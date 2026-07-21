@@ -1,0 +1,46 @@
+{
+  "name": "covenant",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint:root": "eslint eslint.config.mjs playwright.config.ts scripts packages/config",
+    "lint": "pnpm lint:root && turbo lint",
+    "typecheck:root": "tsc -p tsconfig.root.json --noEmit",
+    "typecheck": "pnpm typecheck:root && turbo typecheck",
+    "test:scripts": "node --test scripts/*.test.mjs",
+    "test": "pnpm test:scripts && turbo test",
+    "test:contracts": "node scripts/test-contracts.mjs",
+    "test:integration": "node scripts/not-implemented.mjs integration-tests",
+    "test:e2e": "node scripts/not-implemented.mjs end-to-end-tests",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:env-files": "node scripts/check-env-files.mjs",
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "verify:without-contracts": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check:env-files && pnpm scan:secrets",
+    "verify": "pnpm verify:without-contracts && pnpm test:contracts",
+    "demo:reset": "node scripts/not-implemented.mjs demo-reset",
+    "demo:seed": "node scripts/not-implemented.mjs demo-seed",
+    "demo:health": "node scripts/not-implemented.mjs demo-health"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.31.0",
+    "@playwright/test": "^1.54.1",
+    "@types/node": "^24.1.0",
+    "eslint": "^9.31.0",
+    "eslint-config-next": "^15.4.4",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.6.14",
+    "turbo": "^2.5.5",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.38.0",
+    "vitest": "^3.2.4"
+  }
+}

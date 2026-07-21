@@ -1,0 +1,9 @@
+node_modules
+.next
+.turbo
+dist
+coverage
+cache
+out
+broadcast
+pnpm-lock.yaml
