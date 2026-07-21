@@ -1,0 +1,37 @@
+name: Scoped feature
+description: Propose a capability with an explicit Covenant scope label.
+title: "[SCOPE] "
+labels: ["feature"]
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope label
+      options:
+        - MVP
+        - V2
+        - Production
+        - Protocol
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: State the user-visible or security outcome without expanding implementation implicitly.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Trust-boundary and authority impact
+      description: Identify components, credentials, signers, signed fields, and authoritative state affected.
+    validations:
+      required: true
+  - type: checkboxes
+    id: invariant
+    attributes:
+      label: Security invariant
+      options:
+        - label: No request-generating component receives payment execution authority.
+          required: true

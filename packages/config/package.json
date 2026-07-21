@@ -1,0 +1,17 @@
+{
+  "name": "@covenant/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"process.stdout.write('shared configuration has no runtime tests\\n')\""
+  },
+  "files": [
+    "*.json",
+    "*.mjs",
+    "dist"
+  ]
+}

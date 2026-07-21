@@ -55,17 +55,22 @@ Every capability in project documentation must carry exactly one of these labels
 
 ## Money representation
 
-- **MVP:** JSON money is an unsigned canonical decimal string; internal money is `bigint` base units.
+- **MVP:** Accepted JSON money input is an unsigned decimal string with zero to six fractional digits. `1`, `1.0`, and `1.000000` are equivalent inputs; leading-zero integers such as `01` are rejected.
+- **MVP:** Internal money is `bigint` base units. Canonical output is the shortest exact decimal form, so all equivalent representations above format as `1`.
 - **MVP:** Arc Testnet USDC uses six decimals. Never use JavaScript `number`, floating point, scientific notation, commas, signs, or implicit rounding for money.
 - **MVP:** Payment amounts are positive. Limits may be non-negative only where the schema explicitly permits zero.
-- **MVP:** Enforce the documented maximum before conversion and preserve exact formatting through shared helpers.
+- **MVP:** Enforce the uint256-derived maximum lexically before `BigInt` conversion. Input formatting is not preserved.
 
 ## Security rules
 
 - **MVP:** Parse all signed objects with strict Zod schemas before hashing; reject unknown fields, malformed addresses, unsupported versions, invalid time ordering, and unsafe numeric representations.
-- **MVP:** Normalize every address with one checksum strategy.
+- **MVP:** Public typed-data builders, hashes, and verifiers accept `unknown`, parse internally, and construct messages explicitly from parsed fields.
+- **MVP:** Normalize lowercase addresses to EIP-55; accept correct mixed-case checksum only; reject incorrect checksum and zero security addresses.
+- **MVP:** Issuer, agent signer, and authorization signer are pairwise distinct. The GPU recipient also differs from those roles, the vault, and the token.
+- **MVP:** PaymentIntent, Invoice, DecisionReceipt, and AuthorizationReceipt use strict detached `{ payload, signature }` envelopes with 65-byte signatures.
+- **MVP:** The only accepted chain is Arc Testnet `5042002`; multichain behavior is Protocol scope.
 - **MVP:** EIP-712 domains always include name, version, chain ID, and verifying contract.
-- **MVP:** Signed field definitions and ordering are frozen. Rule results use an ordered deterministic collection hash.
+- **MVP:** Signed field definitions and ordering are frozen. DecisionReceipt is signed and commits to the exact canonical 11-rule collection hash.
 - **MVP:** Never commit secrets, real addresses presented as secrets, funded keys, private keys, API keys, or `.env` values.
 - **MVP:** Do not claim TypeScript/Solidity hash parity until Solidity hashing and parity tests exist.
 

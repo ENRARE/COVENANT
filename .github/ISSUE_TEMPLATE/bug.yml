@@ -1,0 +1,42 @@
+name: Bug report
+description: Report incorrect behavior or a security-control failure.
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Affected scope
+      options:
+        - MVP
+        - V2
+        - Production
+        - Protocol
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Remove private keys, API keys, tokens, personal data, and real funded addresses.
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security impact
+      description: Note affected funds, authority, signatures, replay state, or trust boundary.
+    validations:
+      required: true
