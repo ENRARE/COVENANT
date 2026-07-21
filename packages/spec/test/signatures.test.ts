@@ -22,49 +22,48 @@ import {
   hashInvoice,
   hashPaymentIntent,
   hashRuleResults,
-  verifySignedAuthorizationReceipt,
-  verifySignedDecisionReceipt,
-  verifySignedInvoice,
-  verifySignedPaymentIntent,
+  recoverInvoiceSigner,
+  verifySignedAuthorizationReceiptForCovenant,
+  verifySignedDecisionReceiptForCovenant,
+  verifySignedPaymentIntentForCovenant,
 } from "../src/typed-data.js";
 
 describe("detached signature recovery", () => {
   it("verifies every valid signed fixture", async () => {
     await expect(
-      verifySignedPaymentIntent(
+      verifySignedPaymentIntentForCovenant(
         rawSignedPaymentIntentFixture,
-        paymentIntentDomainFixture,
         rawCovenantSpecFixture,
       ),
     ).resolves.toBeDefined();
     await expect(
-      verifySignedInvoice(rawSignedInvoiceFixture, invoiceDomainFixture),
-    ).resolves.toBeDefined();
+      recoverInvoiceSigner(rawSignedInvoiceFixture, invoiceDomainFixture),
+    ).resolves.toBe(fixtureAddresses.vendor);
     await expect(
-      verifySignedDecisionReceipt(
+      verifySignedDecisionReceiptForCovenant(
         rawApprovedSignedDecisionReceiptFixture,
         rawApprovedRuleResultsFixture,
-        decisionReceiptDomainFixture,
+        rawCovenantSpecFixture,
       ),
     ).resolves.toBeDefined();
     await expect(
-      verifySignedDecisionReceipt(
+      verifySignedDecisionReceiptForCovenant(
         rawRejectedSignedDecisionReceiptFixture,
         rawRejectedRuleResultsFixture,
-        decisionReceiptDomainFixture,
+        rawCovenantSpecFixture,
       ),
     ).resolves.toBeDefined();
     await expect(
-      verifySignedAuthorizationReceipt(
+      verifySignedAuthorizationReceiptForCovenant(
         rawSignedAuthorizationReceiptFixture,
-        authorizationReceiptDomainFixture,
+        rawCovenantSpecFixture,
       ),
     ).resolves.toBeDefined();
   });
 
   it("rejects payload mutation and recovered-signer mismatch", async () => {
     await expect(
-      verifySignedPaymentIntent(
+      verifySignedPaymentIntentForCovenant(
         {
           ...rawSignedPaymentIntentFixture,
           payload: {
@@ -72,16 +71,14 @@ describe("detached signature recovery", () => {
             recipient: fixtureAddresses.attacker,
           },
         },
-        paymentIntentDomainFixture,
         rawCovenantSpecFixture,
       ),
     ).rejects.toThrow(/signer/);
     await expect(
-      verifySignedPaymentIntent(
-        rawSignedPaymentIntentFixture,
-        paymentIntentDomainFixture,
-        { ...rawCovenantSpecFixture, agentSigner: fixtureAddresses.vendor },
-      ),
+      verifySignedPaymentIntentForCovenant(rawSignedPaymentIntentFixture, {
+        ...rawCovenantSpecFixture,
+        agentSigner: fixtureAddresses.vendor,
+      }),
     ).rejects.toThrow();
   });
 
@@ -175,20 +172,20 @@ describe("signed DecisionReceipt rule commitment", () => {
     if (!firstRule) throw new Error("fixture must include a first rule");
     firstRule.reason = "changed";
     await expect(
-      verifySignedDecisionReceipt(
+      verifySignedDecisionReceiptForCovenant(
         rawApprovedSignedDecisionReceiptFixture,
         changed,
-        decisionReceiptDomainFixture,
+        rawCovenantSpecFixture,
       ),
     ).rejects.toThrow(/ruleResultsHash/);
   });
 
   it("enforces APPROVED iff every canonical rule passes", async () => {
     await expect(
-      verifySignedDecisionReceipt(
+      verifySignedDecisionReceiptForCovenant(
         rawApprovedSignedDecisionReceiptFixture,
         rawRejectedRuleResultsFixture,
-        decisionReceiptDomainFixture,
+        rawCovenantSpecFixture,
       ),
     ).rejects.toThrow();
     const rejectedWithPassingHash = {
@@ -199,12 +196,54 @@ describe("signed DecisionReceipt rule commitment", () => {
       },
     };
     await expect(
-      verifySignedDecisionReceipt(
+      verifySignedDecisionReceiptForCovenant(
         rejectedWithPassingHash,
         approvedRuleResultsFixture,
-        decisionReceiptDomainFixture,
+        rawCovenantSpecFixture,
       ),
     ).rejects.toThrow(/APPROVED/);
+  });
+
+  it.each([
+    ["all-zero", `0x${"00".repeat(65)}`],
+    [
+      "invalid recovery byte",
+      `${rawSignedPaymentIntentFixture.signature.slice(0, -2)}ff`,
+    ],
+    [
+      "zero r",
+      `0x${"00".repeat(32)}${rawSignedPaymentIntentFixture.signature.slice(66)}`,
+    ],
+    [
+      "zero s",
+      `${rawSignedPaymentIntentFixture.signature.slice(0, 66)}${"00".repeat(32)}${rawSignedPaymentIntentFixture.signature.slice(-2)}`,
+    ],
+  ])("rejects a well-shaped %s signature", async (_label, signature) => {
+    await expect(
+      verifySignedPaymentIntentForCovenant(
+        { ...rawSignedPaymentIntentFixture, signature },
+        rawCovenantSpecFixture,
+      ),
+    ).rejects.toMatchObject({
+      code: "SIGNATURE_INVALID",
+    });
+  });
+
+  it("documents that viem recovery accepts the ECDSA high-s twin", async () => {
+    const curveOrder = BigInt(
+      "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
+    );
+    const signature = rawSignedPaymentIntentFixture.signature;
+    const s = BigInt(`0x${signature.slice(66, 130)}`);
+    const highS = (curveOrder - s).toString(16).padStart(64, "0");
+    const flippedRecoveryByte = signature.endsWith("1c") ? "1b" : "1c";
+    const malleableTwin = `${signature.slice(0, 66)}${highS}${flippedRecoveryByte}`;
+    await expect(
+      verifySignedPaymentIntentForCovenant(
+        { ...rawSignedPaymentIntentFixture, signature: malleableTwin },
+        rawCovenantSpecFixture,
+      ),
+    ).resolves.toBeDefined();
   });
 
   it("commits to all founder-approved DecisionReceipt fields", () => {

@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { FROZEN_SIGNED_FIELD_NAMES } from "../src/constants.js";
+import {
+  CovenantVerificationError,
+  type VerificationErrorCode,
+} from "../src/errors.js";
 import {
   authorizationReceiptDomainFixture,
   covenantSpecDomainFixture,
@@ -14,6 +19,13 @@ import {
   rawInvoiceFixture,
   rawPaymentIntentFixture,
 } from "../src/fixtures.js";
+import {
+  AUTHORIZATION_RECEIPT_SCHEMA_FIELD_NAMES,
+  COVENANT_SPEC_SCHEMA_FIELD_NAMES,
+  DECISION_RECEIPT_SCHEMA_FIELD_NAMES,
+  INVOICE_SCHEMA_FIELD_NAMES,
+  PAYMENT_INTENT_SCHEMA_FIELD_NAMES,
+} from "../src/schemas.js";
 import {
   AUTHORIZATION_RECEIPT_EIP712_FIELDS,
   COVENANT_SPEC_EIP712_FIELDS,
@@ -32,6 +44,7 @@ import {
   hashPaymentIntent,
   hashRuleResult,
   hashRuleResults,
+  validateSigningDomainForCovenant,
 } from "../src/typed-data.js";
 
 const signedBoundaries = [
@@ -61,6 +74,20 @@ const signedBoundaries = [
     authorizationReceiptDomainFixture,
   ],
 ] as const;
+
+function expectVerificationCode(
+  operation: () => unknown,
+  code: VerificationErrorCode,
+): void {
+  try {
+    operation();
+    throw new Error(`Expected ${code}`);
+  } catch (error) {
+    expect(error).toBeInstanceOf(CovenantVerificationError);
+    if (!(error instanceof CovenantVerificationError)) throw error;
+    expect(error.code).toBe(code);
+  }
+}
 
 describe("strict parse-before-hash boundaries", () => {
   it.each(signedBoundaries)(
@@ -128,17 +155,36 @@ describe("strict parse-before-hash boundaries", () => {
 
 describe("schema and EIP-712 field parity", () => {
   it.each([
-    [rawCovenantSpecFixture, COVENANT_SPEC_EIP712_FIELDS],
-    [rawPaymentIntentFixture, PAYMENT_INTENT_EIP712_FIELDS],
-    [rawInvoiceFixture, INVOICE_EIP712_FIELDS],
-    [rawApprovedDecisionReceiptFixture, DECISION_RECEIPT_EIP712_FIELDS],
-    [rawAuthorizationReceiptFixture, AUTHORIZATION_RECEIPT_EIP712_FIELDS],
+    [
+      COVENANT_SPEC_SCHEMA_FIELD_NAMES,
+      COVENANT_SPEC_EIP712_FIELDS,
+      FROZEN_SIGNED_FIELD_NAMES.covenantSpec,
+    ],
+    [
+      PAYMENT_INTENT_SCHEMA_FIELD_NAMES,
+      PAYMENT_INTENT_EIP712_FIELDS,
+      FROZEN_SIGNED_FIELD_NAMES.paymentIntent,
+    ],
+    [
+      INVOICE_SCHEMA_FIELD_NAMES,
+      INVOICE_EIP712_FIELDS,
+      FROZEN_SIGNED_FIELD_NAMES.invoice,
+    ],
+    [
+      DECISION_RECEIPT_SCHEMA_FIELD_NAMES,
+      DECISION_RECEIPT_EIP712_FIELDS,
+      FROZEN_SIGNED_FIELD_NAMES.decisionReceipt,
+    ],
+    [
+      AUTHORIZATION_RECEIPT_SCHEMA_FIELD_NAMES,
+      AUTHORIZATION_RECEIPT_EIP712_FIELDS,
+      FROZEN_SIGNED_FIELD_NAMES.authorizationReceipt,
+    ],
   ] as const)(
-    "commits to every payload field exactly once",
-    (payload, fields) => {
-      expect(fields.map(({ name }) => name).sort()).toEqual(
-        Object.keys(payload).sort(),
-      );
+    "matches the schema and EIP-712 fields to the independent frozen list",
+    (schemaNames, fields, frozenNames) => {
+      expect(schemaNames).toEqual(frozenNames);
+      expect(fields.map(({ name }) => name)).toEqual(frozenNames);
       expect(new Set(fields.map(({ name }) => name)).size).toBe(fields.length);
     },
   );
@@ -325,6 +371,54 @@ describe("signed-field mutation coverage", () => {
 });
 
 describe("domain separation and vectors", () => {
+  it("validates low-level domains against Covenant deployment context", () => {
+    expect(
+      validateSigningDomainForCovenant(
+        paymentIntentDomainFixture,
+        rawCovenantSpecFixture,
+        paymentIntentDomainFixture.name,
+      ),
+    ).toMatchObject({
+      chainId: 5_042_002n,
+      verifyingContract: fixtureAddresses.vault,
+    });
+    expectVerificationCode(
+      () =>
+        validateSigningDomainForCovenant(
+          { ...paymentIntentDomainFixture, chainId: "1" },
+          rawCovenantSpecFixture,
+          paymentIntentDomainFixture.name,
+        ),
+      "DOMAIN_CHAIN_MISMATCH",
+    );
+    expectVerificationCode(
+      () =>
+        validateSigningDomainForCovenant(
+          {
+            ...paymentIntentDomainFixture,
+            verifyingContract: fixtureAddresses.attacker,
+          },
+          rawCovenantSpecFixture,
+          paymentIntentDomainFixture.name,
+        ),
+      "DOMAIN_CONTRACT_MISMATCH",
+    );
+    expect(() =>
+      validateSigningDomainForCovenant(
+        { ...paymentIntentDomainFixture, name: "Covenant Invoice" },
+        rawCovenantSpecFixture,
+        paymentIntentDomainFixture.name,
+      ),
+    ).toThrow();
+    expect(() =>
+      validateSigningDomainForCovenant(
+        { ...paymentIntentDomainFixture, version: "2" },
+        rawCovenantSpecFixture,
+        paymentIntentDomainFixture.name,
+      ),
+    ).toThrow();
+  });
+
   it("commits to name, version, chain, and verifying contract", () => {
     const base = hashPaymentIntent(
       rawPaymentIntentFixture,

@@ -1,5 +1,6 @@
 export * from "./constants.js";
 export * from "./context.js";
+export * from "./errors.js";
 export * from "./fixtures.js";
 export * from "./money.js";
 export * from "./primitives.js";

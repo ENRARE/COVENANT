@@ -24,11 +24,11 @@ pnpm install --frozen-lockfile
 pnpm verify
 ```
 
-**MVP:** `pnpm verify` validates formatting, root and workspace lint/type checks, script and schema tests, builds, environment-file policy, repository credential scanning, and Foundry tests. Missing Forge is a hard failure. `pnpm verify:without-contracts` is the explicitly partial local command.
+**MVP:** `pnpm verify` validates formatting, root and workspace lint/type checks, script and schema tests, builds, environment-file policy, basic repository credential-pattern scanning, and Foundry tests. Missing Forge is a hard failure. `pnpm verify:without-contracts` is the explicitly partial local command.
 
 **MVP:** `pnpm test:integration`, `pnpm test:e2e`, and all `pnpm demo:*` commands intentionally return non-zero because those later MVP subsystems do not exist yet.
 
-**MVP:** Security-critical JSON is strictly parsed before hashing. The four signed flows use detached `{ payload, signature }` envelopes, DecisionReceipt commits to the canonical rule collection, and only Arc Testnet chain ID `5042002` is accepted.
+**MVP:** Security-critical JSON is strictly parsed before hashing. The four signed flows use detached `{ payload, signature }` envelopes, DecisionReceipt commits to the canonical rule collection, and only Arc Testnet chain ID `5042002` is accepted. Trusted verification anchors signer roles and domains to `CovenantSpec`, and complete authorization requires exact linkage through an approved all-PASS decision.
 
 See [MVP canon](docs/MVP_CANON.md), [security boundaries](docs/SECURITY_BOUNDARIES.md), and [threat model](docs/THREAT_MODEL.md) before changing architecture.
 

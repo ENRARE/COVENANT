@@ -12,7 +12,9 @@ All capabilities in this decision are **MVP** unless explicitly labeled otherwis
 
 **MVP:** PaymentIntent, Invoice, DecisionReceipt, and AuthorizationReceipt use a detached envelope containing exactly `payload` and a 65-byte hexadecimal `signature`. The signature is never included in its own digest.
 
-**MVP:** The only domain chain is Arc Testnet `5042002`. Every domain includes `name` for object-family separation, `version` for schema separation, `chainId` for cross-chain replay resistance, and `verifyingContract` for cross-contract replay resistance. CovenantSpec and AuthorizationReceipt deployment fields must match the domain.
+**MVP:** The only domain chain is Arc Testnet `5042002`. Every domain includes `name` for object-family separation, `version` for schema separation, `chainId` for cross-chain replay resistance, and `verifyingContract` for cross-contract replay resistance. CovenantSpec and AuthorizationReceipt deployment fields must match the domain. Trusted PaymentIntent, DecisionReceipt, and AuthorizationReceipt verification derives the domain name, version, chain, and verifying contract from `CovenantSpec`; it never accepts a domain supplied beside the signed payload.
+
+**MVP:** Low-level recovery functions prove cryptographic self-consistency for a strictly parsed envelope and domain. Covenant-anchored verification additionally requires the recovered PaymentIntent signer to equal `CovenantSpec.agentSigner` and both receipt signers to equal `CovenantSpec.authorizationSigner`. Complete authorization-chain verification additionally enforces all cross-object IDs, hashes, policy, deployment, decision, rule, amount, purpose, and temporal relationships.
 
 **Protocol:** Multichain signing is deferred and requires a new specification.
 
@@ -41,7 +43,7 @@ ruleHash = keccak256(abi.encode(typeHash,
 collectionHash = keccak256(concat(ruleHash[0], ..., ruleHash[10]))
 ```
 
-**MVP:** DecisionReceipt signs `ruleResultsHash`. Verification reparses the envelope and canonical rules, recomputes and compares the hash, requires `APPROVED` exactly when all 11 statuses are `PASS`, recovers the signer, and compares it with `payload.signer`.
+**MVP:** DecisionReceipt signs `ruleResultsHash`. Verification reparses the envelope and canonical rules, recomputes and compares the hash, requires `APPROVED` exactly when all 11 statuses are `PASS`, recovers the signer, compares it with `payload.signer` for self-consistency, and then requires both values to equal `CovenantSpec.authorizationSigner` for trusted verification. A rejected decision can never enter a valid authorization chain.
 
 ## Fixed fixture values
 
@@ -79,6 +81,8 @@ domain names           Covenant CovenantSpec | Covenant PaymentIntent | Covenant
 
 ## Tests and limitation
 
-**MVP:** Tests assert strict parsing at every public boundary, schema/typed-field parity, mutation of each mutable signed field, immutable version/chain rejection, detached-signature exclusion, signature recovery, canonical rule validation, domain separation, and fixed hashes.
+**MVP:** Tests assert strict parsing at every public boundary, independent frozen schema/typed-field parity, mutation of each mutable signed field, immutable version/chain rejection, detached-signature exclusion, Covenant-anchored signature recovery, attacker self-signing rejection, complete authorization linkage, canonical rule validation, domain separation, malformed signatures, and fixed hashes.
+
+**MVP:** viem rejects all-zero signatures, invalid recovery bytes, and zero `r` or `s` during recovery. viem accepts the mathematically equivalent high-`s` twin when the recovery bit is flipped; the MVP design therefore uses authorization nonce/hash state rather than signature bytes as replay identity. No custom cryptography is implemented.
 
 **MVP deferred:** Solidity hashing and TypeScript/Solidity parity require later CovenantVault hashing work. No parity claim is made.

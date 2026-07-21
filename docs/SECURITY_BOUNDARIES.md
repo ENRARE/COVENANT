@@ -37,7 +37,9 @@
 - **MVP:** Arc Testnet `5042002` is the only accepted chain. Protocol multichain types do not cross the public MVP boundary.
 - **MVP:** EIP-712 binds object version, chain, verifying contract, and every security-critical field.
 - **MVP:** DecisionReceipt is signed and commits to the exact canonical 11-rule collection hash; order is validated and never silently sorted.
-- **MVP:** Explicit context validators link Covenant validity, intent creation/expiry, decision creation, and authorization expiry.
+- **MVP:** Signature recovery proves who signed but does not grant authority from a payload signer field. Trusted verification anchors agent and authorization signer identities to `CovenantSpec`.
+- **MVP:** PaymentIntent, DecisionReceipt, and AuthorizationReceipt trusted domains are derived from the Covenant vault, frozen Arc chain, frozen version, and object-family name.
+- **MVP:** Complete authorization-chain verification recomputes the intent and rule hashes; links Covenant, intent, decision, authorization, policy, vault, chain, and signer roles; requires an approved all-PASS decision; and enforces every validity relationship.
 - **MVP:** The executor must compare the submitted call with signed authorization fields byte-for-byte.
 
 ## Deferred controls

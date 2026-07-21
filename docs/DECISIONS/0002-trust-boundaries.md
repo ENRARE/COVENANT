@@ -20,7 +20,9 @@
 
 **MVP:** PaymentIntent, Invoice, DecisionReceipt, and AuthorizationReceipt cross their signing boundaries as strict detached `{ payload, signature }` envelopes. The authority later verifies the agent signature; the vendor signs invoices; the authorization signer signs decisions and exact short-lived authorizations. Signatures never enter their own digest.
 
-**MVP:** Cross-object validators enforce Covenant validity, intent expiry, decision time, and authorization expiry relationships without treating Supabase as authoritative.
+**MVP:** Signature recovery establishes only which key signed a payload. It does not establish Covenant authority from a signer field inside that payload. Trusted verification derives the PaymentIntent signer, authorization signer, Arc chain, and verifying vault from the strictly parsed `CovenantSpec`.
+
+**MVP:** Complete authorization-chain verification requires one Covenant-anchored PaymentIntent, one signed approved DecisionReceipt with all canonical rules passing, and one signed AuthorizationReceipt linked by exact Covenant ID, intent ID and digest, decision ID, policy version, vault, chain, signer roles, and validity periods. Supabase remains non-authoritative.
 
 ## Consequence
 

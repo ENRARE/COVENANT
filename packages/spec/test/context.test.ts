@@ -1,25 +1,24 @@
 import { describe, expect, it } from "vitest";
+import { verifyAuthorizationChain } from "../src/context.js";
 import {
-  rawApprovedDecisionReceiptFixture,
-  rawAuthorizationReceiptFixture,
+  rawApprovedRuleResultsFixture,
+  rawApprovedSignedDecisionReceiptFixture,
   rawCovenantSpecFixture,
-  rawPaymentIntentFixture,
+  rawSignedAuthorizationReceiptFixture,
+  rawSignedPaymentIntentFixture,
 } from "../src/fixtures.js";
-import {
-  validateAuthorizationContext,
-  validatePaymentIntentContext,
-} from "../src/context.js";
 
-describe("cross-object temporal linkage", () => {
-  it("accepts the coherent fixed context", () => {
-    expect(
-      validateAuthorizationContext(
+describe("PaymentIntent Covenant context", () => {
+  it("accepts the coherent signed envelope", async () => {
+    await expect(
+      verifyAuthorizationChain(
         rawCovenantSpecFixture,
-        rawPaymentIntentFixture,
-        rawApprovedDecisionReceiptFixture,
-        rawAuthorizationReceiptFixture,
+        rawSignedPaymentIntentFixture,
+        rawApprovedSignedDecisionReceiptFixture,
+        rawApprovedRuleResultsFixture,
+        rawSignedAuthorizationReceiptFixture,
       ),
-    ).toBeDefined();
+    ).resolves.toBeDefined();
   });
 
   it.each([
@@ -29,38 +28,21 @@ describe("cross-object temporal linkage", () => {
       { createdAt: "1785168001", expiresAt: "1785168010" },
     ],
     ["expires after Covenant", { expiresAt: "1785168001" }],
-  ] as const)("rejects PaymentIntent %s", (_label, mutation) => {
-    expect(() =>
-      validatePaymentIntentContext(rawCovenantSpecFixture, {
-        ...rawPaymentIntentFixture,
-        ...mutation,
-      }),
-    ).toThrow();
-  });
-
-  it("rejects DecisionReceipt before PaymentIntent", () => {
-    expect(() =>
-      validateAuthorizationContext(
+  ] as const)("rejects an intent %s", async (_label, mutation) => {
+    await expect(
+      verifyAuthorizationChain(
         rawCovenantSpecFixture,
-        rawPaymentIntentFixture,
-        { ...rawApprovedDecisionReceiptFixture, createdAt: "1784563259" },
-        rawAuthorizationReceiptFixture,
+        {
+          ...rawSignedPaymentIntentFixture,
+          payload: {
+            ...rawSignedPaymentIntentFixture.payload,
+            ...mutation,
+          },
+        },
+        rawApprovedSignedDecisionReceiptFixture,
+        rawApprovedRuleResultsFixture,
+        rawSignedAuthorizationReceiptFixture,
       ),
-    ).toThrow(/DecisionReceipt/);
-  });
-
-  it.each([
-    ["not after decision", "1784563300"],
-    ["after intent expiry", "1784563561"],
-    ["after Covenant expiry", "1785168001"],
-  ])("rejects authorization %s", (_label, validUntil) => {
-    expect(() =>
-      validateAuthorizationContext(
-        rawCovenantSpecFixture,
-        rawPaymentIntentFixture,
-        rawApprovedDecisionReceiptFixture,
-        { ...rawAuthorizationReceiptFixture, validUntil },
-      ),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 });

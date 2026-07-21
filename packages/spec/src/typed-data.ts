@@ -5,10 +5,16 @@ import {
   keccak256,
   recoverTypedDataAddress,
   stringToHex,
+  type Address,
   type Hex,
 } from "viem";
 import { z } from "zod";
-import { ARC_TESTNET_CHAIN_ID, SCHEMA_VERSION } from "./constants.js";
+import {
+  ARC_TESTNET_CHAIN_ID,
+  ARC_TESTNET_CHAIN_ID_STRING,
+  SCHEMA_VERSION,
+} from "./constants.js";
+import { verificationFailure } from "./errors.js";
 import {
   authorizationReceiptSchema,
   canonicalRuleResultsSchema,
@@ -22,6 +28,7 @@ import {
   signedInvoiceSchema,
   signedPaymentIntentSchema,
   type CanonicalRuleResults,
+  type CovenantSpec,
   type DecisionReceipt,
 } from "./schemas.js";
 import { vaultAddressSchema } from "./primitives.js";
@@ -42,6 +49,15 @@ const domainNameSchema = z.enum([
   EIP712_DOMAIN_NAMES.authorizationReceipt,
 ]);
 
+const covenantDomainCandidateSchema = z
+  .object({
+    name: z.string(),
+    version: z.string(),
+    chainId: z.string(),
+    verifyingContract: vaultAddressSchema,
+  })
+  .strict();
+
 export const signingDomainSchema = z
   .object({
     name: domainNameSchema,
@@ -52,6 +68,51 @@ export const signingDomainSchema = z
   .strict();
 
 export type SigningDomain = z.infer<typeof signingDomainSchema>;
+
+function signingDomainForParsedCovenant(
+  covenantSpec: CovenantSpec,
+  name: SigningDomain["name"],
+) {
+  return {
+    name,
+    version: SCHEMA_VERSION,
+    chainId: ARC_TESTNET_CHAIN_ID_STRING,
+    verifyingContract: covenantSpec.vaultAddress,
+  } as const;
+}
+
+export function deriveSigningDomainForCovenant(
+  covenant: unknown,
+  name: SigningDomain["name"],
+) {
+  const covenantSpec = covenantSpecSchema.parse(covenant);
+  return signingDomainForParsedCovenant(covenantSpec, name);
+}
+
+export function validateSigningDomainForCovenant(
+  domain: unknown,
+  covenant: unknown,
+  expectedName: SigningDomain["name"],
+): SigningDomain {
+  const covenantSpec = covenantSpecSchema.parse(covenant);
+  const candidate = covenantDomainCandidateSchema.parse(domain);
+  if (
+    candidate.chainId !== ARC_TESTNET_CHAIN_ID_STRING ||
+    covenantSpec.chainId !== ARC_TESTNET_CHAIN_ID
+  ) {
+    verificationFailure(
+      "DOMAIN_CHAIN_MISMATCH",
+      "Signing domain chainId does not match CovenantSpec.chainId",
+    );
+  }
+  if (candidate.verifyingContract !== covenantSpec.vaultAddress) {
+    verificationFailure(
+      "DOMAIN_CONTRACT_MISMATCH",
+      "Signing domain verifyingContract does not match CovenantSpec.vaultAddress",
+    );
+  }
+  return parseDomain(candidate, expectedName);
+}
 
 export const COVENANT_SPEC_EIP712_FIELDS = [
   { name: "version", type: "string" },
@@ -375,97 +436,223 @@ function assertDecisionMatchesRules(
 ): void {
   const allPass = ruleResults.every((result) => result.status === "PASS");
   if ((decision === "APPROVED") !== allPass) {
-    throw new Error(
+    verificationFailure(
+      "RULE_RESULTS_NOT_ALL_PASSING",
       "Decision must be APPROVED exactly when every canonical rule passes",
     );
   }
 }
 
-export async function verifySignedPaymentIntent(
+export async function recoverPaymentIntentSigner(
   envelope: unknown,
   domain: unknown,
+): Promise<Address> {
+  const signed = signedPaymentIntentSchema.parse(envelope);
+  const rawPayload = (envelope as { payload: unknown }).payload;
+  const typedData = buildPaymentIntentTypedData(rawPayload, domain);
+  return recoverTypedDataAddress({
+    ...typedData,
+    signature: signed.signature,
+  });
+}
+
+export async function recoverInvoiceSigner(
+  envelope: unknown,
+  domain: unknown,
+): Promise<Address> {
+  const signed = signedInvoiceSchema.parse(envelope);
+  const rawPayload = (envelope as { payload: unknown }).payload;
+  const typedData = buildInvoiceTypedData(rawPayload, domain);
+  return recoverTypedDataAddress({
+    ...typedData,
+    signature: signed.signature,
+  });
+}
+
+export async function recoverDecisionReceiptSigner(
+  envelope: unknown,
+  domain: unknown,
+): Promise<Address> {
+  const signed = signedDecisionReceiptSchema.parse(envelope);
+  const rawPayload = (envelope as { payload: unknown }).payload;
+  const typedData = buildDecisionReceiptTypedData(rawPayload, domain);
+  return recoverTypedDataAddress({
+    ...typedData,
+    signature: signed.signature,
+  });
+}
+
+export async function recoverAuthorizationReceiptSigner(
+  envelope: unknown,
+  domain: unknown,
+): Promise<Address> {
+  const signed = signedAuthorizationReceiptSchema.parse(envelope);
+  const rawPayload = (envelope as { payload: unknown }).payload;
+  const typedData = buildAuthorizationReceiptTypedData(rawPayload, domain);
+  return recoverTypedDataAddress({
+    ...typedData,
+    signature: signed.signature,
+  });
+}
+
+async function recoverOrFail(
+  recover: () => Promise<Address>,
+  objectName: string,
+): Promise<Address> {
+  try {
+    return await recover();
+  } catch (error) {
+    verificationFailure(
+      "SIGNATURE_INVALID",
+      `${objectName} signature recovery failed`,
+      error,
+    );
+  }
+}
+
+export async function verifySignedPaymentIntentForCovenant(
+  envelope: unknown,
   covenant: unknown,
 ) {
   const signed = signedPaymentIntentSchema.parse(envelope);
   const covenantSpec = covenantSpecSchema.parse(covenant);
-  const rawPayload = (envelope as { payload: unknown }).payload;
-  const typedData = buildPaymentIntentTypedData(rawPayload, domain);
-  const recovered = await recoverTypedDataAddress({
-    ...typedData,
-    signature: signed.signature,
-  });
-  if (recovered !== signed.payload.agentSigner) {
-    throw new Error(
-      "Recovered PaymentIntent signer does not match payload agentSigner",
+  if (signed.payload.covenantId !== covenantSpec.covenantId) {
+    verificationFailure(
+      "COVENANT_ID_MISMATCH",
+      "PaymentIntent.covenantId does not match CovenantSpec.covenantId",
     );
   }
+  if (signed.payload.agentSigner !== covenantSpec.agentSigner) {
+    verificationFailure(
+      "UNTRUSTED_AGENT_SIGNER",
+      "PaymentIntent.agentSigner is not CovenantSpec.agentSigner",
+    );
+  }
+  const domain = signingDomainForParsedCovenant(
+    covenantSpec,
+    EIP712_DOMAIN_NAMES.paymentIntent,
+  );
+  const recovered = await recoverOrFail(
+    () => recoverPaymentIntentSigner(envelope, domain),
+    "PaymentIntent",
+  );
   if (
-    signed.payload.agentSigner !== covenantSpec.agentSigner ||
-    signed.payload.covenantId !== covenantSpec.covenantId
+    recovered !== signed.payload.agentSigner ||
+    recovered !== covenantSpec.agentSigner
   ) {
-    throw new Error(
-      "Signed PaymentIntent does not match CovenantSpec agent authority",
+    verificationFailure(
+      "UNTRUSTED_AGENT_SIGNER",
+      "Recovered PaymentIntent signer is not CovenantSpec.agentSigner",
     );
   }
   return signed;
 }
 
-export async function verifySignedInvoice(envelope: unknown, domain: unknown) {
-  const signed = signedInvoiceSchema.parse(envelope);
-  const rawPayload = (envelope as { payload: unknown }).payload;
-  const typedData = buildInvoiceTypedData(rawPayload, domain);
-  const recovered = await recoverTypedDataAddress({
-    ...typedData,
-    signature: signed.signature,
-  });
-  if (recovered !== signed.payload.vendor) {
-    throw new Error("Recovered Invoice signer does not match payload vendor");
-  }
-  return signed;
-}
-
-export async function verifySignedDecisionReceipt(
+export async function verifySignedDecisionReceiptForCovenant(
   envelope: unknown,
   ruleResults: unknown,
-  domain: unknown,
+  covenant: unknown,
 ) {
   const signed = signedDecisionReceiptSchema.parse(envelope);
-  const rawPayload = (envelope as { payload: unknown }).payload;
+  const covenantSpec = covenantSpecSchema.parse(covenant);
   const canonicalRules = canonicalRuleResultsSchema.parse(ruleResults);
+  if (signed.payload.covenantId !== covenantSpec.covenantId) {
+    verificationFailure(
+      "COVENANT_ID_MISMATCH",
+      "DecisionReceipt.covenantId does not match CovenantSpec.covenantId",
+    );
+  }
+  if (signed.payload.policyVersion !== covenantSpec.policyVersion) {
+    verificationFailure(
+      "POLICY_VERSION_MISMATCH",
+      "DecisionReceipt.policyVersion does not match CovenantSpec.policyVersion",
+    );
+  }
+  if (signed.payload.signer !== covenantSpec.authorizationSigner) {
+    verificationFailure(
+      "UNTRUSTED_AUTHORIZATION_SIGNER",
+      "DecisionReceipt.signer is not CovenantSpec.authorizationSigner",
+    );
+  }
   const computedRuleResultsHash = hashRuleResults(canonicalRules);
   if (computedRuleResultsHash !== signed.payload.ruleResultsHash) {
-    throw new Error(
-      "DecisionReceipt ruleResultsHash does not match canonical results",
+    verificationFailure(
+      "RULE_RESULTS_MISMATCH",
+      "DecisionReceipt.ruleResultsHash does not match canonical results",
     );
   }
   assertDecisionMatchesRules(signed.payload.decision, canonicalRules);
-  const typedData = buildDecisionReceiptTypedData(rawPayload, domain);
-  const recovered = await recoverTypedDataAddress({
-    ...typedData,
-    signature: signed.signature,
-  });
-  if (recovered !== signed.payload.signer) {
-    throw new Error(
-      "Recovered DecisionReceipt signer does not match payload signer",
+  const domain = signingDomainForParsedCovenant(
+    covenantSpec,
+    EIP712_DOMAIN_NAMES.decisionReceipt,
+  );
+  const recovered = await recoverOrFail(
+    () => recoverDecisionReceiptSigner(envelope, domain),
+    "DecisionReceipt",
+  );
+  if (
+    recovered !== signed.payload.signer ||
+    recovered !== covenantSpec.authorizationSigner
+  ) {
+    verificationFailure(
+      "UNTRUSTED_AUTHORIZATION_SIGNER",
+      "Recovered DecisionReceipt signer is not CovenantSpec.authorizationSigner",
     );
   }
   return { envelope: signed, ruleResults: canonicalRules } as const;
 }
 
-export async function verifySignedAuthorizationReceipt(
+export async function verifySignedAuthorizationReceiptForCovenant(
   envelope: unknown,
-  domain: unknown,
+  covenant: unknown,
 ) {
   const signed = signedAuthorizationReceiptSchema.parse(envelope);
-  const rawPayload = (envelope as { payload: unknown }).payload;
-  const typedData = buildAuthorizationReceiptTypedData(rawPayload, domain);
-  const recovered = await recoverTypedDataAddress({
-    ...typedData,
-    signature: signed.signature,
-  });
-  if (recovered !== signed.payload.signer) {
-    throw new Error(
-      "Recovered AuthorizationReceipt signer does not match payload signer",
+  const covenantSpec = covenantSpecSchema.parse(covenant);
+  if (signed.payload.covenantId !== covenantSpec.covenantId) {
+    verificationFailure(
+      "COVENANT_ID_MISMATCH",
+      "AuthorizationReceipt.covenantId does not match CovenantSpec.covenantId",
+    );
+  }
+  if (signed.payload.vaultAddress !== covenantSpec.vaultAddress) {
+    verificationFailure(
+      "VAULT_MISMATCH",
+      "AuthorizationReceipt.vaultAddress does not match CovenantSpec.vaultAddress",
+    );
+  }
+  if (signed.payload.chainId !== covenantSpec.chainId) {
+    verificationFailure(
+      "CHAIN_MISMATCH",
+      "AuthorizationReceipt.chainId does not match CovenantSpec.chainId",
+    );
+  }
+  if (signed.payload.policyVersion !== covenantSpec.policyVersion) {
+    verificationFailure(
+      "POLICY_VERSION_MISMATCH",
+      "AuthorizationReceipt.policyVersion does not match CovenantSpec.policyVersion",
+    );
+  }
+  if (signed.payload.signer !== covenantSpec.authorizationSigner) {
+    verificationFailure(
+      "UNTRUSTED_AUTHORIZATION_SIGNER",
+      "AuthorizationReceipt.signer is not CovenantSpec.authorizationSigner",
+    );
+  }
+  const domain = signingDomainForParsedCovenant(
+    covenantSpec,
+    EIP712_DOMAIN_NAMES.authorizationReceipt,
+  );
+  const recovered = await recoverOrFail(
+    () => recoverAuthorizationReceiptSigner(envelope, domain),
+    "AuthorizationReceipt",
+  );
+  if (
+    recovered !== signed.payload.signer ||
+    recovered !== covenantSpec.authorizationSigner
+  ) {
+    verificationFailure(
+      "UNTRUSTED_AUTHORIZATION_SIGNER",
+      "Recovered AuthorizationReceipt signer is not CovenantSpec.authorizationSigner",
     );
   }
   return signed;

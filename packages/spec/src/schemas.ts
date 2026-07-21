@@ -22,7 +22,7 @@ import {
   versionSchema,
 } from "./primitives.js";
 
-export const covenantSpecSchema = z
+const covenantSpecPayloadSchema = z
   .object({
     version: versionSchema,
     covenantId: identifierSchema,
@@ -43,8 +43,13 @@ export const covenantSpecSchema = z
     policyVersion: policyVersionSchema,
     createdAt: timestampSchema,
   })
-  .strict()
-  .superRefine((value, context) => {
+  .strict();
+
+export const COVENANT_SPEC_SCHEMA_FIELD_NAMES =
+  covenantSpecPayloadSchema.keyof().options;
+
+export const covenantSpecSchema = covenantSpecPayloadSchema.superRefine(
+  (value, context) => {
     const separatedRoles = [
       value.issuer,
       value.agentSigner,
@@ -94,9 +99,10 @@ export const covenantSpecSchema = z
         message: "Per-payment maximum must not exceed total budget",
       });
     }
-  });
+  },
+);
 
-export const paymentIntentSchema = z
+const paymentIntentPayloadSchema = z
   .object({
     version: versionSchema,
     intentId: identifierSchema,
@@ -111,8 +117,13 @@ export const paymentIntentSchema = z
     expiresAt: timestampSchema,
     nonce: uintStringSchema,
   })
-  .strict()
-  .superRefine((value, context) => {
+  .strict();
+
+export const PAYMENT_INTENT_SCHEMA_FIELD_NAMES =
+  paymentIntentPayloadSchema.keyof().options;
+
+export const paymentIntentSchema = paymentIntentPayloadSchema.superRefine(
+  (value, context) => {
     if (value.expiresAt <= value.createdAt) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -120,9 +131,10 @@ export const paymentIntentSchema = z
         message: "expiresAt must occur after createdAt",
       });
     }
-  });
+  },
+);
 
-export const invoiceSchema = z
+const invoicePayloadSchema = z
   .object({
     version: versionSchema,
     invoiceId: identifierSchema,
@@ -136,8 +148,12 @@ export const invoiceSchema = z
     expiresAt: timestampSchema,
     nonce: uintStringSchema,
   })
-  .strict()
-  .superRefine((value, context) => {
+  .strict();
+
+export const INVOICE_SCHEMA_FIELD_NAMES = invoicePayloadSchema.keyof().options;
+
+export const invoiceSchema = invoicePayloadSchema.superRefine(
+  (value, context) => {
     if (value.expiresAt <= value.issuedAt) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
@@ -145,7 +161,8 @@ export const invoiceSchema = z
         message: "expiresAt must occur after issuedAt",
       });
     }
-  });
+  },
+);
 
 export const ruleResultSchema = z
   .object({
@@ -172,7 +189,7 @@ export const canonicalRuleResultsSchema = z
     });
   });
 
-export const decisionReceiptSchema = z
+const decisionReceiptPayloadSchema = z
   .object({
     version: versionSchema,
     decisionId: identifierSchema,
@@ -187,7 +204,12 @@ export const decisionReceiptSchema = z
   })
   .strict();
 
-export const authorizationReceiptSchema = z
+export const DECISION_RECEIPT_SCHEMA_FIELD_NAMES =
+  decisionReceiptPayloadSchema.keyof().options;
+
+export const decisionReceiptSchema = decisionReceiptPayloadSchema;
+
+const authorizationReceiptPayloadSchema = z
   .object({
     version: versionSchema,
     authorizationId: identifierSchema,
@@ -202,6 +224,11 @@ export const authorizationReceiptSchema = z
     signer: authorizationSignerAddressSchema,
   })
   .strict();
+
+export const AUTHORIZATION_RECEIPT_SCHEMA_FIELD_NAMES =
+  authorizationReceiptPayloadSchema.keyof().options;
+
+export const authorizationReceiptSchema = authorizationReceiptPayloadSchema;
 
 const detachedEnvelope = <T extends z.ZodTypeAny>(payload: T) =>
   z.object({ payload, signature: signatureSchema }).strict();
