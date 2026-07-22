@@ -1,10 +1,13 @@
 import {
   concat,
   encodeAbiParameters,
+  hashDomain,
+  hashStruct,
   hashTypedData,
   keccak256,
   recoverTypedDataAddress,
   stringToHex,
+  zeroAddress,
   type Address,
   type Hex,
 } from "viem";
@@ -33,6 +36,36 @@ import {
 } from "./schemas.js";
 import { vaultAddressSchema } from "./primitives.js";
 
+const SECP256K1_HALF_CURVE_ORDER = BigInt(
+  "0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0",
+);
+
+function assertCanonicalSignature(signature: Hex): void {
+  const r = BigInt(`0x${signature.slice(2, 66)}`);
+  const s = BigInt(`0x${signature.slice(66, 130)}`);
+  const v = Number.parseInt(signature.slice(130, 132), 16);
+
+  if (r === 0n || s === 0n) {
+    throw new Error("Signature r and s must be nonzero");
+  }
+  if (s > SECP256K1_HALF_CURVE_ORDER) {
+    throw new Error("Signature s must be canonical low-s");
+  }
+  if (v !== 27 && v !== 28) {
+    throw new Error("Signature v must be 27 or 28");
+  }
+}
+
+async function requireNonzeroRecoveredSigner(
+  recovery: Promise<Address>,
+): Promise<Address> {
+  const recovered = await recovery;
+  if (recovered === zeroAddress) {
+    throw new Error("Signature recovered the zero address");
+  }
+  return recovered;
+}
+
 export const EIP712_DOMAIN_NAMES = {
   covenantSpec: "Covenant CovenantSpec",
   paymentIntent: "Covenant PaymentIntent",
@@ -40,6 +73,13 @@ export const EIP712_DOMAIN_NAMES = {
   decisionReceipt: "Covenant DecisionReceipt",
   authorizationReceipt: "Covenant AuthorizationReceipt",
 } as const;
+
+const EIP712_DOMAIN_FIELDS = [
+  { name: "name", type: "string" },
+  { name: "version", type: "string" },
+  { name: "chainId", type: "uint256" },
+  { name: "verifyingContract", type: "address" },
+] as const;
 
 const domainNameSchema = z.enum([
   EIP712_DOMAIN_NAMES.covenantSpec,
@@ -395,6 +435,60 @@ export function hashAuthorizationReceipt(
   return hashTypedData(buildAuthorizationReceiptTypedData(payload, domain));
 }
 
+export function hashPaymentIntentStruct(payload: unknown): Hex {
+  const value = paymentIntentSchema.parse(payload);
+  return hashStruct({
+    data: {
+      version: value.version,
+      intentId: value.intentId,
+      covenantId: value.covenantId,
+      agentSigner: value.agentSigner,
+      recipient: value.recipient,
+      token: value.token,
+      amount: value.amount,
+      invoiceHash: value.invoiceHash,
+      purpose: value.purpose,
+      createdAt: value.createdAt,
+      expiresAt: value.expiresAt,
+      nonce: value.nonce,
+    },
+    primaryType: "PaymentIntent",
+    types: PAYMENT_INTENT_TYPES,
+  });
+}
+
+export function hashAuthorizationReceiptStruct(payload: unknown): Hex {
+  const value = authorizationReceiptSchema.parse(payload);
+  return hashStruct({
+    data: {
+      version: value.version,
+      authorizationId: value.authorizationId,
+      decisionId: value.decisionId,
+      covenantId: value.covenantId,
+      intentHash: value.intentHash,
+      vaultAddress: value.vaultAddress,
+      chainId: value.chainId,
+      policyVersion: value.policyVersion,
+      authorizationNonce: value.authorizationNonce,
+      validUntil: value.validUntil,
+      signer: value.signer,
+    },
+    primaryType: "AuthorizationReceipt",
+    types: AUTHORIZATION_RECEIPT_TYPES,
+  });
+}
+
+export function hashSigningDomain(domain: unknown): Hex {
+  const value = signingDomainSchema.parse(domain);
+  const normalized = eip712Domain(value);
+  return hashDomain({
+    domain: normalized,
+    types: {
+      EIP712Domain: EIP712_DOMAIN_FIELDS,
+    },
+  });
+}
+
 const RULE_RESULT_TYPE_HASH = keccak256(
   stringToHex(
     "RuleResult(string ruleId,string status,string expected,string actual,string reason)",
@@ -450,10 +544,13 @@ export async function recoverPaymentIntentSigner(
   const signed = signedPaymentIntentSchema.parse(envelope);
   const rawPayload = (envelope as { payload: unknown }).payload;
   const typedData = buildPaymentIntentTypedData(rawPayload, domain);
-  return recoverTypedDataAddress({
-    ...typedData,
-    signature: signed.signature,
-  });
+  assertCanonicalSignature(signed.signature);
+  return requireNonzeroRecoveredSigner(
+    recoverTypedDataAddress({
+      ...typedData,
+      signature: signed.signature,
+    }),
+  );
 }
 
 export async function recoverInvoiceSigner(
@@ -463,10 +560,13 @@ export async function recoverInvoiceSigner(
   const signed = signedInvoiceSchema.parse(envelope);
   const rawPayload = (envelope as { payload: unknown }).payload;
   const typedData = buildInvoiceTypedData(rawPayload, domain);
-  return recoverTypedDataAddress({
-    ...typedData,
-    signature: signed.signature,
-  });
+  assertCanonicalSignature(signed.signature);
+  return requireNonzeroRecoveredSigner(
+    recoverTypedDataAddress({
+      ...typedData,
+      signature: signed.signature,
+    }),
+  );
 }
 
 export async function recoverDecisionReceiptSigner(
@@ -476,10 +576,13 @@ export async function recoverDecisionReceiptSigner(
   const signed = signedDecisionReceiptSchema.parse(envelope);
   const rawPayload = (envelope as { payload: unknown }).payload;
   const typedData = buildDecisionReceiptTypedData(rawPayload, domain);
-  return recoverTypedDataAddress({
-    ...typedData,
-    signature: signed.signature,
-  });
+  assertCanonicalSignature(signed.signature);
+  return requireNonzeroRecoveredSigner(
+    recoverTypedDataAddress({
+      ...typedData,
+      signature: signed.signature,
+    }),
+  );
 }
 
 export async function recoverAuthorizationReceiptSigner(
@@ -489,10 +592,13 @@ export async function recoverAuthorizationReceiptSigner(
   const signed = signedAuthorizationReceiptSchema.parse(envelope);
   const rawPayload = (envelope as { payload: unknown }).payload;
   const typedData = buildAuthorizationReceiptTypedData(rawPayload, domain);
-  return recoverTypedDataAddress({
-    ...typedData,
-    signature: signed.signature,
-  });
+  assertCanonicalSignature(signed.signature);
+  return requireNonzeroRecoveredSigner(
+    recoverTypedDataAddress({
+      ...typedData,
+      signature: signed.signature,
+    }),
+  );
 }
 
 async function recoverOrFail(

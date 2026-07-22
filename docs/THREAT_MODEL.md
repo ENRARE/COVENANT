@@ -8,18 +8,18 @@ Outcome meanings: **Prevented** means the MVP control blocks the stated outcome;
 
 ## Assets
 
-| Asset                            | Scope | Security objective                                                       |
-| -------------------------------- | ----- | ------------------------------------------------------------------------ |
-| Vault USDC                       | MVP   | Preserve funds except exact authorized settlement within hard limits     |
-| Issuer authority                 | MVP   | Prevent unauthorized Covenant creation or revocation decisions           |
-| Agent identity key               | MVP   | Authenticate proposals without granting execution authority              |
-| Authorization signer             | MVP   | Sign only exact, approved, short-lived receipts                          |
-| Circle credentials               | MVP   | Restrict transaction submission to the isolated executor                 |
-| Covenant configuration           | MVP   | Preserve issuer-approved immutable limits and policy commitment          |
-| `PaymentIntent` integrity        | MVP   | Bind agent, recipient, token, amount, invoice, purpose, time, and nonce  |
-| `AuthorizationReceipt` integrity | MVP   | Bind decision, Covenant, intent, vault, chain, policy, nonce, and expiry |
-| Audit records                    | MVP   | Preserve useful evidence without becoming authoritative state            |
-| Vendor invoice key               | MVP   | Authenticate the approved vendor’s exact invoice fields                  |
+| Asset                            | Scope | Security objective                                                                                   |
+| -------------------------------- | ----- | ---------------------------------------------------------------------------------------------------- |
+| Vault USDC                       | MVP   | Preserve funds except exact authorized settlement within hard limits                                 |
+| Issuer authority                 | MVP   | Prevent unauthorized Covenant creation or revocation decisions                                       |
+| Agent identity key               | MVP   | Authenticate proposals without granting execution authority                                          |
+| Authorization signer             | MVP   | Sign only exact, approved, short-lived receipts                                                      |
+| Circle credentials               | MVP   | Restrict transaction submission to the isolated executor                                             |
+| Covenant configuration           | MVP   | Preserve issuer-approved immutable limits and policy commitment                                      |
+| `PaymentIntent` integrity        | MVP   | Bind agent, recipient, token, amount, invoice, purpose, time, and nonce                              |
+| `AuthorizationReceipt` integrity | MVP   | Bind a nonzero DecisionReceipt identifier, Covenant, intent, vault, chain, policy, nonce, and expiry |
+| Audit records                    | MVP   | Preserve useful evidence without becoming authoritative state                                        |
+| Vendor invoice key               | MVP   | Authenticate the approved vendor’s exact invoice fields                                              |
 
 ## Components
 

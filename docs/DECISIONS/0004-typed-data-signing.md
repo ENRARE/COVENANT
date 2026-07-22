@@ -16,6 +16,8 @@ All capabilities in this decision are **MVP** unless explicitly labeled otherwis
 
 **MVP:** Low-level recovery functions prove cryptographic self-consistency for a strictly parsed envelope and domain. Covenant-anchored verification additionally requires the recovered PaymentIntent signer to equal `CovenantSpec.agentSigner` and both receipt signers to equal `CovenantSpec.authorizationSigner`. Complete authorization-chain verification additionally enforces all cross-object IDs, hashes, policy, deployment, decision, rule, amount, purpose, and temporal relationships.
 
+**MVP:** `AuthorizationReceipt.decisionId` is a signed linkage identifier for the contextual `DecisionReceipt` and must not be `bytes32(0)`. The trusted offchain authorization-chain verifier validates the referenced DecisionReceipt and its linkage. The vault enforces only that the signed identifier is nonzero and does not verify the DecisionReceipt onchain.
+
 **Protocol:** Multichain signing is deferred and requires a new specification.
 
 ## Signed fields
@@ -83,6 +85,8 @@ domain names           Covenant CovenantSpec | Covenant PaymentIntent | Covenant
 
 **MVP:** Tests assert strict parsing at every public boundary, independent frozen schema/typed-field parity, mutation of each mutable signed field, immutable version/chain rejection, detached-signature exclusion, Covenant-anchored signature recovery, attacker self-signing rejection, complete authorization linkage, canonical rule validation, domain separation, malformed signatures, and fixed hashes.
 
-**MVP:** viem rejects all-zero signatures, invalid recovery bytes, and zero `r` or `s` during recovery. viem accepts the mathematically equivalent high-`s` twin when the recovery bit is flipped; the MVP design therefore uses authorization nonce/hash state rather than signature bytes as replay identity. No custom cryptography is implemented.
+**MVP:** Trusted TypeScript and Solidity verification accept only canonical 65-byte ECDSA signatures with nonzero `r` and `s`, `v` equal to 27 or 28, low-`s`, and a nonzero recovered signer. Solidity uses OpenZeppelin ECDSA; TypeScript performs the equivalent canonical-form checks before viem recovery. High-`s` twins are rejected on both boundaries. Replay identity uses signed message digests, identifiers, and nonces, never signature bytes. No custom cryptography is implemented.
 
-**MVP deferred:** Solidity hashing and TypeScript/Solidity parity require later CovenantVault hashing work. No parity claim is made.
+**MVP:** COV-002 proves TypeScript/Solidity runtime parity for PaymentIntent and AuthorizationReceipt struct hashes, EIP-712 digests, domain separators, dynamic string hashing, and canonical low-`s` signature acceptance. Fixed fixtures test pure hashing, while execution tests sign for the actual deployed vault address.
+
+**MVP deferred:** CovenantSpec, Invoice, and DecisionReceipt Solidity hashing parity is not claimed because those objects are not required by CovenantVault runtime behavior.

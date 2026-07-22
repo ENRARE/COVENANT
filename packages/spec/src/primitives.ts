@@ -42,6 +42,11 @@ export const bytes32Schema = z
   .regex(/^0x[0-9a-fA-F]{64}$/, "Expected 32-byte hex value")
   .transform((value) => value as Hex);
 
+export const nonzeroBytes32Schema = bytes32Schema.refine(
+  (value) => value !== `0x${"00".repeat(32)}`,
+  "Zero bytes32 value is not allowed",
+);
+
 export const signatureSchema = z
   .string()
   .regex(/^0x[0-9a-fA-F]{130}$/, "Expected 65-byte signature")
