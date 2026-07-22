@@ -229,7 +229,7 @@ describe("signed DecisionReceipt rule commitment", () => {
     });
   });
 
-  it("documents that viem recovery accepts the ECDSA high-s twin", async () => {
+  it("rejects the ECDSA high-s twin at the trusted verification boundary", async () => {
     const curveOrder = BigInt(
       "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
     );
@@ -243,7 +243,7 @@ describe("signed DecisionReceipt rule commitment", () => {
         { ...rawSignedPaymentIntentFixture, signature: malleableTwin },
         rawCovenantSpecFixture,
       ),
-    ).resolves.toBeDefined();
+    ).rejects.toMatchObject({ code: "SIGNATURE_INVALID" });
   });
 
   it("commits to all founder-approved DecisionReceipt fields", () => {

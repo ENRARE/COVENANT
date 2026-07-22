@@ -34,6 +34,9 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - name: Install pinned Solidity dependencies
+        run: forge install --no-git --shallow openzeppelin-contracts=OpenZeppelin/openzeppelin-contracts@tag=v5.6.1 forge-std=foundry-rs/forge-std@tag=v1.9.7
+
       - name: Validate formatting
         run: pnpm format:check
 

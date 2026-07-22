@@ -42,6 +42,9 @@ import {
   hashDecisionReceipt,
   hashInvoice,
   hashPaymentIntent,
+  hashPaymentIntentStruct,
+  hashAuthorizationReceiptStruct,
+  hashSigningDomain,
   hashRuleResult,
   hashRuleResults,
   validateSigningDomainForCovenant,
@@ -472,5 +475,20 @@ describe("domain separation and vectors", () => {
         authorizationReceiptDomainFixture,
       ),
     ).toBe(expectedVectorHashes.authorizationReceipt);
+  });
+
+  it("freezes runtime Solidity struct and domain parity vectors", () => {
+    expect(hashPaymentIntentStruct(rawPaymentIntentFixture)).toBe(
+      "0xc4d6004a5a72ff6ba840c5014d828e81e9e16788c2baf954f495e6b7f8b7832a",
+    );
+    expect(hashAuthorizationReceiptStruct(rawAuthorizationReceiptFixture)).toBe(
+      "0x2479a55ed11ca406ec56959c34702ddf28f5fe9f369e7274fe5bdf396be727ee",
+    );
+    expect(hashSigningDomain(paymentIntentDomainFixture)).toBe(
+      "0x7a1af5478e03f72ecac4236c8393fc2165719699035608183c206460166564c8",
+    );
+    expect(hashSigningDomain(authorizationReceiptDomainFixture)).toBe(
+      "0xc79bc72a231f2f20430a2c95ddb5f16b592c201615cc98af2a4d7603d9de9ea2",
+    );
   });
 });

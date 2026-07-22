@@ -14,6 +14,9 @@ import {
 import {
   EIP712_DOMAIN_NAMES,
   hashPaymentIntent,
+  hashPaymentIntentStruct,
+  hashAuthorizationReceiptStruct,
+  hashSigningDomain,
   hashRuleResults,
   signingDomainSchema,
 } from "./typed-data.js";
@@ -266,4 +269,12 @@ export const expectedVectorHashes = {
     "0x8d0587bee7b740a10b9ea4ae96568c119f855ab45aa66ef2d7850d49f9303be4",
   approvedRuleResults: approvedRuleResultsHash,
   rejectedRuleResults: rejectedRuleResultsHash,
+  paymentIntentStruct: hashPaymentIntentStruct(rawPaymentIntentFixture),
+  authorizationReceiptStruct: hashAuthorizationReceiptStruct(
+    rawAuthorizationReceiptFixture,
+  ),
+  paymentIntentDomain: hashSigningDomain(paymentIntentDomainFixture),
+  authorizationReceiptDomain: hashSigningDomain(
+    authorizationReceiptDomainFixture,
+  ),
 } as const;
