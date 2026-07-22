@@ -16,13 +16,7 @@ abstract contract GeneratedHandlerBase is Test {
     uint256 internal immutable authorizationKey;
     uint256 internal nextIdentity = 100;
 
-    constructor(
-        CovenantVault vault_,
-        MockUSDC token_,
-        address issuer_,
-        uint256 agentKey_,
-        uint256 authorizationKey_
-    ) {
+    constructor(CovenantVault vault_, MockUSDC token_, address issuer_, uint256 agentKey_, uint256 authorizationKey_) {
         vault = vault_;
         token = token_;
         issuer = issuer_;
@@ -70,8 +64,7 @@ abstract contract GeneratedHandlerBase is Test {
             vault.authorizationSigner()
         );
         intentSignature = _sign(agentKey, intentHash);
-        authorizationSignature =
-            _sign(authorizationKey, vault.hashAuthorizationReceipt(authorization));
+        authorizationSignature = _sign(authorizationKey, vault.hashAuthorizationReceipt(authorization));
     }
 
     function _sign(uint256 key, bytes32 digest) internal pure returns (bytes memory) {
@@ -87,6 +80,7 @@ abstract contract GeneratedHandlerBase is Test {
 
 contract ActivePaymentHandler is GeneratedHandlerBase {
     error SuccessfulPaymentUnreached();
+    error SuccessfulDirectTransferUnreached();
 
     bool public immutable forceAllPaymentsToFail;
     uint256 public generatedSuccessfulPayments;
@@ -159,10 +153,9 @@ contract ActivePaymentHandler is GeneratedHandlerBase {
             consumedAuthorizationIds.push(authorization.authorizationId);
             consumedAuthorizationNonces.push(authorization.authorizationNonce);
         } catch (bytes memory reason) {
-            if (
-                forceAllPaymentsToFail
-                    && _selector(reason) == CovenantVault.InvalidPaymentIntent.selector
-            ) generatedFailedPayments++;
+            if (forceAllPaymentsToFail && _selector(reason) == CovenantVault.InvalidPaymentIntent.selector) {
+                generatedFailedPayments++;
+            }
         }
     }
 
@@ -205,8 +198,7 @@ contract ActivePaymentHandler is GeneratedHandlerBase {
                 failedAuthorizationNonces.push(authorization.authorizationNonce);
                 if (
                     vault.totalSpent() != spentBefore || vault.paymentCount() != countBefore
-                        || vault.usedIntentHashes(intentHash)
-                        || vault.usedIntentIds(intent.intentId)
+                        || vault.usedIntentHashes(intentHash) || vault.usedIntentIds(intent.intentId)
                         || vault.usedAgentNonces(intent.nonce)
                         || vault.usedAuthorizationIds(authorization.authorizationId)
                         || vault.usedAuthorizationNonces(authorization.authorizationNonce)
@@ -279,18 +271,25 @@ contract ActivePaymentHandler is GeneratedHandlerBase {
         uint256 countLimit = vault.maxPaymentCount();
         uint256 spent = vault.totalSpent();
         uint256 count = vault.paymentCount();
+        uint256 vaultBalance = token.balanceOf(address(vault));
         vm.prank(issuer);
-        token.transfer(address(vault), 1);
-        generatedDirectTransfers++;
+        try token.transfer(address(vault), 1) returns (bool transferred) {
+            if (transferred && token.balanceOf(address(vault)) == vaultBalance + 1) {
+                generatedDirectTransfers++;
+            }
+        } catch {}
         if (
             vault.totalBudget() != budget || vault.maxAmountPerPayment() != maximum
-                || vault.maxPaymentCount() != countLimit || vault.totalSpent() != spent
-                || vault.paymentCount() != count
+                || vault.maxPaymentCount() != countLimit || vault.totalSpent() != spent || vault.paymentCount() != count
         ) authorityChanged = true;
     }
 
     function assertSuccessfulPaymentReachability() external view {
         if (generatedSuccessfulPayments == 0) revert SuccessfulPaymentUnreached();
+    }
+
+    function assertSuccessfulDirectTransferReachability() external view {
+        if (generatedDirectTransfers == 0) revert SuccessfulDirectTransferUnreached();
     }
 
     function consumedLength() external view returns (uint256) {
@@ -315,13 +314,9 @@ contract RevocationHandler is GeneratedHandlerBase {
     bytes32 public consumedAuthorizationId;
     uint256 public consumedAuthorizationNonce;
 
-    constructor(
-        CovenantVault vault_,
-        MockUSDC token_,
-        address issuer_,
-        uint256 agentKey_,
-        uint256 authorizationKey_
-    ) GeneratedHandlerBase(vault_, token_, issuer_, agentKey_, authorizationKey_) {}
+    constructor(CovenantVault vault_, MockUSDC token_, address issuer_, uint256 agentKey_, uint256 authorizationKey_)
+        GeneratedHandlerBase(vault_, token_, issuer_, agentKey_, authorizationKey_)
+    {}
 
     function advanceLifecycle() external {
         if (phase == 0) {
@@ -332,9 +327,7 @@ contract RevocationHandler is GeneratedHandlerBase {
                 bytes memory authorizationSignature,
                 bytes32 intentHash
             ) = _payment(1);
-            try vault.executePayment(
-                intent, intentSignature, authorization, authorizationSignature
-            ) {
+            try vault.executePayment(intent, intentSignature, authorization, authorizationSignature) {
                 generatedSuccessfulPayments++;
                 consumedIntentHash = intentHash;
                 consumedIntentId = intent.intentId;
@@ -360,9 +353,7 @@ contract RevocationHandler is GeneratedHandlerBase {
                 bytes memory intentSignature,
                 bytes memory authorizationSignature,
             ) = _payment(1);
-            try vault.executePayment(
-                intent, intentSignature, authorization, authorizationSignature
-            ) {
+            try vault.executePayment(intent, intentSignature, authorization, authorizationSignature) {
                 unexpectedOutcome = true;
             } catch (bytes memory reason) {
                 if (_selector(reason) == CovenantVault.CovenantIsRevoked.selector) {
@@ -448,8 +439,7 @@ contract WithdrawalHandler is GeneratedHandlerBase {
                 generatedSuccessfulWithdrawals++;
                 phase = 4;
                 if (
-                    token.balanceOf(address(vault)) != 0
-                        || token.balanceOf(issuer) - issuerBefore != vaultBefore
+                    token.balanceOf(address(vault)) != 0 || token.balanceOf(issuer) - issuerBefore != vaultBefore
                         || vault.totalSpent() != spentBefore || vault.paymentCount() != countBefore
                 ) withdrawalStateMismatch = true;
             } catch {
@@ -490,9 +480,7 @@ contract ActivePaymentInvariantTest is CampaignBase {
     function setUp() public override {
         super.setUp();
         vault = _campaignVault();
-        handler = new ActivePaymentHandler(
-            vault, token, issuer, AGENT_PRIVATE_KEY, AUTHORIZATION_PRIVATE_KEY, false
-        );
+        handler = new ActivePaymentHandler(vault, token, issuer, AGENT_PRIVATE_KEY, AUTHORIZATION_PRIVATE_KEY, false);
         bytes4[] memory selectors = new bytes4[](1);
         selectors[0] = handler.advanceCampaign.selector;
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
@@ -531,9 +519,7 @@ contract ActivePaymentInvariantTest is CampaignBase {
         assertGt(handler.generatedDirectTransfers(), 0);
         emit log_named_uint("generatedSuccessfulPayments", handler.generatedSuccessfulPayments());
         emit log_named_uint("generatedFailedPayments", handler.generatedFailedPayments());
-        emit log_named_uint(
-            "generatedFailedTokenSettlements", handler.generatedFailedTokenSettlements()
-        );
+        emit log_named_uint("generatedFailedTokenSettlements", handler.generatedFailedTokenSettlements());
         emit log_named_uint("generatedSuccessfulFunding", handler.generatedSuccessfulFunding());
     }
 }
@@ -544,9 +530,7 @@ contract RevocationInvariantTest is CampaignBase {
     function setUp() public override {
         super.setUp();
         vault = _campaignVault();
-        handler = new RevocationHandler(
-            vault, token, issuer, AGENT_PRIVATE_KEY, AUTHORIZATION_PRIVATE_KEY
-        );
+        handler = new RevocationHandler(vault, token, issuer, AGENT_PRIVATE_KEY, AUTHORIZATION_PRIVATE_KEY);
         targetContract(address(handler));
     }
 
@@ -567,13 +551,8 @@ contract RevocationInvariantTest is CampaignBase {
         assertGt(handler.generatedSuccessfulRevocations(), 0);
         assertGt(handler.generatedPostRevocationPaymentFailures(), 0);
         assertGt(handler.generatedRepeatedRevocationFailures(), 0);
-        emit log_named_uint(
-            "generatedSuccessfulRevocations", handler.generatedSuccessfulRevocations()
-        );
-        emit log_named_uint(
-            "generatedPostRevocationPaymentFailures",
-            handler.generatedPostRevocationPaymentFailures()
-        );
+        emit log_named_uint("generatedSuccessfulRevocations", handler.generatedSuccessfulRevocations());
+        emit log_named_uint("generatedPostRevocationPaymentFailures", handler.generatedPostRevocationPaymentFailures());
     }
 }
 
@@ -583,9 +562,7 @@ contract WithdrawalInvariantTest is CampaignBase {
     function setUp() public override {
         super.setUp();
         vault = _campaignVault();
-        handler = new WithdrawalHandler(
-            vault, token, issuer, attacker, AGENT_PRIVATE_KEY, AUTHORIZATION_PRIVATE_KEY
-        );
+        handler = new WithdrawalHandler(vault, token, issuer, attacker, AGENT_PRIVATE_KEY, AUTHORIZATION_PRIVATE_KEY);
         targetContract(address(handler));
     }
 
@@ -599,22 +576,30 @@ contract WithdrawalInvariantTest is CampaignBase {
         assertGt(handler.generatedSuccessfulRevocations(), 0);
         assertGt(handler.generatedSuccessfulWithdrawals(), 0);
         assertGt(handler.generatedInvalidWithdrawalFailures(), 1);
-        emit log_named_uint(
-            "generatedSuccessfulWithdrawals", handler.generatedSuccessfulWithdrawals()
-        );
+        emit log_named_uint("generatedSuccessfulWithdrawals", handler.generatedSuccessfulWithdrawals());
     }
 }
 
 contract InvariantReachabilityMutantTest is CampaignBase {
     function testAllPaymentsForcedToFailBreakSuccessfulPaymentReachability() public {
         CovenantVault campaignVault = _campaignVault();
-        ActivePaymentHandler mutant = new ActivePaymentHandler(
-            campaignVault, token, issuer, AGENT_PRIVATE_KEY, AUTHORIZATION_PRIVATE_KEY, true
-        );
+        ActivePaymentHandler mutant =
+            new ActivePaymentHandler(campaignVault, token, issuer, AGENT_PRIVATE_KEY, AUTHORIZATION_PRIVATE_KEY, true);
         mutant.pay();
         assertEq(mutant.generatedSuccessfulPayments(), 0);
         assertEq(mutant.generatedFailedPayments(), 1);
         vm.expectRevert(ActivePaymentHandler.SuccessfulPaymentUnreached.selector);
         mutant.assertSuccessfulPaymentReachability();
+    }
+
+    function testTransferSuccessWithoutBalanceIncreaseBreaksDirectTransferReachability() public {
+        CovenantVault campaignVault = _campaignVault();
+        ActivePaymentHandler mutant =
+            new ActivePaymentHandler(campaignVault, token, issuer, AGENT_PRIVATE_KEY, AUTHORIZATION_PRIVATE_KEY, false);
+        token.setTransferSuccessWithoutMovement(true);
+        mutant.directTransfer();
+        assertEq(mutant.generatedDirectTransfers(), 0);
+        vm.expectRevert(ActivePaymentHandler.SuccessfulDirectTransferUnreached.selector);
+        mutant.assertSuccessfulDirectTransferReachability();
     }
 }

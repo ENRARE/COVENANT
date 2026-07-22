@@ -6,11 +6,7 @@ import {CovenantTypes} from "../src/CovenantTypes.sol";
 import {CovenantVaultTestBase} from "./CovenantVaultTestBase.t.sol";
 
 contract CovenantHashingHarness {
-    function paymentIntentStruct(CovenantTypes.PaymentIntent calldata intent)
-        external
-        pure
-        returns (bytes32)
-    {
+    function paymentIntentStruct(CovenantTypes.PaymentIntent calldata intent) external pure returns (bytes32) {
         return CovenantHashing.hashPaymentIntentStruct(intent);
     }
 
@@ -22,21 +18,12 @@ contract CovenantHashingHarness {
         return CovenantHashing.hashAuthorizationReceiptStruct(authorization);
     }
 
-    function paymentIntentDomain(uint256 chainId, address verifyingContract)
-        external
-        pure
-        returns (bytes32)
-    {
-        return CovenantHashing.domainSeparator(
-            CovenantHashing.PAYMENT_INTENT_DOMAIN_NAME_HASH, chainId, verifyingContract
-        );
+    function paymentIntentDomain(uint256 chainId, address verifyingContract) external pure returns (bytes32) {
+        return
+            CovenantHashing.domainSeparator(CovenantHashing.PAYMENT_INTENT_DOMAIN_NAME_HASH, chainId, verifyingContract);
     }
 
-    function authorizationReceiptDomain(uint256 chainId, address verifyingContract)
-        external
-        pure
-        returns (bytes32)
-    {
+    function authorizationReceiptDomain(uint256 chainId, address verifyingContract) external pure returns (bytes32) {
         return CovenantHashing.domainSeparator(
             CovenantHashing.AUTHORIZATION_RECEIPT_DOMAIN_NAME_HASH, chainId, verifyingContract
         );
@@ -58,52 +45,41 @@ contract CovenantHashParityTest is CovenantVaultTestBase {
     function testFixedPaymentIntentStructAndDigestMatchTypeScript() public view {
         CovenantTypes.PaymentIntent memory intent = _fixtureIntent();
         bytes32 structHash = harness.paymentIntentStruct(intent);
-        bytes32 separator =
-            harness.paymentIntentDomain(5_042_002, 0x4000000000000000000000000000000000000004);
+        bytes32 separator = harness.paymentIntentDomain(5_042_002, 0x4000000000000000000000000000000000000004);
 
         assertEq(structHash, 0xc4d6004a5a72ff6ba840c5014d828e81e9e16788c2baf954f495e6b7f8b7832a);
         assertEq(separator, 0x7a1af5478e03f72ecac4236c8393fc2165719699035608183c206460166564c8);
         assertEq(
-            harness.digest(separator, structHash),
-            0x83aa530f535bee63287ee8f5b759f618d554290e16af53e4ca3ab44310d70a6a
+            harness.digest(separator, structHash), 0x83aa530f535bee63287ee8f5b759f618d554290e16af53e4ca3ab44310d70a6a
         );
     }
 
     function testFixedAuthorizationStructAndDigestMatchTypeScript() public view {
         CovenantTypes.AuthorizationReceipt memory authorization = _fixtureAuthorization();
         bytes32 structHash = harness.authorizationReceiptStruct(authorization);
-        bytes32 separator = harness.authorizationReceiptDomain(
-            5_042_002, 0x4000000000000000000000000000000000000004
-        );
+        bytes32 separator = harness.authorizationReceiptDomain(5_042_002, 0x4000000000000000000000000000000000000004);
 
         assertEq(structHash, 0x2479a55ed11ca406ec56959c34702ddf28f5fe9f369e7274fe5bdf396be727ee);
         assertEq(separator, 0xc79bc72a231f2f20430a2c95ddb5f16b592c201615cc98af2a4d7603d9de9ea2);
         assertEq(
-            harness.digest(separator, structHash),
-            0x8d0587bee7b740a10b9ea4ae96568c119f855ab45aa66ef2d7850d49f9303be4
+            harness.digest(separator, structHash), 0x8d0587bee7b740a10b9ea4ae96568c119f855ab45aa66ef2d7850d49f9303be4
         );
     }
 
     function testRuntimeDomainSeparatorsUseActualVaultChainAndAddress() public view {
-        assertEq(
-            vault.paymentIntentDomainSeparator(),
-            harness.paymentIntentDomain(block.chainid, address(vault))
-        );
+        assertEq(vault.paymentIntentDomainSeparator(), harness.paymentIntentDomain(block.chainid, address(vault)));
         assertEq(
             vault.authorizationReceiptDomainSeparator(),
             harness.authorizationReceiptDomain(block.chainid, address(vault))
         );
-        assertTrue(
-            vault.paymentIntentDomainSeparator() != vault.authorizationReceiptDomainSeparator()
-        );
+        assertTrue(vault.paymentIntentDomainSeparator() != vault.authorizationReceiptDomainSeparator());
     }
 
     function testRuntimeDigestsMatchPureHashing() public view {
         CovenantTypes.PaymentIntent memory intent = _intent(bytes32(uint256(2)), 1, 1_250_000);
         bytes32 intentStructHash = harness.paymentIntentStruct(intent);
         assertEq(
-            vault.hashPaymentIntent(intent),
-            harness.digest(vault.paymentIntentDomainSeparator(), intentStructHash)
+            vault.hashPaymentIntent(intent), harness.digest(vault.paymentIntentDomainSeparator(), intentStructHash)
         );
 
         CovenantTypes.AuthorizationReceipt memory authorization =
@@ -133,20 +109,21 @@ contract CovenantHashParityTest is CovenantVaultTestBase {
     function testEveryPaymentIntentFieldChangesStructHashAndDigest() public view {
         CovenantTypes.PaymentIntent memory original = _fixtureIntent();
         bytes32 originalStructHash = harness.paymentIntentStruct(original);
-        bytes32 separator =
-            harness.paymentIntentDomain(5_042_002, 0x4000000000000000000000000000000000000004);
+        bytes32 separator = harness.paymentIntentDomain(5_042_002, 0x4000000000000000000000000000000000000004);
         bytes32 originalDigest = harness.digest(separator, originalStructHash);
 
         for (uint8 field; field < 12; ++field) {
             CovenantTypes.PaymentIntent memory mutated = _fixtureIntent();
             _mutatePaymentIntent(mutated, field);
-            _assertPaymentIntentFieldChanged(original, mutated, field);
+            assertEq(
+                _paymentIntentDifferenceMask(original, mutated),
+                uint256(1) << field,
+                "PaymentIntent mutation changed an unrelated field"
+            );
             bytes32 mutatedStructHash = harness.paymentIntentStruct(mutated);
             assertNotEq(mutatedStructHash, originalStructHash, "PaymentIntent struct field omitted");
             assertNotEq(
-                harness.digest(separator, mutatedStructHash),
-                originalDigest,
-                "PaymentIntent digest field omitted"
+                harness.digest(separator, mutatedStructHash), originalDigest, "PaymentIntent digest field omitted"
             );
         }
     }
@@ -154,19 +131,19 @@ contract CovenantHashParityTest is CovenantVaultTestBase {
     function testEveryAuthorizationReceiptFieldChangesStructHashAndDigest() public view {
         CovenantTypes.AuthorizationReceipt memory original = _fixtureAuthorization();
         bytes32 originalStructHash = harness.authorizationReceiptStruct(original);
-        bytes32 separator = harness.authorizationReceiptDomain(
-            5_042_002, 0x4000000000000000000000000000000000000004
-        );
+        bytes32 separator = harness.authorizationReceiptDomain(5_042_002, 0x4000000000000000000000000000000000000004);
         bytes32 originalDigest = harness.digest(separator, originalStructHash);
 
         for (uint8 field; field < 11; ++field) {
             CovenantTypes.AuthorizationReceipt memory mutated = _fixtureAuthorization();
             _mutateAuthorizationReceipt(mutated, field);
-            _assertAuthorizationReceiptFieldChanged(original, mutated, field);
-            bytes32 mutatedStructHash = harness.authorizationReceiptStruct(mutated);
-            assertNotEq(
-                mutatedStructHash, originalStructHash, "AuthorizationReceipt struct field omitted"
+            assertEq(
+                _authorizationReceiptDifferenceMask(original, mutated),
+                uint256(1) << field,
+                "AuthorizationReceipt mutation changed an unrelated field"
             );
+            bytes32 mutatedStructHash = harness.authorizationReceiptStruct(mutated);
+            assertNotEq(mutatedStructHash, originalStructHash, "AuthorizationReceipt struct field omitted");
             assertNotEq(
                 harness.digest(separator, mutatedStructHash),
                 originalDigest,
@@ -175,10 +152,27 @@ contract CovenantHashParityTest is CovenantVaultTestBase {
         }
     }
 
-    function _mutatePaymentIntent(CovenantTypes.PaymentIntent memory value, uint8 field)
-        private
-        pure
-    {
+    function testControlledTwoFieldPaymentIntentMutantIsRejectedBySingleFieldCheck() public pure {
+        CovenantTypes.PaymentIntent memory original = _fixtureIntent();
+        CovenantTypes.PaymentIntent memory mutated = _fixtureIntent();
+        _mutatePaymentIntent(mutated, 0);
+        _mutatePaymentIntent(mutated, 1);
+        assertEq(_paymentIntentDifferenceMask(original, mutated), 3);
+        assertNotEq(_paymentIntentDifferenceMask(original, mutated), uint256(1) << 0);
+        assertNotEq(_paymentIntentDifferenceMask(original, mutated), uint256(1) << 1);
+    }
+
+    function testControlledTwoFieldAuthorizationMutantIsRejectedBySingleFieldCheck() public pure {
+        CovenantTypes.AuthorizationReceipt memory original = _fixtureAuthorization();
+        CovenantTypes.AuthorizationReceipt memory mutated = _fixtureAuthorization();
+        _mutateAuthorizationReceipt(mutated, 0);
+        _mutateAuthorizationReceipt(mutated, 1);
+        assertEq(_authorizationReceiptDifferenceMask(original, mutated), 3);
+        assertNotEq(_authorizationReceiptDifferenceMask(original, mutated), uint256(1) << 0);
+        assertNotEq(_authorizationReceiptDifferenceMask(original, mutated), uint256(1) << 1);
+    }
+
+    function _mutatePaymentIntent(CovenantTypes.PaymentIntent memory value, uint8 field) private pure {
         if (field == 0) value.version = "2";
         else if (field == 1) value.intentId = bytes32(uint256(21));
         else if (field == 2) value.covenantId = bytes32(uint256(22));
@@ -193,42 +187,25 @@ contract CovenantHashParityTest is CovenantVaultTestBase {
         else value.nonce++;
     }
 
-    function _assertPaymentIntentFieldChanged(
+    function _paymentIntentDifferenceMask(
         CovenantTypes.PaymentIntent memory original,
-        CovenantTypes.PaymentIntent memory mutated,
-        uint8 field
-    ) private pure {
-        if (field == 0) {
-            assertNotEq(original.version, mutated.version);
-        } else if (field == 1) {
-            assertNotEq(original.intentId, mutated.intentId);
-        } else if (field == 2) {
-            assertNotEq(original.covenantId, mutated.covenantId);
-        } else if (field == 3) {
-            assertNotEq(original.agentSigner, mutated.agentSigner);
-        } else if (field == 4) {
-            assertNotEq(original.recipient, mutated.recipient);
-        } else if (field == 5) {
-            assertNotEq(original.token, mutated.token);
-        } else if (field == 6) {
-            assertNotEq(original.amount, mutated.amount);
-        } else if (field == 7) {
-            assertNotEq(original.invoiceHash, mutated.invoiceHash);
-        } else if (field == 8) {
-            assertNotEq(original.purpose, mutated.purpose);
-        } else if (field == 9) {
-            assertNotEq(original.createdAt, mutated.createdAt);
-        } else if (field == 10) {
-            assertNotEq(original.expiresAt, mutated.expiresAt);
-        } else {
-            assertNotEq(original.nonce, mutated.nonce);
-        }
+        CovenantTypes.PaymentIntent memory mutated
+    ) private pure returns (uint256 mask) {
+        if (keccak256(bytes(original.version)) != keccak256(bytes(mutated.version))) mask |= 1 << 0;
+        if (original.intentId != mutated.intentId) mask |= 1 << 1;
+        if (original.covenantId != mutated.covenantId) mask |= 1 << 2;
+        if (original.agentSigner != mutated.agentSigner) mask |= 1 << 3;
+        if (original.recipient != mutated.recipient) mask |= 1 << 4;
+        if (original.token != mutated.token) mask |= 1 << 5;
+        if (original.amount != mutated.amount) mask |= 1 << 6;
+        if (original.invoiceHash != mutated.invoiceHash) mask |= 1 << 7;
+        if (keccak256(bytes(original.purpose)) != keccak256(bytes(mutated.purpose))) mask |= 1 << 8;
+        if (original.createdAt != mutated.createdAt) mask |= 1 << 9;
+        if (original.expiresAt != mutated.expiresAt) mask |= 1 << 10;
+        if (original.nonce != mutated.nonce) mask |= 1 << 11;
     }
 
-    function _mutateAuthorizationReceipt(
-        CovenantTypes.AuthorizationReceipt memory value,
-        uint8 field
-    ) private pure {
+    function _mutateAuthorizationReceipt(CovenantTypes.AuthorizationReceipt memory value, uint8 field) private pure {
         if (field == 0) {
             value.version = "2";
         } else if (field == 1) {
@@ -254,34 +231,21 @@ contract CovenantHashParityTest is CovenantVaultTestBase {
         }
     }
 
-    function _assertAuthorizationReceiptFieldChanged(
+    function _authorizationReceiptDifferenceMask(
         CovenantTypes.AuthorizationReceipt memory original,
-        CovenantTypes.AuthorizationReceipt memory mutated,
-        uint8 field
-    ) private pure {
-        if (field == 0) {
-            assertNotEq(original.version, mutated.version);
-        } else if (field == 1) {
-            assertNotEq(original.authorizationId, mutated.authorizationId);
-        } else if (field == 2) {
-            assertNotEq(original.decisionId, mutated.decisionId);
-        } else if (field == 3) {
-            assertNotEq(original.covenantId, mutated.covenantId);
-        } else if (field == 4) {
-            assertNotEq(original.intentHash, mutated.intentHash);
-        } else if (field == 5) {
-            assertNotEq(original.vaultAddress, mutated.vaultAddress);
-        } else if (field == 6) {
-            assertNotEq(original.chainId, mutated.chainId);
-        } else if (field == 7) {
-            assertNotEq(original.policyVersion, mutated.policyVersion);
-        } else if (field == 8) {
-            assertNotEq(original.authorizationNonce, mutated.authorizationNonce);
-        } else if (field == 9) {
-            assertNotEq(original.validUntil, mutated.validUntil);
-        } else {
-            assertNotEq(original.signer, mutated.signer);
-        }
+        CovenantTypes.AuthorizationReceipt memory mutated
+    ) private pure returns (uint256 mask) {
+        if (keccak256(bytes(original.version)) != keccak256(bytes(mutated.version))) mask |= 1 << 0;
+        if (original.authorizationId != mutated.authorizationId) mask |= 1 << 1;
+        if (original.decisionId != mutated.decisionId) mask |= 1 << 2;
+        if (original.covenantId != mutated.covenantId) mask |= 1 << 3;
+        if (original.intentHash != mutated.intentHash) mask |= 1 << 4;
+        if (original.vaultAddress != mutated.vaultAddress) mask |= 1 << 5;
+        if (original.chainId != mutated.chainId) mask |= 1 << 6;
+        if (keccak256(bytes(original.policyVersion)) != keccak256(bytes(mutated.policyVersion))) mask |= 1 << 7;
+        if (original.authorizationNonce != mutated.authorizationNonce) mask |= 1 << 8;
+        if (original.validUntil != mutated.validUntil) mask |= 1 << 9;
+        if (original.signer != mutated.signer) mask |= 1 << 10;
     }
 
     function _fixtureIntent() private pure returns (CovenantTypes.PaymentIntent memory) {
@@ -301,11 +265,7 @@ contract CovenantHashParityTest is CovenantVaultTestBase {
         });
     }
 
-    function _fixtureAuthorization()
-        private
-        pure
-        returns (CovenantTypes.AuthorizationReceipt memory)
-    {
+    function _fixtureAuthorization() private pure returns (CovenantTypes.AuthorizationReceipt memory) {
         return CovenantTypes.AuthorizationReceipt({
             version: "1",
             authorizationId: 0x0606060606060606060606060606060606060606060606060606060606060606,

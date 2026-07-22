@@ -29,6 +29,10 @@ function fixture() {
   writeFileSync(join(dependency, "Fixture.sol"), "contract Fixture {}\n");
   writeFileSync(join(dependency, "README.md"), "fixture\n");
   writeFileSync(
+    join(dependency, ".gitattributes"),
+    "Fixture.sol filter=fixture\n",
+  );
+  writeFileSync(
     join(dependency, ".gitignore"),
     "Ignored.sol\nignored-foundry.toml\n",
   );
@@ -107,6 +111,95 @@ test("installer refuses a hidden-dirty checkout", () => {
       "Fixture.sol",
     ]);
   }
+});
+
+test("dependency verification rejects raw changes concealed by a clean filter", () => {
+  const value = fixture();
+  git(value.dependency, [
+    "config",
+    "filter.fixture.clean",
+    "git show HEAD:Fixture.sol",
+  ]);
+  writeFileSync(
+    join(value.dependency, "Fixture.sol"),
+    "contract Filtered {}\n",
+  );
+  const filteredHash = git(value.dependency, [
+    "hash-object",
+    "--path=Fixture.sol",
+    "Fixture.sol",
+  ]);
+  assert.equal(
+    filteredHash,
+    git(value.dependency, ["rev-parse", "HEAD:Fixture.sol"]),
+  );
+
+  const result = verify(value);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Fixture\.sol.*raw bytes differ from HEAD blob/);
+});
+
+test("installer rejects an existing raw change concealed by a clean filter", () => {
+  const value = fixture();
+  git(value.dependency, [
+    "config",
+    "filter.fixture.clean",
+    "git show HEAD:Fixture.sol",
+  ]);
+  writeFileSync(
+    join(value.dependency, "Fixture.sol"),
+    "contract Filtered {}\n",
+  );
+  assert.equal(
+    git(value.dependency, ["hash-object", "--path=Fixture.sol", "Fixture.sol"]),
+    git(value.dependency, ["rev-parse", "HEAD:Fixture.sol"]),
+  );
+
+  const result = install(value);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Fixture\.sol.*raw bytes differ from HEAD blob/);
+});
+
+test("dependency verification rejects CRLF bytes when HEAD stores LF", () => {
+  const value = fixture();
+  writeFileSync(
+    join(value.dependency, "Fixture.sol"),
+    "contract Fixture {}\r\n",
+  );
+  const result = verify(value);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Fixture\.sol.*raw bytes differ from HEAD blob/);
+});
+
+test("dependency verification rejects LF bytes when HEAD stores CRLF", () => {
+  const value = fixture();
+  git(value.dependency, ["config", "core.autocrlf", "false"]);
+  writeFileSync(
+    join(value.dependency, "Fixture.sol"),
+    "contract Fixture {}\r\n",
+  );
+  git(value.dependency, ["add", "Fixture.sol"]);
+  git(value.dependency, ["commit", "-m", "store CRLF fixture"]);
+  value.commit = git(value.dependency, ["rev-parse", "HEAD"]);
+  writeFileSync(
+    value.manifest,
+    JSON.stringify({
+      schemaVersion: 1,
+      dependencies: [
+        {
+          name: "example",
+          repository: "https://github.com/example/example.git",
+          version: "v1.0.0",
+          commit: value.commit,
+          directory: "lib/example",
+        },
+      ],
+    }),
+  );
+  writeFileSync(join(value.dependency, "Fixture.sol"), "contract Fixture {}\n");
+  const result = verify(value);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Fixture\.sol.*raw bytes differ from HEAD blob/);
 });
 
 const mutations = [
@@ -237,7 +330,10 @@ for (const [name, enableFlag, disableFlag, expectedFlag] of [
       const result = verify(value);
       assert.notEqual(result.status, 0, `${name} unexpectedly passed`);
       assert.match(result.stderr, new RegExp(`Fixture\\.sol.*${expectedFlag}`));
-      assert.match(result.stderr, /Fixture\.sol.*differs from HEAD blob/);
+      assert.match(
+        result.stderr,
+        /Fixture\.sol.*raw bytes differ from HEAD blob/,
+      );
     } finally {
       git(value.dependency, ["update-index", disableFlag, "Fixture.sol"]);
     }

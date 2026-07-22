@@ -6,6 +6,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 contract MockUSDC is ERC20 {
     address public failingSender;
     bool public transfersFail;
+    bool public transfersSucceedWithoutMovement;
     address public callbackTriggerSender;
     address public callbackTarget;
     bytes public callbackData;
@@ -28,6 +29,10 @@ contract MockUSDC is ERC20 {
         transfersFail = shouldFail;
     }
 
+    function setTransferSuccessWithoutMovement(bool shouldSkipMovement) external {
+        transfersSucceedWithoutMovement = shouldSkipMovement;
+    }
+
     function setCallback(address triggerSender, address target, bytes calldata data) external {
         callbackTriggerSender = triggerSender;
         callbackTarget = target;
@@ -39,6 +44,7 @@ contract MockUSDC is ERC20 {
 
     function _update(address from, address to, uint256 value) internal override {
         if (transfersFail && from == failingSender) revert("MOCK_TRANSFER_FAILED");
+        if (transfersSucceedWithoutMovement) return;
         if (from == callbackTriggerSender && callbackData.length != 0 && !callbackAttempted) {
             callbackAttempted = true;
             bytes memory returnData;

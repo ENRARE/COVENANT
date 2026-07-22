@@ -33,6 +33,8 @@ for (const dependency of manifest.dependencies) {
   mkdirSync(dirname(dependency.path), { recursive: true });
   const commands = [
     ["init", dependency.path],
+    ["-C", dependency.path, "config", "core.autocrlf", "false"],
+    ["-C", dependency.path, "config", "core.eol", "lf"],
     ["-C", dependency.path, "remote", "add", "origin", dependency.repository],
     [
       "-C",

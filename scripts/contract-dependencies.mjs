@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { lstatSync, readFileSync, readdirSync } from "node:fs";
+import { lstatSync, readFileSync, readdirSync, readlinkSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 
 export const DEFAULT_MANIFEST = "packages/contracts/dependencies.lock.json";
@@ -163,65 +163,63 @@ function parseHeadTree(repositoryPath, safeDirectories, errors) {
   return entries;
 }
 
-function hashTrackedBlobs(repositoryPath, entries, safeDirectories, errors) {
-  const hashes = new Map();
-  const batchPaths = [];
+function compareTrackedBlobs(repositoryPath, entries, safeDirectories, errors) {
   for (const entry of entries) {
     if (entry.type !== "blob") continue;
+    if (!["100644", "100755", "120000"].includes(entry.mode)) {
+      errors.push(
+        `tracked path ${displayPath(entry.path)} has unsupported blob mode ${entry.mode}`,
+      );
+      continue;
+    }
+
+    const workingPath = resolve(repositoryPath, entry.path);
+    let stat;
     try {
-      lstatSync(resolve(repositoryPath, entry.path));
+      stat = lstatSync(workingPath);
     } catch {
       errors.push(`tracked path ${displayPath(entry.path)} is missing`);
       continue;
     }
-    if (/[\r\n]/.test(entry.path)) {
-      const result = gitOutput(
-        repositoryPath,
-        ["hash-object", `--path=${entry.path}`, "--", entry.path],
-        { safeDirectories },
-      );
-      if (!result.ok) {
-        errors.push(`unable to hash tracked path ${displayPath(entry.path)}`);
-      } else {
-        hashes.set(entry.path, result.output);
-      }
-    } else {
-      batchPaths.push(entry.path);
-    }
-  }
 
-  if (batchPaths.length !== 0) {
-    const result = gitResult(repositoryPath, ["hash-object", "--stdin-paths"], {
-      safeDirectories,
-      input: `${batchPaths.join("\n")}\n`,
-    });
-    const output = result.status === 0 ? result.stdout.trim().split("\n") : [];
-    if (result.status !== 0 || output.length !== batchPaths.length) {
-      errors.push("unable to hash every tracked working-tree blob");
-    } else {
-      for (let index = 0; index < batchPaths.length; index++) {
-        hashes.set(batchPaths[index], output[index]);
-      }
-    }
-  }
-
-  for (const entry of entries) {
-    if (entry.type !== "blob") continue;
-    const actual = hashes.get(entry.path);
-    if (actual !== undefined && actual !== entry.objectId) {
-      const raw = gitOutput(
-        repositoryPath,
-        ["hash-object", "--no-filters", "--", entry.path],
-        { safeDirectories },
-      );
-      // A byte-for-byte HEAD match is also authoritative. This handles tracked
-      // CRLF test vectors whose repository intentionally stores CRLF while a
-      // machine-wide core.autocrlf setting would otherwise re-clean them.
-      if (!raw.ok || raw.output !== entry.objectId) {
+    let workingBytes;
+    if (entry.mode === "120000") {
+      if (!stat.isSymbolicLink()) {
         errors.push(
-          `tracked path ${displayPath(entry.path)} differs from HEAD blob ${entry.objectId}`,
+          `tracked path ${displayPath(entry.path)} must be a symbolic link`,
         );
+        continue;
       }
+      workingBytes = readlinkSync(workingPath, { encoding: "buffer" });
+    } else {
+      if (!stat.isFile()) {
+        errors.push(
+          `tracked path ${displayPath(entry.path)} must be a regular file`,
+        );
+        continue;
+      }
+      workingBytes = readFileSync(workingPath);
+    }
+
+    const headBlob = gitResult(
+      repositoryPath,
+      ["cat-file", "blob", entry.objectId],
+      {
+        safeDirectories,
+        encoding: null,
+        maxBuffer: 64 * 1024 * 1024,
+      },
+    );
+    if (headBlob.status !== 0 || !Buffer.isBuffer(headBlob.stdout)) {
+      errors.push(
+        `unable to read HEAD blob ${entry.objectId} for tracked path ${displayPath(entry.path)}`,
+      );
+      continue;
+    }
+    if (!workingBytes.equals(headBlob.stdout)) {
+      errors.push(
+        `tracked path ${displayPath(entry.path)} raw bytes differ from HEAD blob ${entry.objectId}`,
+      );
     }
   }
 }
@@ -297,7 +295,7 @@ function repositoryContentErrors(
   errors.push(...untrackedErrors(repositoryPath, safeDirectories));
 
   const entries = parseHeadTree(repositoryPath, safeDirectories, errors);
-  hashTrackedBlobs(repositoryPath, entries, safeDirectories, errors);
+  compareTrackedBlobs(repositoryPath, entries, safeDirectories, errors);
 
   for (const entry of entries) {
     if (entry.type === "blob") continue;
