@@ -64,6 +64,7 @@ contract CovenantVault is EIP712, ReentrancyGuard {
     error ReplayDetected();
     error TotalBudgetExceeded();
     error PaymentCountExceeded();
+    error TokenBalanceDeltaMismatch(uint256 expected, uint256 actual);
 
     event CovenantFunded(address indexed issuer, uint256 amount);
     event CovenantRevoked(address indexed issuer);
@@ -110,7 +111,9 @@ contract CovenantVault is EIP712, ReentrancyGuard {
 
     function fund(uint256 amount) external onlyIssuer nonReentrant {
         if (amount == 0) revert ZeroAmount();
+        uint256 balanceBefore = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), amount);
+        _requireExactBalanceIncrease(balanceBefore, token.balanceOf(address(this)), amount);
         emit CovenantFunded(msg.sender, amount);
     }
 
@@ -123,7 +126,9 @@ contract CovenantVault is EIP712, ReentrancyGuard {
     function withdrawRemaining() external onlyIssuer nonReentrant {
         if (!revoked && block.timestamp < validUntil) revert WithdrawalUnavailable();
         uint256 amount = token.balanceOf(address(this));
+        uint256 issuerBalanceBefore = token.balanceOf(issuer);
         token.safeTransfer(issuer, amount);
+        _requireExactBalanceIncrease(issuerBalanceBefore, token.balanceOf(issuer), amount);
         emit RemainingFundsWithdrawn(issuer, amount);
     }
 
@@ -170,7 +175,11 @@ contract CovenantVault is EIP712, ReentrancyGuard {
         totalSpent += intent.amount;
         paymentCount += 1;
 
+        uint256 recipientBalanceBefore = token.balanceOf(recipient);
         token.safeTransfer(recipient, intent.amount);
+        _requireExactBalanceIncrease(
+            recipientBalanceBefore, token.balanceOf(recipient), intent.amount
+        );
 
         _emitPaymentExecuted(intent, authorization, intentHash);
     }
@@ -278,9 +287,29 @@ contract CovenantVault is EIP712, ReentrancyGuard {
                 || configuration.validUntil <= configuration.validAfter
                 || bytes(configuration.purpose).length == 0
                 || bytes(configuration.purpose).length > 256
+                || _hasBoundaryWhitespace(bytes(configuration.purpose))
                 || bytes(configuration.policyVersion).length == 0
                 || bytes(configuration.policyVersion).length > 32
+                || !_isPolicyVersion(bytes(configuration.policyVersion))
         ) revert InvalidConfiguration();
+    }
+
+    function _hasBoundaryWhitespace(bytes memory value) private pure returns (bool) {
+        return value[0] <= 0x20 || value[value.length - 1] <= 0x20;
+    }
+
+    function _isPolicyVersion(bytes memory value) private pure returns (bool) {
+        for (uint256 i; i < value.length; ++i) {
+            bytes1 character = value[i];
+            bool alphaNumeric = (character >= 0x30 && character <= 0x39)
+                || (character >= 0x41 && character <= 0x5A)
+                || (character >= 0x61 && character <= 0x7A);
+            if (i == 0 && !alphaNumeric) return false;
+            if (!alphaNumeric && character != 0x2E && character != 0x5F && character != 0x2D) {
+                return false;
+            }
+        }
+        return true;
     }
 
     function _emitPaymentExecuted(
@@ -300,5 +329,14 @@ contract CovenantVault is EIP712, ReentrancyGuard {
             totalSpent,
             paymentCount
         );
+    }
+
+    function _requireExactBalanceIncrease(
+        uint256 balanceBefore,
+        uint256 balanceAfter,
+        uint256 expected
+    ) private pure {
+        uint256 actual = balanceAfter >= balanceBefore ? balanceAfter - balanceBefore : 0;
+        if (actual != expected) revert TokenBalanceDeltaMismatch(expected, actual);
     }
 }

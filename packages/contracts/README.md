@@ -6,17 +6,22 @@
 
 **MVP:** Execution is permissionless to submit and fully signature-gated. Invoice verification, RuleResult evaluation, DecisionReceipt verification, procurement interpretation, vendor delivery, Circle integration, broadcasting deployment, services, agents, Supabase, and UI are not implemented here.
 
-**MVP:** The only token outflow paths are an authorized payment to the immutable recipient and an issuer withdrawal to the immutable issuer after revocation or expiry. The only funding path is issuer-controlled `safeTransferFrom` for the immutable token.
+**MVP:** The only token outflow paths are an authorized payment to the immutable recipient and an issuer withdrawal to the immutable issuer after revocation or expiry. The only funding path is issuer-controlled `safeTransferFrom` for the immutable token. Every movement requires the destination's observable balance to increase by exactly the requested amount.
+
+**MVP:** Only the configured standard Arc Testnet USDC-style token is supported. Fee-on-transfer, rebasing, success-without-transfer, and malicious token behavior are unsupported and rejected whenever observable balance deltas do not match. This is not generalized ERC-20 support.
 
 ## Pinned dependencies
 
-**MVP:** OpenZeppelin Contracts is pinned to `v5.6.1`, and forge-std is pinned to `v1.9.7`. Dependency source directories are local build inputs under the ignored repository-root `lib/` directory and are not committed.
+**MVP:** Solidity dependencies are recorded in `packages/contracts/dependencies.lock.json` by repository, reviewed release, full commit SHA, and installation directory. OpenZeppelin Contracts `v5.6.1` is pinned to `5fd1781b1454fd1ef8e722282f86f9293cacf256`; forge-std `v1.9.7` is pinned to `77041d2ce690e692d6e03cc812b57d1ddaa4d505`. Dependency source directories are local build inputs under the ignored repository-root `lib/` directory and are not committed.
 
-**MVP:** Install both exact versions from the repository root:
+**MVP:** Install and verify both exact commits from the repository root:
 
 ```powershell
-forge install --no-git --shallow openzeppelin-contracts=OpenZeppelin/openzeppelin-contracts@tag=v5.6.1 forge-std=foundry-rs/forge-std@tag=v1.9.7
+pnpm install:contracts:deps
+pnpm verify:contracts:deps
 ```
+
+**MVP:** Installation fetches and checks out the recorded commits in detached HEAD state. Verification fails if either checkout's `HEAD` differs from the manifest.
 
 **MVP:** The vault uses OpenZeppelin `EIP712`, `ECDSA`, `SafeERC20`, and `ReentrancyGuard`. Canonical 65-byte low-`s` signatures are required, and replay identity never uses signature bytes.
 
@@ -51,12 +56,12 @@ Pop-Location
 
 ## Parity boundary
 
-**MVP:** Solidity and TypeScript parity is proven for PaymentIntent struct hashes and EIP-712 digests, AuthorizationReceipt struct hashes and EIP-712 digests, both runtime domain separators, dynamic string hashing, and canonical low-`s` signature acceptance.
+**MVP:** Runtime Solidity and TypeScript parity is proven only for PaymentIntent struct hashes and EIP-712 digests, AuthorizationReceipt struct hashes and EIP-712 digests, both runtime domain separators, dynamic string hashing, and canonical low-`s` signature acceptance.
 
 **MVP:** Execution tests sign for the actual deployed test vault address. Frozen fixture digests are verified through pure hashing.
 
 **MVP deferred:** CovenantSpec, Invoice, and DecisionReceipt Solidity hashing parity is not claimed because those objects are not verified by the runtime vault.
 
-**Production:** Broadcast deployment, real funds, managed keys, operational monitoring, incident response, and independent audit remain deferred.
+**Production:** Broadcast deployment, real funds, managed keys, operational monitoring, incident response, independent external audit, and formal verification remain deferred. No external audit or formal verification has occurred.
 
 **Protocol:** Upgradeability, arbitrary calls, generalized policies, and multichain operation remain excluded.

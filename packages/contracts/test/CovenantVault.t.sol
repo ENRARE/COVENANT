@@ -66,6 +66,8 @@ contract CovenantVaultTest is CovenantVaultTestBase {
         vm.prank(issuer);
         vault.fund(0);
 
+        vm.expectEmit(true, false, false, true, address(vault));
+        emit CovenantVault.CovenantFunded(issuer, 5_000_000_000);
         vm.prank(issuer);
         vault.fund(5_000_000_000);
         assertEq(token.balanceOf(address(vault)), 15_000_000_000);
@@ -386,6 +388,8 @@ contract CovenantVaultTest is CovenantVaultTestBase {
         vm.prank(attacker);
         vault.revoke();
 
+        vm.expectEmit(true, false, false, false, address(vault));
+        emit CovenantVault.CovenantRevoked(issuer);
         vm.prank(issuer);
         vault.revoke();
         assertTrue(vault.revoked());
@@ -403,6 +407,10 @@ contract CovenantVaultTest is CovenantVaultTestBase {
     }
 
     function testWithdrawalOnlyAfterRevocationOrExpiryAndNeverChangesSpent() public {
+        vm.expectRevert(abi.encodeWithSelector(CovenantVault.UnauthorizedCaller.selector, attacker));
+        vm.prank(attacker);
+        vault.withdrawRemaining();
+
         vm.expectRevert(CovenantVault.WithdrawalUnavailable.selector);
         vm.prank(issuer);
         vault.withdrawRemaining();
@@ -412,6 +420,9 @@ contract CovenantVaultTest is CovenantVaultTestBase {
         uint256 issuerBefore = token.balanceOf(issuer);
         vm.prank(issuer);
         vault.revoke();
+        uint256 withdrawalAmount = token.balanceOf(address(vault));
+        vm.expectEmit(true, false, false, true, address(vault));
+        emit CovenantVault.RemainingFundsWithdrawn(issuer, withdrawalAmount);
         vm.prank(issuer);
         vault.withdrawRemaining();
         assertEq(vault.totalSpent(), spentBefore);
@@ -460,7 +471,7 @@ contract CovenantVaultTest is CovenantVaultTestBase {
             CovenantVault.executePayment,
             (intent, intentSignature, authorization, authorizationSignature)
         );
-        token.setCallback(address(vault), callback);
+        token.setCallback(address(vault), address(vault), callback);
 
         vault.executePayment(intent, intentSignature, authorization, authorizationSignature);
         assertTrue(token.callbackAttempted());
