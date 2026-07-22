@@ -134,6 +134,42 @@ describe("detached signature recovery", () => {
       ),
     ).toBe(expectedVectorHashes.authorizationReceipt);
   });
+
+  it("rejects coherent cross-domain signature reuse", async () => {
+    await expect(
+      verifySignedAuthorizationReceiptForCovenant(
+        {
+          ...rawSignedAuthorizationReceiptFixture,
+          signature: rawSignedPaymentIntentFixture.signature,
+        },
+        rawCovenantSpecFixture,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      verifySignedPaymentIntentForCovenant(
+        {
+          ...rawSignedPaymentIntentFixture,
+          signature: rawSignedAuthorizationReceiptFixture.signature,
+        },
+        rawCovenantSpecFixture,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("rejects zero decision linkage at the trusted AuthorizationReceipt boundary", async () => {
+    await expect(
+      verifySignedAuthorizationReceiptForCovenant(
+        {
+          ...rawSignedAuthorizationReceiptFixture,
+          payload: {
+            ...rawSignedAuthorizationReceiptFixture.payload,
+            decisionId: `0x${"00".repeat(32)}`,
+          },
+        },
+        rawCovenantSpecFixture,
+      ),
+    ).rejects.toThrow();
+  });
 });
 
 describe("signed DecisionReceipt rule commitment", () => {
@@ -244,6 +280,37 @@ describe("signed DecisionReceipt rule commitment", () => {
         rawCovenantSpecFixture,
       ),
     ).rejects.toMatchObject({ code: "SIGNATURE_INVALID" });
+  });
+
+  const authorizationSignature = rawSignedAuthorizationReceiptFixture.signature;
+  const curveOrder = BigInt(
+    "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
+  );
+  const authorizationS = BigInt(`0x${authorizationSignature.slice(66, 130)}`);
+  const authorizationHighS = (curveOrder - authorizationS)
+    .toString(16)
+    .padStart(64, "0");
+  const authorizationHighSTwin = `${authorizationSignature.slice(0, 66)}${authorizationHighS}${authorizationSignature.endsWith("1c") ? "1b" : "1c"}`;
+
+  it.each([
+    ["all-zero / zero recovered signer", `0x${"00".repeat(65)}`],
+    ["zero r", `0x${"00".repeat(32)}${authorizationSignature.slice(66)}`],
+    [
+      "zero s",
+      `${authorizationSignature.slice(0, 66)}${"00".repeat(32)}${authorizationSignature.slice(-2)}`,
+    ],
+    ["invalid v", `${authorizationSignature.slice(0, -2)}ff`],
+    ["high-s", authorizationHighSTwin],
+    ["short", authorizationSignature.slice(0, -2)],
+    ["long", `${authorizationSignature}00`],
+    ["wrong signer", rawSignedPaymentIntentFixture.signature],
+  ])("rejects AuthorizationReceipt %s signature", async (_label, signature) => {
+    await expect(
+      verifySignedAuthorizationReceiptForCovenant(
+        { ...rawSignedAuthorizationReceiptFixture, signature },
+        rawCovenantSpecFixture,
+      ),
+    ).rejects.toThrow();
   });
 
   it("commits to all founder-approved DecisionReceipt fields", () => {

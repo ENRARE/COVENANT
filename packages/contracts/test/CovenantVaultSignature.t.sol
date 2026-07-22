@@ -4,8 +4,32 @@ pragma solidity 0.8.28;
 import {CovenantTypes} from "../src/CovenantTypes.sol";
 import {CovenantVault} from "../src/CovenantVault.sol";
 import {CovenantVaultTestBase} from "./CovenantVaultTestBase.t.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract CovenantVaultSignatureTest is CovenantVaultTestBase {
+    function testFuzzArbitraryRsvCannotAuthenticateWrongSigner(
+        bytes32 r,
+        bytes32 s,
+        uint8 v,
+        bool agentPosition
+    ) public {
+        CovenantTypes.PaymentIntent memory intent = _intent(bytes32(uint256(191)), 191, 1);
+        (
+            bytes memory intentSig,
+            CovenantTypes.AuthorizationReceipt memory auth,
+            bytes memory authSig
+        ) = _signedPayment(intent, bytes32(uint256(192)), 192);
+        bytes32 digest =
+            agentPosition ? vault.hashPaymentIntent(intent) : vault.hashAuthorizationReceipt(auth);
+        (address recovered,,) = ECDSA.tryRecover(digest, v, r, s);
+        vm.assume(recovered != (agentPosition ? agentSigner : authorizationSigner));
+        bytes memory fuzzed = abi.encodePacked(r, s, v);
+        vm.expectRevert();
+        vault.executePayment(
+            intent, agentPosition ? fuzzed : intentSig, auth, agentPosition ? authSig : fuzzed
+        );
+    }
+
     function testRejectsAllMalformedAgentAndAuthorizationSignatureForms() public {
         bytes[] memory bad = new bytes[](7);
         bad[0] = new bytes(65);

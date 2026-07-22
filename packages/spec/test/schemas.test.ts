@@ -44,6 +44,19 @@ describe("security-critical schemas", () => {
     ).toBe(1n);
   });
 
+  it("requires AuthorizationReceipt.decisionId to be nonzero", () => {
+    expect(
+      authorizationReceiptSchema.safeParse({
+        ...rawAuthorizationReceiptFixture,
+        decisionId: `0x${"00".repeat(32)}`,
+      }).success,
+    ).toBe(false);
+    expect(
+      authorizationReceiptSchema.safeParse(rawAuthorizationReceiptFixture)
+        .success,
+    ).toBe(true);
+  });
+
   it.each([
     ["issuer", "agentSigner"],
     ["issuer", "authorizationSigner"],

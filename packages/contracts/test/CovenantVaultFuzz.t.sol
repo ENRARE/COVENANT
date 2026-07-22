@@ -6,6 +6,58 @@ import {CovenantVault} from "../src/CovenantVault.sol";
 import {CovenantVaultTestBase} from "./CovenantVaultTestBase.t.sol";
 
 contract CovenantVaultFuzzTest is CovenantVaultTestBase {
+    function testFuzzStatefulFundingPaymentRevocationWithdrawalOrdering(uint8[] memory actions)
+        public
+    {
+        vm.assume(actions.length != 0);
+        if (actions.length > 24) assembly ("memory-safe") { mstore(actions, 24) }
+        uint256 nextId = 10_000;
+        bool observedRevoked;
+        for (uint256 i; i < actions.length; ++i) {
+            uint8 action = actions[i] % 4;
+            if (action == 0) {
+                vm.prank(issuer);
+                vault.fund(1);
+            } else if (action == 1) {
+                CovenantTypes.PaymentIntent memory intent = _intent(bytes32(nextId), nextId, 1);
+                (
+                    bytes memory intentSig,
+                    CovenantTypes.AuthorizationReceipt memory auth,
+                    bytes memory authSig
+                ) = _signedPayment(intent, bytes32(nextId + 1_000), nextId + 1_000);
+                if (vault.revoked() || vault.paymentCount() >= vault.maxPaymentCount()) {
+                    vm.expectRevert();
+                    vault.executePayment(intent, intentSig, auth, authSig);
+                } else {
+                    vault.executePayment(intent, intentSig, auth, authSig);
+                }
+                nextId++;
+            } else if (action == 2) {
+                if (vault.revoked()) {
+                    vm.expectRevert(CovenantVault.CovenantAlreadyRevoked.selector);
+                    vm.prank(issuer);
+                    vault.revoke();
+                } else {
+                    vm.prank(issuer);
+                    vault.revoke();
+                    observedRevoked = true;
+                }
+            } else {
+                if (!vault.revoked()) {
+                    vm.expectRevert(CovenantVault.WithdrawalUnavailable.selector);
+                    vm.prank(issuer);
+                    vault.withdrawRemaining();
+                } else {
+                    vm.prank(issuer);
+                    vault.withdrawRemaining();
+                }
+            }
+            if (observedRevoked) assertTrue(vault.revoked());
+            assertLe(vault.totalSpent(), vault.totalBudget());
+            assertLe(vault.paymentCount(), vault.maxPaymentCount());
+        }
+    }
+
     function testFuzzValidPaymentSequenceRespectsBudgetAndCount(uint96[] memory rawAmounts) public {
         vm.assume(rawAmounts.length != 0);
         if (rawAmounts.length > 8) assembly ("memory-safe") { mstore(rawAmounts, 8) }

@@ -251,6 +251,22 @@ contract CovenantVaultTest is CovenantVaultTestBase {
         _expectInvalidAuthorization(intent, intentSignature, authorization);
     }
 
+    function testAuthorizationDecisionIdMustBeNonzeroAndValidNonzeroPasses() public {
+        CovenantTypes.PaymentIntent memory intent = _intent(bytes32(uint256(801)), 801, 1);
+        bytes32 intentHash = vault.hashPaymentIntent(intent);
+        bytes memory intentSignature = _signature(AGENT_PRIVATE_KEY, intentHash);
+        CovenantTypes.AuthorizationReceipt memory authorization =
+            _authorization(bytes32(uint256(802)), 802, intentHash);
+        authorization.decisionId = bytes32(0);
+        _expectInvalidAuthorization(intent, intentSignature, authorization);
+
+        authorization = _authorization(bytes32(uint256(803)), 803, intentHash);
+        bytes memory authorizationSignature =
+            _signature(AUTHORIZATION_PRIVATE_KEY, vault.hashAuthorizationReceipt(authorization));
+        vault.executePayment(intent, intentSignature, authorization, authorizationSignature);
+        assertEq(vault.paymentCount(), 1);
+    }
+
     function testExactTimestampBoundaries() public {
         CovenantTypes.PaymentIntent memory intent = _intent(bytes32(uint256(2)), 1, 1_250_000);
 
@@ -421,12 +437,14 @@ contract CovenantVaultTest is CovenantVaultTestBase {
         vm.prank(issuer);
         vault.revoke();
         uint256 withdrawalAmount = token.balanceOf(address(vault));
+        uint256 exactIssuerBefore = token.balanceOf(issuer);
         vm.expectEmit(true, false, false, true, address(vault));
         emit CovenantVault.RemainingFundsWithdrawn(issuer, withdrawalAmount);
         vm.prank(issuer);
         vault.withdrawRemaining();
         assertEq(vault.totalSpent(), spentBefore);
         assertEq(token.balanceOf(address(vault)), 0);
+        assertEq(token.balanceOf(issuer) - exactIssuerBefore, withdrawalAmount);
         assertGt(token.balanceOf(issuer), issuerBefore);
 
         CovenantVault expiredVault = _deployVault(_configuration());
@@ -491,6 +509,54 @@ contract CovenantVaultTest is CovenantVaultTestBase {
 
         vm.expectRevert();
         otherVault.executePayment(intent, intentSignature, authorization, authorizationSignature);
+    }
+
+    function testCrossDomainSignatureReuseAndReceiptChainMismatchFail() public {
+        CovenantTypes.PaymentIntent memory intent = _intent(bytes32(uint256(901)), 901, 1);
+        (
+            bytes memory intentSignature,
+            CovenantTypes.AuthorizationReceipt memory authorization,
+            bytes memory authorizationSignature
+        ) = _signedPayment(intent, bytes32(uint256(902)), 902);
+
+        vm.expectRevert();
+        vault.executePayment(intent, authorizationSignature, authorization, intentSignature);
+
+        authorization.chainId = 1;
+        authorizationSignature =
+            _signature(AUTHORIZATION_PRIVATE_KEY, vault.hashAuthorizationReceipt(authorization));
+        vm.expectRevert(CovenantVault.InvalidAuthorizationReceipt.selector);
+        vault.executePayment(intent, intentSignature, authorization, authorizationSignature);
+    }
+
+    function testWithdrawalFailurePreservesAllStateAndBalances() public {
+        CovenantTypes.PaymentIntent memory intent = _intent(bytes32(uint256(911)), 911, 1);
+        bytes32 intentHash = vault.hashPaymentIntent(intent);
+        bytes32 authorizationId = bytes32(uint256(912));
+        uint256 authorizationNonce = 912;
+        _execute(intent, authorizationId, authorizationNonce);
+        vm.prank(issuer);
+        vault.revoke();
+
+        uint256 spentBefore = vault.totalSpent();
+        uint256 countBefore = vault.paymentCount();
+        uint256 vaultBalanceBefore = token.balanceOf(address(vault));
+        uint256 issuerBalanceBefore = token.balanceOf(issuer);
+        token.setTransferFailure(address(vault), true);
+        vm.expectRevert("MOCK_TRANSFER_FAILED");
+        vm.prank(issuer);
+        vault.withdrawRemaining();
+
+        assertEq(vault.totalSpent(), spentBefore);
+        assertEq(vault.paymentCount(), countBefore);
+        assertTrue(vault.revoked());
+        assertEq(token.balanceOf(address(vault)), vaultBalanceBefore);
+        assertEq(token.balanceOf(issuer), issuerBalanceBefore);
+        assertTrue(vault.usedIntentHashes(intentHash));
+        assertTrue(vault.usedIntentIds(intent.intentId));
+        assertTrue(vault.usedAgentNonces(intent.nonce));
+        assertTrue(vault.usedAuthorizationIds(authorizationId));
+        assertTrue(vault.usedAuthorizationNonces(authorizationNonce));
     }
 
     function testFuzzAuthorizedAmountNeverExceedsLimits(uint64 rawAmount) public {

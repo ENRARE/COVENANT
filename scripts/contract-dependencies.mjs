@@ -60,3 +60,56 @@ export function runGit(arguments_, options = {}) {
     ...options,
   });
 }
+
+function gitOutput(dependency, arguments_) {
+  const result = runGit([
+    "-c",
+    `safe.directory=${dependency.path}`,
+    "-C",
+    dependency.path,
+    ...arguments_,
+  ]);
+  return {
+    ok: result.status === 0,
+    output: result.status === 0 ? result.stdout.trim() : result.stderr.trim(),
+  };
+}
+
+export function dependencyIntegrityErrors(dependency) {
+  const errors = [];
+  const head = gitOutput(dependency, ["rev-parse", "HEAD"]);
+  if (!head.ok || head.output !== dependency.commit) {
+    errors.push(
+      `expected HEAD ${dependency.commit} but found ${head.output || "unreadable"}`,
+    );
+  }
+  const origin = gitOutput(dependency, ["remote", "get-url", "origin"]);
+  if (!origin.ok || origin.output !== dependency.repository) {
+    errors.push(
+      `expected origin ${dependency.repository} but found ${origin.output || "unreadable"}`,
+    );
+  }
+  const worktree = gitOutput(dependency, ["diff", "--exit-code", "--"]);
+  if (!worktree.ok) errors.push("tracked worktree differs from HEAD");
+  const index = gitOutput(dependency, [
+    "diff",
+    "--cached",
+    "--exit-code",
+    "--",
+  ]);
+  if (!index.ok) errors.push("Git index differs from HEAD");
+  const deleted = gitOutput(dependency, ["ls-files", "--deleted"]);
+  if (!deleted.ok || deleted.output !== "")
+    errors.push("tracked files are deleted");
+  const untracked = gitOutput(dependency, [
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+  ]);
+  if (!untracked.ok || untracked.output !== "") {
+    errors.push(
+      `untracked files are present${untracked.output ? `: ${untracked.output}` : ""}`,
+    );
+  }
+  return errors;
+}

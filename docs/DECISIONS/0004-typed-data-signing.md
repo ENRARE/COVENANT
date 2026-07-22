@@ -16,6 +16,8 @@ All capabilities in this decision are **MVP** unless explicitly labeled otherwis
 
 **MVP:** Low-level recovery functions prove cryptographic self-consistency for a strictly parsed envelope and domain. Covenant-anchored verification additionally requires the recovered PaymentIntent signer to equal `CovenantSpec.agentSigner` and both receipt signers to equal `CovenantSpec.authorizationSigner`. Complete authorization-chain verification additionally enforces all cross-object IDs, hashes, policy, deployment, decision, rule, amount, purpose, and temporal relationships.
 
+**MVP:** `AuthorizationReceipt.decisionId` is a signed linkage identifier for the contextual `DecisionReceipt` and must not be `bytes32(0)`. The trusted offchain authorization-chain verifier validates the referenced DecisionReceipt and its linkage. The vault enforces only that the signed identifier is nonzero and does not verify the DecisionReceipt onchain.
+
 **Protocol:** Multichain signing is deferred and requires a new specification.
 
 ## Signed fields

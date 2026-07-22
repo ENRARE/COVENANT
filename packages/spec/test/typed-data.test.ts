@@ -374,6 +374,23 @@ describe("signed-field mutation coverage", () => {
 });
 
 describe("domain separation and vectors", () => {
+  it("keeps the frozen AuthorizationReceipt digest while rejecting a zero decision linkage", () => {
+    expect(
+      hashAuthorizationReceipt(
+        rawAuthorizationReceiptFixture,
+        authorizationReceiptDomainFixture,
+      ),
+    ).toBe(expectedVectorHashes.authorizationReceipt);
+    expect(() =>
+      hashAuthorizationReceipt(
+        {
+          ...rawAuthorizationReceiptFixture,
+          decisionId: `0x${"00".repeat(32)}`,
+        },
+        authorizationReceiptDomainFixture,
+      ),
+    ).toThrow();
+  });
   it("validates low-level domains against Covenant deployment context", () => {
     expect(
       validateSigningDomainForCovenant(

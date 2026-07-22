@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import {
   DEFAULT_MANIFEST,
+  dependencyIntegrityErrors,
   loadDependencyManifest,
   parseArguments,
   runGit,
@@ -16,22 +17,15 @@ const manifest = loadDependencyManifest(
 
 for (const dependency of manifest.dependencies) {
   if (existsSync(dependency.path)) {
-    const result = runGit([
-      "-c",
-      `safe.directory=${dependency.path}`,
-      "-C",
-      dependency.path,
-      "rev-parse",
-      "HEAD",
-    ]);
-    if (result.status === 0 && result.stdout.trim() === dependency.commit) {
+    const errors = dependencyIntegrityErrors(dependency);
+    if (errors.length === 0) {
       console.log(
         `[OK] ${dependency.name} ${dependency.version} already installed at ${dependency.commit}`,
       );
       continue;
     }
     console.error(
-      `[FAILED] ${dependency.directory} exists but is not ${dependency.commit}; remove it explicitly before reinstalling.`,
+      `[FAILED] ${dependency.directory} exists but is not the exact clean approved checkout: ${errors.join("; ")}. Remove it explicitly before a clean reinstall.`,
     );
     process.exit(1);
   }
@@ -54,6 +48,13 @@ for (const dependency of manifest.dependencies) {
   for (const command of commands) {
     const result = runGit(command, { stdio: "inherit" });
     if (result.status !== 0) process.exit(result.status ?? 1);
+  }
+  const errors = dependencyIntegrityErrors(dependency);
+  if (errors.length !== 0) {
+    console.error(
+      `[FAILED] Installed dependency failed integrity verification: ${errors.join("; ")}`,
+    );
+    process.exit(1);
   }
   console.log(
     `[OK] Installed ${dependency.name} ${dependency.version} at ${dependency.commit}`,

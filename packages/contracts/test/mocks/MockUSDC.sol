@@ -11,6 +11,7 @@ contract MockUSDC is ERC20 {
     bytes public callbackData;
     bool public callbackAttempted;
     bool public callbackSucceeded;
+    bytes4 public callbackRevertSelector;
 
     constructor() ERC20("Mock USDC", "USDC") {}
 
@@ -33,13 +34,22 @@ contract MockUSDC is ERC20 {
         callbackData = data;
         callbackAttempted = false;
         callbackSucceeded = false;
+        callbackRevertSelector = bytes4(0);
     }
 
     function _update(address from, address to, uint256 value) internal override {
         if (transfersFail && from == failingSender) revert("MOCK_TRANSFER_FAILED");
         if (from == callbackTriggerSender && callbackData.length != 0 && !callbackAttempted) {
             callbackAttempted = true;
-            (callbackSucceeded,) = callbackTarget.call(callbackData);
+            bytes memory returnData;
+            (callbackSucceeded, returnData) = callbackTarget.call(callbackData);
+            if (!callbackSucceeded && returnData.length >= 4) {
+                bytes4 selector;
+                assembly ("memory-safe") {
+                    selector := mload(add(returnData, 0x20))
+                }
+                callbackRevertSelector = selector;
+            }
         }
         super._update(from, to, value);
     }

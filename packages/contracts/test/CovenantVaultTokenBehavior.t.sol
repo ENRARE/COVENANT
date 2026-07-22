@@ -4,6 +4,8 @@ pragma solidity 0.8.28;
 import {CovenantTypes} from "../src/CovenantTypes.sol";
 import {CovenantVault} from "../src/CovenantVault.sol";
 import {CovenantVaultTestBase} from "./CovenantVaultTestBase.t.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {MockUSDC} from "./mocks/MockUSDC.sol";
 import {
     TestTokenBase,
     FalseReturnToken,
@@ -13,7 +15,138 @@ import {
     SuccessWithoutTransferToken
 } from "./mocks/HostileTokens.sol";
 
+contract IssuerReentrancyHarness {
+    CovenantVault public vault;
+    MockUSDC public token;
+    bytes4 public nestedRevertSelector;
+    bool public nestedCallSucceeded;
+
+    function configure(CovenantVault vault_, MockUSDC token_) external {
+        require(address(vault) == address(0));
+        vault = vault_;
+        token = token_;
+    }
+
+    function approveAndFund(uint256 amount) external {
+        token.approve(address(vault), type(uint256).max);
+        vault.fund(amount);
+    }
+
+    function revoke() external {
+        vault.revoke();
+    }
+
+    function withdraw() external {
+        vault.withdrawRemaining();
+    }
+
+    function reenterFund() external {
+        require(msg.sender == address(token));
+        bytes memory result;
+        (nestedCallSucceeded, result) =
+            address(vault).call(abi.encodeCall(CovenantVault.fund, (uint256(1))));
+        nestedRevertSelector = _selector(result);
+    }
+
+    function reenterWithdraw() external {
+        require(msg.sender == address(token));
+        bytes memory result;
+        (nestedCallSucceeded, result) =
+            address(vault).call(abi.encodeCall(CovenantVault.withdrawRemaining, ()));
+        nestedRevertSelector = _selector(result);
+    }
+
+    function _selector(bytes memory result) private pure returns (bytes4 value) {
+        if (result.length < 4) return bytes4(0);
+        assembly ("memory-safe") { value := mload(add(result, 0x20)) }
+    }
+}
+
 contract CovenantVaultTokenBehaviorTest is CovenantVaultTestBase {
+    function testFuzzFundingBalanceMismatchRollsBack(uint96 rawAmount) public {
+        uint256 amount = bound(uint256(rawAmount), 1, 1_000_000_000);
+        FeeOnTransferToken other = new FeeOnTransferToken();
+        CovenantVault otherVault = _vaultFor(address(other));
+        other.mint(issuer, amount);
+        vm.startPrank(issuer);
+        other.approve(address(otherVault), amount);
+        vm.expectPartialRevert(CovenantVault.TokenBalanceDeltaMismatch.selector);
+        otherVault.fund(amount);
+        vm.stopPrank();
+        assertEq(other.balanceOf(address(otherVault)), 0);
+        assertEq(other.balanceOf(issuer), amount);
+        assertEq(otherVault.totalSpent(), 0);
+        assertEq(otherVault.paymentCount(), 0);
+    }
+
+    function testFuzzWithdrawalBalanceMismatchRollsBack(uint96 rawAmount) public {
+        uint256 amount = bound(uint256(rawAmount), 1, 1_000_000_000);
+        FeeOnTransferToken other = new FeeOnTransferToken();
+        CovenantVault otherVault = _vaultFor(address(other));
+        other.mint(address(otherVault), amount);
+        vm.prank(issuer);
+        otherVault.revoke();
+        vm.expectPartialRevert(CovenantVault.TokenBalanceDeltaMismatch.selector);
+        vm.prank(issuer);
+        otherVault.withdrawRemaining();
+        assertEq(other.balanceOf(address(otherVault)), amount);
+        assertEq(other.balanceOf(issuer), 0);
+        assertTrue(otherVault.revoked());
+        assertEq(otherVault.totalSpent(), 0);
+        assertEq(otherVault.paymentCount(), 0);
+    }
+
+    function testFundReentrancyReachesGuardAsImmutableIssuer() public {
+        IssuerReentrancyHarness harness = new IssuerReentrancyHarness();
+        CovenantTypes.Configuration memory configuration = _configuration();
+        configuration.issuer = address(harness);
+        CovenantVault harnessVault = _deployVault(configuration);
+        harness.configure(harnessVault, token);
+        token.mint(address(harness), 10);
+        token.setCallback(
+            address(harness),
+            address(harness),
+            abi.encodeCall(IssuerReentrancyHarness.reenterFund, ())
+        );
+
+        harness.approveAndFund(5);
+        assertEq(
+            harness.nestedRevertSelector(), ReentrancyGuard.ReentrancyGuardReentrantCall.selector
+        );
+        assertFalse(harness.nestedCallSucceeded());
+        assertEq(token.balanceOf(address(harnessVault)), 5);
+        assertEq(harnessVault.totalSpent(), 0);
+        assertEq(harnessVault.paymentCount(), 0);
+        _assertNoReplayState(harnessVault);
+    }
+
+    function testWithdrawalReentrancyReachesGuardAsImmutableIssuer() public {
+        IssuerReentrancyHarness harness = new IssuerReentrancyHarness();
+        CovenantTypes.Configuration memory configuration = _configuration();
+        configuration.issuer = address(harness);
+        CovenantVault harnessVault = _deployVault(configuration);
+        harness.configure(harnessVault, token);
+        token.mint(address(harnessVault), 10);
+        harness.revoke();
+        token.setCallback(
+            address(harnessVault),
+            address(harness),
+            abi.encodeCall(IssuerReentrancyHarness.reenterWithdraw, ())
+        );
+
+        harness.withdraw();
+        assertEq(
+            harness.nestedRevertSelector(), ReentrancyGuard.ReentrancyGuardReentrantCall.selector
+        );
+        assertFalse(harness.nestedCallSucceeded());
+        assertEq(token.balanceOf(address(harnessVault)), 0);
+        assertEq(token.balanceOf(address(harness)), 10);
+        assertTrue(harnessVault.revoked());
+        assertEq(harnessVault.totalSpent(), 0);
+        assertEq(harnessVault.paymentCount(), 0);
+        _assertNoReplayState(harnessVault);
+    }
+
     function testFuzzDeliveredBalanceMismatchRollsBack(uint96 rawAmount) public {
         uint256 amount = bound(uint256(rawAmount), 1, 1_000_000_000);
         FeeOnTransferToken other = new FeeOnTransferToken();
@@ -125,7 +258,16 @@ contract CovenantVaultTokenBehaviorTest is CovenantVaultTestBase {
         );
         vault.executePayment(intent, intentSig, auth, authSig);
         assertFalse(token.callbackSucceeded());
+        assertEq(
+            token.callbackRevertSelector(), ReentrancyGuard.ReentrancyGuardReentrantCall.selector
+        );
         assertEq(vault.paymentCount(), 1);
+        assertEq(vault.totalSpent(), intent.amount);
+        assertTrue(vault.usedIntentHashes(vault.hashPaymentIntent(intent)));
+        assertTrue(vault.usedIntentIds(intent.intentId));
+        assertTrue(vault.usedAgentNonces(intent.nonce));
+        assertTrue(vault.usedAuthorizationIds(auth.authorizationId));
+        assertTrue(vault.usedAuthorizationNonces(auth.authorizationNonce));
 
         vm.prank(issuer);
         vault.revoke();
@@ -221,5 +363,13 @@ contract CovenantVaultTokenBehaviorTest is CovenantVaultTestBase {
             auth,
             _signature(AUTHORIZATION_PRIVATE_KEY, otherVault.hashAuthorizationReceipt(auth))
         );
+    }
+
+    function _assertNoReplayState(CovenantVault target) private view {
+        assertFalse(target.usedIntentHashes(bytes32(uint256(1))));
+        assertFalse(target.usedIntentIds(bytes32(uint256(2))));
+        assertFalse(target.usedAgentNonces(3));
+        assertFalse(target.usedAuthorizationIds(bytes32(uint256(4))));
+        assertFalse(target.usedAuthorizationNonces(5));
     }
 }

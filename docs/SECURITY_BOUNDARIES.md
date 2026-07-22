@@ -43,6 +43,7 @@
 - **MVP:** The executor must compare the submitted call with signed authorization fields byte-for-byte.
 - **MVP:** The vault supports only its immutable standard Arc Testnet USDC-style token and requires exact destination balance deltas for funding, payment, and withdrawal. Fee-on-transfer, rebasing, success-without-transfer, and malicious token behavior are unsupported; mismatched observable deltas revert settlement and replay/accounting writes.
 - **MVP:** Runtime Solidity EIP-712 parity is limited to PaymentIntent and AuthorizationReceipt. CovenantSpec, Invoice, and DecisionReceipt are not runtime vault types.
+- **MVP:** Every `AuthorizationReceipt` commits to a nonzero `decisionId` identifying its contextual offchain `DecisionReceipt`. The trusted authorization-chain verifier validates that receipt and its cross-object linkage. The vault validates only the nonzero signed identifier and does not perform onchain `DecisionReceipt` verification.
 
 ## Deferred controls
 

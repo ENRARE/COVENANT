@@ -2,9 +2,9 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   DEFAULT_MANIFEST,
+  dependencyIntegrityErrors,
   loadDependencyManifest,
   parseArguments,
-  runGit,
 } from "./contract-dependencies.mjs";
 
 const arguments_ = parseArguments(process.argv.slice(2));
@@ -23,20 +23,10 @@ for (const dependency of manifest.dependencies) {
     failed = true;
     continue;
   }
-  const result = runGit([
-    "-c",
-    `safe.directory=${dependency.path}`,
-    "-C",
-    dependency.path,
-    "rev-parse",
-    "HEAD",
-  ]);
-  const actual =
-    result.status === 0 ? result.stdout.trim() : "not-a-git-checkout";
-  if (actual !== dependency.commit) {
-    console.error(
-      `[FAILED] ${dependency.name} expected ${dependency.commit} but found ${actual}`,
-    );
+  const errors = dependencyIntegrityErrors(dependency);
+  if (errors.length !== 0) {
+    for (const error of errors)
+      console.error(`[FAILED] ${dependency.name}: ${error}`);
     failed = true;
     continue;
   }

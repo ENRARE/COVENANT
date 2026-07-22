@@ -8,6 +8,7 @@ import {
   issuerAddressSchema,
   moneySchema,
   mvpChainIdSchema,
+  nonzeroBytes32Schema,
   policyVersionSchema,
   positiveMoneySchema,
   positiveUintStringSchema,
@@ -213,7 +214,7 @@ const authorizationReceiptPayloadSchema = z
   .object({
     version: versionSchema,
     authorizationId: identifierSchema,
-    decisionId: identifierSchema,
+    decisionId: nonzeroBytes32Schema,
     covenantId: identifierSchema,
     intentHash: bytes32Schema,
     vaultAddress: vaultAddressSchema,
