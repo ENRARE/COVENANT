@@ -44,6 +44,7 @@ for (const dependency of manifest.dependencies) {
       dependency.commit,
     ],
     ["-C", dependency.path, "checkout", "--detach", "FETCH_HEAD"],
+    ["-C", dependency.path, "submodule", "update", "--init", "--recursive"],
   ];
   for (const command of commands) {
     const result = runGit(command, { stdio: "inherit" });

@@ -130,6 +130,160 @@ contract CovenantHashParityTest is CovenantVaultTestBase {
         assertTrue(harness.authorizationReceiptStruct(authorization) != baseAuthorizationHash);
     }
 
+    function testEveryPaymentIntentFieldChangesStructHashAndDigest() public view {
+        CovenantTypes.PaymentIntent memory original = _fixtureIntent();
+        bytes32 originalStructHash = harness.paymentIntentStruct(original);
+        bytes32 separator =
+            harness.paymentIntentDomain(5_042_002, 0x4000000000000000000000000000000000000004);
+        bytes32 originalDigest = harness.digest(separator, originalStructHash);
+
+        for (uint8 field; field < 12; ++field) {
+            CovenantTypes.PaymentIntent memory mutated = _fixtureIntent();
+            _mutatePaymentIntent(mutated, field);
+            _assertPaymentIntentFieldChanged(original, mutated, field);
+            bytes32 mutatedStructHash = harness.paymentIntentStruct(mutated);
+            assertNotEq(mutatedStructHash, originalStructHash, "PaymentIntent struct field omitted");
+            assertNotEq(
+                harness.digest(separator, mutatedStructHash),
+                originalDigest,
+                "PaymentIntent digest field omitted"
+            );
+        }
+    }
+
+    function testEveryAuthorizationReceiptFieldChangesStructHashAndDigest() public view {
+        CovenantTypes.AuthorizationReceipt memory original = _fixtureAuthorization();
+        bytes32 originalStructHash = harness.authorizationReceiptStruct(original);
+        bytes32 separator = harness.authorizationReceiptDomain(
+            5_042_002, 0x4000000000000000000000000000000000000004
+        );
+        bytes32 originalDigest = harness.digest(separator, originalStructHash);
+
+        for (uint8 field; field < 11; ++field) {
+            CovenantTypes.AuthorizationReceipt memory mutated = _fixtureAuthorization();
+            _mutateAuthorizationReceipt(mutated, field);
+            _assertAuthorizationReceiptFieldChanged(original, mutated, field);
+            bytes32 mutatedStructHash = harness.authorizationReceiptStruct(mutated);
+            assertNotEq(
+                mutatedStructHash, originalStructHash, "AuthorizationReceipt struct field omitted"
+            );
+            assertNotEq(
+                harness.digest(separator, mutatedStructHash),
+                originalDigest,
+                "AuthorizationReceipt digest field omitted"
+            );
+        }
+    }
+
+    function _mutatePaymentIntent(CovenantTypes.PaymentIntent memory value, uint8 field)
+        private
+        pure
+    {
+        if (field == 0) value.version = "2";
+        else if (field == 1) value.intentId = bytes32(uint256(21));
+        else if (field == 2) value.covenantId = bytes32(uint256(22));
+        else if (field == 3) value.agentSigner = address(0x23);
+        else if (field == 4) value.recipient = address(0x24);
+        else if (field == 5) value.token = address(0x25);
+        else if (field == 6) value.amount++;
+        else if (field == 7) value.invoiceHash = bytes32(uint256(27));
+        else if (field == 8) value.purpose = "Mutated purpose";
+        else if (field == 9) value.createdAt++;
+        else if (field == 10) value.expiresAt++;
+        else value.nonce++;
+    }
+
+    function _assertPaymentIntentFieldChanged(
+        CovenantTypes.PaymentIntent memory original,
+        CovenantTypes.PaymentIntent memory mutated,
+        uint8 field
+    ) private pure {
+        if (field == 0) {
+            assertNotEq(original.version, mutated.version);
+        } else if (field == 1) {
+            assertNotEq(original.intentId, mutated.intentId);
+        } else if (field == 2) {
+            assertNotEq(original.covenantId, mutated.covenantId);
+        } else if (field == 3) {
+            assertNotEq(original.agentSigner, mutated.agentSigner);
+        } else if (field == 4) {
+            assertNotEq(original.recipient, mutated.recipient);
+        } else if (field == 5) {
+            assertNotEq(original.token, mutated.token);
+        } else if (field == 6) {
+            assertNotEq(original.amount, mutated.amount);
+        } else if (field == 7) {
+            assertNotEq(original.invoiceHash, mutated.invoiceHash);
+        } else if (field == 8) {
+            assertNotEq(original.purpose, mutated.purpose);
+        } else if (field == 9) {
+            assertNotEq(original.createdAt, mutated.createdAt);
+        } else if (field == 10) {
+            assertNotEq(original.expiresAt, mutated.expiresAt);
+        } else {
+            assertNotEq(original.nonce, mutated.nonce);
+        }
+    }
+
+    function _mutateAuthorizationReceipt(
+        CovenantTypes.AuthorizationReceipt memory value,
+        uint8 field
+    ) private pure {
+        if (field == 0) {
+            value.version = "2";
+        } else if (field == 1) {
+            value.authorizationId = bytes32(uint256(31));
+        } else if (field == 2) {
+            value.decisionId = bytes32(uint256(32));
+        } else if (field == 3) {
+            value.covenantId = bytes32(uint256(33));
+        } else if (field == 4) {
+            value.intentHash = bytes32(uint256(34));
+        } else if (field == 5) {
+            value.vaultAddress = address(0x35);
+        } else if (field == 6) {
+            value.chainId++;
+        } else if (field == 7) {
+            value.policyVersion = "gpu-policy-2";
+        } else if (field == 8) {
+            value.authorizationNonce++;
+        } else if (field == 9) {
+            value.validUntil++;
+        } else {
+            value.signer = address(0x3A);
+        }
+    }
+
+    function _assertAuthorizationReceiptFieldChanged(
+        CovenantTypes.AuthorizationReceipt memory original,
+        CovenantTypes.AuthorizationReceipt memory mutated,
+        uint8 field
+    ) private pure {
+        if (field == 0) {
+            assertNotEq(original.version, mutated.version);
+        } else if (field == 1) {
+            assertNotEq(original.authorizationId, mutated.authorizationId);
+        } else if (field == 2) {
+            assertNotEq(original.decisionId, mutated.decisionId);
+        } else if (field == 3) {
+            assertNotEq(original.covenantId, mutated.covenantId);
+        } else if (field == 4) {
+            assertNotEq(original.intentHash, mutated.intentHash);
+        } else if (field == 5) {
+            assertNotEq(original.vaultAddress, mutated.vaultAddress);
+        } else if (field == 6) {
+            assertNotEq(original.chainId, mutated.chainId);
+        } else if (field == 7) {
+            assertNotEq(original.policyVersion, mutated.policyVersion);
+        } else if (field == 8) {
+            assertNotEq(original.authorizationNonce, mutated.authorizationNonce);
+        } else if (field == 9) {
+            assertNotEq(original.validUntil, mutated.validUntil);
+        } else {
+            assertNotEq(original.signer, mutated.signer);
+        }
+    }
+
     function _fixtureIntent() private pure returns (CovenantTypes.PaymentIntent memory) {
         return CovenantTypes.PaymentIntent({
             version: "1",

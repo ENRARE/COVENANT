@@ -95,12 +95,24 @@ contract CovenantVaultFuzzTest is CovenantVaultTestBase {
 
     function testFuzzEveryIntentFieldMutationInvalidatesOriginalSignatures(uint8 rawField) public {
         uint8 field = uint8(bound(rawField, 0, 11));
+        _assertPaymentIntentMutationRejectsAtExpectedStage(field);
+    }
+
+    function testEveryIntentFieldMutationRejectsAtExpectedStage() public {
+        for (uint8 field; field < 12; ++field) {
+            _assertPaymentIntentMutationRejectsAtExpectedStage(field);
+        }
+    }
+
+    function _assertPaymentIntentMutationRejectsAtExpectedStage(uint8 field) private {
         CovenantTypes.PaymentIntent memory intent = _intent(bytes32(uint256(3_001)), 3_001, 1);
         (
             bytes memory intentSig,
             CovenantTypes.AuthorizationReceipt memory auth,
             bytes memory authSig
         ) = _signedPayment(intent, bytes32(uint256(3_002)), 3_002);
+        bytes32 originalStructHash = vault.hashPaymentIntentStruct(intent);
+        bytes32 originalDigest = vault.hashPaymentIntent(intent);
         if (field == 0) intent.version = "2";
         else if (field == 1) intent.intentId = bytes32(uint256(9));
         else if (field == 2) intent.covenantId = bytes32(uint256(9));
@@ -113,7 +125,13 @@ contract CovenantVaultFuzzTest is CovenantVaultTestBase {
         else if (field == 9) intent.createdAt += 1;
         else if (field == 10) intent.expiresAt -= 1;
         else intent.nonce += 1;
-        vm.expectRevert();
+        assertNotEq(vault.hashPaymentIntentStruct(intent), originalStructHash);
+        assertNotEq(vault.hashPaymentIntent(intent), originalDigest);
+        if (field == 1 || field == 6 || field == 7 || field == 9 || field == 10 || field == 11) {
+            vm.expectPartialRevert(CovenantVault.InvalidAgentSignature.selector);
+        } else {
+            vm.expectRevert(CovenantVault.InvalidPaymentIntent.selector);
+        }
         vault.executePayment(intent, intentSig, auth, authSig);
     }
 
@@ -121,12 +139,24 @@ contract CovenantVaultFuzzTest is CovenantVaultTestBase {
         public
     {
         uint8 field = uint8(bound(rawField, 0, 10));
+        _assertAuthorizationMutationRejectsAtExpectedStage(field);
+    }
+
+    function testEveryAuthorizationFieldMutationRejectsAtExpectedStage() public {
+        for (uint8 field; field < 11; ++field) {
+            _assertAuthorizationMutationRejectsAtExpectedStage(field);
+        }
+    }
+
+    function _assertAuthorizationMutationRejectsAtExpectedStage(uint8 field) private {
         CovenantTypes.PaymentIntent memory intent = _intent(bytes32(uint256(4_001)), 4_001, 1);
         (
             bytes memory intentSig,
             CovenantTypes.AuthorizationReceipt memory auth,
             bytes memory authSig
         ) = _signedPayment(intent, bytes32(uint256(4_002)), 4_002);
+        bytes32 originalStructHash = vault.hashAuthorizationReceiptStruct(auth);
+        bytes32 originalDigest = vault.hashAuthorizationReceipt(auth);
         if (field == 0) auth.version = "2";
         else if (field == 1) auth.authorizationId = bytes32(uint256(9));
         else if (field == 2) auth.decisionId = bytes32(uint256(9));
@@ -138,7 +168,13 @@ contract CovenantVaultFuzzTest is CovenantVaultTestBase {
         else if (field == 8) auth.authorizationNonce += 1;
         else if (field == 9) auth.validUntil -= 1;
         else auth.signer = attacker;
-        vm.expectRevert();
+        assertNotEq(vault.hashAuthorizationReceiptStruct(auth), originalStructHash);
+        assertNotEq(vault.hashAuthorizationReceipt(auth), originalDigest);
+        if (field == 1 || field == 2 || field == 8 || field == 9) {
+            vm.expectPartialRevert(CovenantVault.InvalidAuthorizationSignature.selector);
+        } else {
+            vm.expectRevert(CovenantVault.InvalidAuthorizationReceipt.selector);
+        }
         vault.executePayment(intent, intentSig, auth, authSig);
     }
 

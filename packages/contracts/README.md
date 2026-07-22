@@ -25,9 +25,9 @@ pnpm verify:contracts:deps
 
 **MVP:** The vault uses OpenZeppelin `EIP712`, `ECDSA`, `SafeERC20`, and `ReentrancyGuard`. Canonical 65-byte low-`s` signatures are required, and replay identity never uses signature bytes.
 
-**MVP:** Every AuthorizationReceipt must contain a nonzero signed `decisionId` linking it to a real offchain DecisionReceipt. The vault validates that identifier but does not verify DecisionReceipt contents onchain.
+**MVP:** Every `AuthorizationReceipt` must contain a nonzero signed `decisionId` identifying its contextual offchain `DecisionReceipt`. The trusted offchain authorization-chain verifier validates the referenced receipt and its linkage. The vault validates only the signed nonzero identifier and does not verify `DecisionReceipt` contents onchain.
 
-**MVP:** Dependency verification checks the exact commit, exact origin URL, empty index, unchanged tracked worktree, absence of tracked deletions, and absence of untracked files before Forge is allowed to compile.
+**MVP:** Dependency verification checks the exact commit and origin URL, rejects concealment index flags, independently compares every tracked working file with its HEAD blob, verifies supported nested Git state, and rejects staged, ordinary-untracked, and ignored-untracked content before Forge is allowed to compile.
 
 ## Build and test
 

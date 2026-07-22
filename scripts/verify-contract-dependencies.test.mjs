@@ -28,6 +28,10 @@ function fixture() {
   git(dependency, ["config", "user.name", "Covenant Fixture"]);
   writeFileSync(join(dependency, "Fixture.sol"), "contract Fixture {}\n");
   writeFileSync(join(dependency, "README.md"), "fixture\n");
+  writeFileSync(
+    join(dependency, ".gitignore"),
+    "Ignored.sol\nignored-foundry.toml\n",
+  );
   git(dependency, ["add", "."]);
   git(dependency, ["commit", "-m", "fixture"]);
   const commit = git(dependency, ["rev-parse", "HEAD"]);
@@ -84,6 +88,27 @@ test("installer refuses an existing dirty checkout", () => {
   assert.notEqual(install(value).status, 0);
 });
 
+test("installer refuses a hidden-dirty checkout", () => {
+  const value = fixture();
+  git(value.dependency, ["update-index", "--assume-unchanged", "Fixture.sol"]);
+  try {
+    writeFileSync(
+      join(value.dependency, "Fixture.sol"),
+      "contract Hidden {}\n",
+    );
+    assert.equal(git(value.dependency, ["status", "--porcelain"]), "");
+    const result = install(value);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Fixture\.sol.*assume-unchanged/);
+  } finally {
+    git(value.dependency, [
+      "update-index",
+      "--no-assume-unchanged",
+      "Fixture.sol",
+    ]);
+  }
+});
+
 const mutations = [
   [
     "wrong HEAD commit",
@@ -138,6 +163,19 @@ const mutations = [
     (v) => writeFileSync(join(v.dependency, "remappings.txt"), "x/=y/\n"),
   ],
   [
+    "ignored untracked Solidity",
+    (v) =>
+      writeFileSync(join(v.dependency, "Ignored.sol"), "contract Ignored {}\n"),
+  ],
+  [
+    "ignored untracked configuration",
+    (v) =>
+      writeFileSync(
+        join(v.dependency, "ignored-foundry.toml"),
+        "[profile.default]\n",
+      ),
+  ],
+  [
     "wrong origin URL",
     (v) =>
       git(v.dependency, [
@@ -155,5 +193,53 @@ for (const [name, mutate] of mutations) {
     mutate(value);
     const result = verify(value);
     assert.notEqual(result.status, 0, `${name} unexpectedly passed`);
+    if (name === "ignored untracked Solidity") {
+      assert.match(
+        result.stderr,
+        /ignored untracked path is present: "Ignored\.sol"/,
+      );
+    }
+    if (name === "ignored untracked configuration") {
+      assert.match(
+        result.stderr,
+        /ignored untracked path is present: "ignored-foundry\.toml"/,
+      );
+    }
+  });
+}
+
+for (const [name, enableFlag, disableFlag, expectedFlag] of [
+  [
+    "assume-unchanged tracked mutation",
+    "--assume-unchanged",
+    "--no-assume-unchanged",
+    "assume-unchanged",
+  ],
+  [
+    "skip-worktree tracked mutation",
+    "--skip-worktree",
+    "--no-skip-worktree",
+    "skip-worktree",
+  ],
+]) {
+  test(`dependency verification rejects ${name}`, () => {
+    const value = fixture();
+    git(value.dependency, ["update-index", enableFlag, "Fixture.sol"]);
+    try {
+      writeFileSync(
+        join(value.dependency, "Fixture.sol"),
+        "contract Concealed {}\n",
+      );
+      assert.equal(
+        git(value.dependency, ["status", "--porcelain", "--", "Fixture.sol"]),
+        "",
+      );
+      const result = verify(value);
+      assert.notEqual(result.status, 0, `${name} unexpectedly passed`);
+      assert.match(result.stderr, new RegExp(`Fixture\\.sol.*${expectedFlag}`));
+      assert.match(result.stderr, /Fixture\.sol.*differs from HEAD blob/);
+    } finally {
+      git(value.dependency, ["update-index", disableFlag, "Fixture.sol"]);
+    }
   });
 }

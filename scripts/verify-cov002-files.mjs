@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const REQUIRED_COV002_FILES = Object.freeze([
+  ".gitignore",
   "packages/contracts/src/CovenantVault.sol",
   "packages/contracts/src/CovenantTypes.sol",
   "packages/contracts/src/CovenantHashing.sol",
