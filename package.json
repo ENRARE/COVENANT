@@ -17,6 +17,8 @@
     "test": "pnpm test:scripts && turbo test",
     "install:contracts:deps": "node scripts/install-contract-dependencies.mjs",
     "verify:contracts:deps": "node scripts/verify-contract-dependencies.mjs",
+    "generate:contract-abi": "node scripts/generate-contract-abi.mjs",
+    "verify:contract-abi": "node scripts/verify-contract-abi.mjs",
     "verify:cov002-files": "node scripts/verify-cov002-files.mjs",
     "test:contracts": "node scripts/test-contracts.mjs",
     "test:integration": "node scripts/not-implemented.mjs integration-tests",
@@ -26,7 +28,7 @@
     "check:env-files": "node scripts/check-env-files.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "verify:without-contracts": "pnpm verify:cov002-files && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check:env-files && pnpm scan:secrets",
-    "verify": "pnpm verify:without-contracts && pnpm test:contracts",
+    "verify": "pnpm verify:without-contracts && pnpm verify:contract-abi && pnpm test:contracts",
     "demo:reset": "node scripts/not-implemented.mjs demo-reset",
     "demo:seed": "node scripts/not-implemented.mjs demo-seed",
     "demo:health": "node scripts/not-implemented.mjs demo-health"

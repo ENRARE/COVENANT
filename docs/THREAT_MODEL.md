@@ -95,3 +95,16 @@ Each row states attack path, affected asset, MVP control, residual risk, deferre
 - **MVP:** In-memory coordination can be lost on process restart and cannot establish authoritative replay or budget truth. The immutable CovenantVault remains the final authoritative enforcement boundary.
 - **Production:** Durable distributed idempotency, signer authentication and custody, finalized/quorum RPC evidence, reorganization handling, monitoring, rate limiting, and incident response remain required before real funds.
 - **Production:** Durable authorization reservations, restart recovery, finalized vault reconciliation, and operator recovery are required to preserve retained identity-to-nonce bindings across process loss.
+
+## COV-004 control realization
+
+- **MVP:** COV-004 realizes the submission-only executor boundary as a pure application core. It verifies the original signed intent, rules, decision, and authorization against a provider-owned Covenant and constructs only the exact vault payment call.
+- **MVP:** Invoice remains authority-only evidence. The executor verifies the signed decision commitment and canonical rules offchain, while vault calldata contains only the PaymentIntent and AuthorizationReceipt payloads with their detached signatures.
+- **MVP:** A generated committed Foundry ABI plus deterministic parity verification prevents silent TypeScript/Solidity call-shape drift. Selector, tuple order and widths, decode, and exact re-encoding are tested independently.
+- **MVP:** Public callers cannot select a target, chain, token, recipient, amount, ABI, function, calldata, or native value. The transport receives the same immutable internally constructed transaction for simulation and submission and has no policy authority.
+- **MVP:** The executor owns no authorization signing key or funded transaction key. COV-004 includes no Circle credential and no live Arc broadcast capability.
+- **MVP:** Structured digest identity and pending-operation joining prevent concurrent duplicate transport submissions inside one process. Detached signatures do not affect execution identity.
+- **MVP:** A second clock check after simulation prevents knowingly submitting an authorization that expired during simulation. Submission exceptions, timeouts, malformed results, and unsafe post-submit repository failures become retained ambiguity rather than blind retries.
+- **MVP:** In-memory completion and ambiguity records are volatile. Process loss can erase coordination evidence, while the vault still rejects replay and remains authoritative for budget, count, revocation, balance, and settlement.
+- **Production:** Durable idempotency, restart recovery, status reconciliation, finality policy, managed transaction custody, monitoring, and operator procedures are required before real funds.
+- **Protocol:** Generic forwarding, arbitrary calldata, batching, multichain execution, and upgradeable settlement require separate threat models.

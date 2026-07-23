@@ -40,6 +40,19 @@ forge test --root packages/contracts
 
 **MVP:** Foundry tests set the chain ID to Arc Testnet `5042002`. The constructor rejects every other chain ID.
 
+## Generated ABI
+
+**MVP:** `packages/contracts/abi/CovenantVault.json` is the committed full ABI generated directly from Foundry output. It is the TypeScript executor's contract-call source of truth and must not be edited by hand.
+
+**MVP:** Regenerate and verify it from the repository root:
+
+```powershell
+pnpm.cmd generate:contract-abi
+pnpm.cmd verify:contract-abi
+```
+
+**MVP:** `pnpm.cmd verify` fails when the committed artifact differs byte-for-byte from current `forge inspect CovenantVault abi --root packages/contracts --json` output.
+
 ## Local simulation
 
 **MVP:** Start local Anvil with the frozen Arc chain ID:
