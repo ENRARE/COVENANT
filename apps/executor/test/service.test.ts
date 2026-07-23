@@ -1,4 +1,6 @@
 import {
+  signedAuthorizationReceiptSchema,
+  signedPaymentIntentSchema,
   EIP712_DOMAIN_NAMES,
   buildAuthorizationReceiptTypedData,
   buildDecisionReceiptTypedData,
@@ -7,12 +9,15 @@ import {
 import {
   decodeFunctionData,
   encodeFunctionData,
+  parseAbi,
   toFunctionSelector,
+  type Hex,
 } from "viem";
 import { describe, expect, it } from "vitest";
 import {
   covenantVaultExecutePaymentAbi,
   EXECUTE_PAYMENT_SELECTOR,
+  verifyExecutePaymentCalldata,
 } from "../src/calldata/prepare-execute-payment.js";
 import { cloneRequest, createTestHarness } from "./fixtures.js";
 
@@ -89,6 +94,123 @@ describe("executor preparation and exact call construction", () => {
       name: "executePayment",
       stateMutability: "nonpayable",
     });
+  });
+
+  it("rejects every direct calldata mutation at the internal verification boundary", async () => {
+    const harness = await createTestHarness();
+    const prepared = await harness.service.prepareExecution(harness.request);
+    const signedPaymentIntent = signedPaymentIntentSchema.parse(
+      harness.request.signedPaymentIntent,
+    );
+    const signedAuthorizationReceipt = signedAuthorizationReceiptSchema.parse(
+      harness.request.authorizationReceipt,
+    );
+    const decoded = decodeFunctionData({
+      abi: covenantVaultExecutePaymentAbi,
+      data: prepared.data,
+    });
+    if (decoded.args === undefined) throw new Error("Expected decoded args");
+    const validArgs = structuredClone(decoded.args) as [
+      Record<string, unknown>,
+      Hex,
+      Record<string, unknown>,
+      Hex,
+    ];
+    const alternateSignature: Hex = `0x${"ab".repeat(65)}`;
+    const encodeAlternate = (
+      mutate: (
+        args: [Record<string, unknown>, Hex, Record<string, unknown>, Hex],
+      ) => void,
+    ) => {
+      const args = structuredClone(validArgs);
+      mutate(args);
+      return encodeFunctionData({
+        abi: covenantVaultExecutePaymentAbi,
+        functionName: "executePayment",
+        args,
+      });
+    };
+    const mutations: [string, Hex][] = [
+      ["changed selector", `0xdeadbeef${prepared.data.slice(10)}`],
+      ["appended byte", `${prepared.data}00`],
+      ["truncated byte", prepared.data.slice(0, -2) as Hex],
+      [
+        "changed PaymentIntent scalar",
+        encodeAlternate((args) => {
+          args[0].purpose = "Changed purpose";
+        }),
+      ],
+      [
+        "changed same-type PaymentIntent field",
+        encodeAlternate((args) => {
+          args[0].intentId = `0x${"bb".repeat(32)}`;
+        }),
+      ],
+      [
+        "changed intent signature",
+        encodeAlternate((args) => {
+          args[1] = alternateSignature;
+        }),
+      ],
+      [
+        "changed AuthorizationReceipt scalar",
+        encodeAlternate((args) => {
+          args[2].policyVersion = "gpu-policy-2";
+        }),
+      ],
+      [
+        "changed same-type AuthorizationReceipt field",
+        encodeAlternate((args) => {
+          args[2].authorizationId = `0x${"cc".repeat(32)}`;
+        }),
+      ],
+      [
+        "changed authorization signature",
+        encodeAlternate((args) => {
+          args[3] = alternateSignature;
+        }),
+      ],
+      [
+        "ERC-20 transfer",
+        encodeFunctionData({
+          abi: parseAbi(["function transfer(address,uint256)"]),
+          functionName: "transfer",
+          args: [harness.covenant.recipientAddress, 1n],
+        }),
+      ],
+      [
+        "ERC-20 approval",
+        encodeFunctionData({
+          abi: parseAbi(["function approve(address,uint256)"]),
+          functionName: "approve",
+          args: [harness.covenant.vaultAddress, 1n],
+        }),
+      ],
+      [
+        "representative multicall",
+        encodeFunctionData({
+          abi: parseAbi(["function multicall(bytes[])"]),
+          functionName: "multicall",
+          args: [[prepared.data]],
+        }),
+      ],
+    ];
+
+    for (const [name, data] of mutations) {
+      let caught: unknown;
+      try {
+        verifyExecutePaymentCalldata({
+          data,
+          signedPaymentIntent,
+          signedAuthorizationReceipt,
+        });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught, name).toMatchObject({ code: "EXECUTION_CALL_MISMATCH" });
+    }
+    expect(harness.transportState.simulations).toHaveLength(0);
+    expect(harness.transportState.submissions).toHaveLength(0);
   });
 
   it("simulates and submits the same frozen scalar transaction object", async () => {

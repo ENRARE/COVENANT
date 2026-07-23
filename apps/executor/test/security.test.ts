@@ -6,6 +6,10 @@ import {
   hashRuleResults,
 } from "@covenant/spec";
 import { cloneRequest, createTestHarness, TEST_NOW } from "./fixtures.js";
+import {
+  createExecutorService,
+  type ExecutionRepository,
+} from "../src/index.js";
 
 function record(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value))
@@ -43,6 +47,22 @@ function expectedChainMutationCode(name: string): string {
     default:
       return "INVALID_AUTHORIZATION_CHAIN";
   }
+}
+
+function expectSafeExecutorError(
+  error: unknown,
+  code: string,
+  message: string,
+  secrets: readonly string[],
+): void {
+  expect(error).toMatchObject({ code, message });
+  expect(error).not.toHaveProperty("cause");
+  expect(error).not.toHaveProperty("stack");
+  const serialized = JSON.stringify(error);
+  expect(serialized).toBe(
+    JSON.stringify({ name: "ExecutorError", code, message }),
+  );
+  for (const secret of secrets) expect(serialized).not.toContain(secret);
 }
 
 describe("strict executor boundaries", () => {
@@ -204,6 +224,35 @@ describe("strict executor boundaries", () => {
     ).rejects.toMatchObject({ code: "INVALID_AUTHORIZATION_CHAIN" });
   });
 
+  it("rejects a cross-request AuthorizationReceipt before coordination or transport", async () => {
+    const first = await createTestHarness();
+    const second = await createTestHarness();
+    const repositoryCalls = { simulations: 0, executions: 0 };
+    const repository: ExecutionRepository = {
+      coordinateSimulation: (_id, operation) => {
+        repositoryCalls.simulations += 1;
+        return operation();
+      },
+      coordinateExecution: (_id, operation) => {
+        repositoryCalls.executions += 1;
+        return operation();
+      },
+    };
+    const service = createExecutorService({
+      ...first.dependencies,
+      executionRepository: repository,
+    });
+    await expect(
+      service.executeAuthorizedPayment({
+        ...first.request,
+        authorizationReceipt: second.request.authorizationReceipt,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_AUTHORIZATION_CHAIN" });
+    expect(repositoryCalls).toEqual({ simulations: 0, executions: 0 });
+    expect(first.transportState.simulations).toHaveLength(0);
+    expect(first.transportState.submissions).toHaveLength(0);
+  });
+
   it.each([
     ["authenticated rejection", "REJECTED", "FAIL", "DECISION_NOT_APPROVED"],
     ["inconsistent approved rules", "APPROVED", "FAIL", "RULES_NOT_APPROVED"],
@@ -278,6 +327,72 @@ describe("strict executor boundaries", () => {
       expect(JSON.stringify(caught)).not.toContain("provider-secret");
     }
   });
+
+  it.each(["exception", "malformed"] as const)(
+    "sanitizes %s clock output",
+    async (kind) => {
+      const harness = await createTestHarness();
+      harness.dependencies.clock.now = () => {
+        if (kind === "exception")
+          throw new Error("clock-secret https://clock.invalid");
+        return "2000000000";
+      };
+      const service = createExecutorService(harness.dependencies);
+      let caught: unknown;
+      try {
+        await service.prepareExecution(harness.request);
+      } catch (error) {
+        caught = error;
+      }
+      expectSafeExecutorError(
+        caught,
+        "CLOCK_FAILURE",
+        "Executor clock failed",
+        [
+          "clock-secret",
+          "https://clock.invalid",
+          harness.request.signedPaymentIntent.signature,
+        ],
+      );
+      expect(harness.transportState.simulations).toHaveLength(0);
+      expect(harness.transportState.submissions).toHaveLength(0);
+    },
+  );
+
+  it.each(["exception", "malformed"] as const)(
+    "sanitizes %s simulation output",
+    async (kind) => {
+      const harness = await createTestHarness();
+      if (kind === "exception") {
+        harness.transportState.simulationError = new Error(
+          "simulation-secret https://rpc.invalid",
+        );
+      } else {
+        harness.transportState.simulationResult = {
+          status: "SIMULATED",
+          response: "simulation-secret",
+        };
+      }
+      let caught: unknown;
+      try {
+        await harness.service.simulateAuthorizedPayment(harness.request);
+      } catch (error) {
+        caught = error;
+      }
+      expectSafeExecutorError(
+        caught,
+        "SIMULATION_FAILURE",
+        "Authorized transaction simulation failed",
+        [
+          "simulation-secret",
+          "https://rpc.invalid",
+          harness.request.signedPaymentIntent.signature,
+        ],
+      );
+      expect(harness.transportState.simulations).toHaveLength(1);
+      expect(harness.transportState.submissions).toHaveLength(0);
+    },
+  );
 
   it("rejects caller transaction and calldata override attempts as unknown fields", async () => {
     const fields = [

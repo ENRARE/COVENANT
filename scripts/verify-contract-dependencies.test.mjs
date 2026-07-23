@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -68,11 +74,14 @@ function verify(value) {
   );
 }
 
-function install(value) {
+function install(value, environmentOverrides = {}) {
   return spawnSync(
     process.execPath,
     [installer, "--root", value.root, "--manifest", value.manifest],
-    { encoding: "utf8" },
+    {
+      encoding: "utf8",
+      env: { ...process.env, ...environmentOverrides },
+    },
   );
 }
 
@@ -84,6 +93,99 @@ test("dependency verification accepts an exact clean checkout", () => {
 test("installer accepts an existing exact clean checkout", () => {
   const value = fixture();
   assert.equal(install(value).status, 0);
+});
+
+test("installer preserves LF bytes through recursive submodules when global autocrlf is true", () => {
+  const root = mkdtempSync(join(tmpdir(), "covenant-autocrlf-test-"));
+  try {
+    const sources = join(root, "sources");
+    const deepest = join(sources, "deepest");
+    const middle = join(sources, "middle");
+    const parent = join(sources, "parent");
+    for (const repository of [deepest, middle, parent]) {
+      mkdirSync(repository, { recursive: true });
+      git(repository, ["init"]);
+      git(repository, ["config", "user.email", "fixture@covenant.invalid"]);
+      git(repository, ["config", "user.name", "Covenant Fixture"]);
+    }
+
+    writeFileSync(join(deepest, "Deep.sol"), "contract Deep {}\n");
+    git(deepest, ["add", "."]);
+    git(deepest, ["commit", "-m", "deep fixture"]);
+
+    writeFileSync(join(middle, "Middle.sol"), "contract Middle {}\n");
+    git(middle, [
+      "-c",
+      "protocol.file.allow=always",
+      "submodule",
+      "add",
+      deepest,
+      "lib/deepest",
+    ]);
+    git(middle, ["add", "."]);
+    git(middle, ["commit", "-m", "middle fixture"]);
+
+    writeFileSync(join(parent, "Parent.sol"), "contract Parent {}\n");
+    git(parent, [
+      "-c",
+      "protocol.file.allow=always",
+      "submodule",
+      "add",
+      middle,
+      "lib/middle",
+    ]);
+    git(parent, ["add", "."]);
+    git(parent, ["commit", "-m", "parent fixture"]);
+    const commit = git(parent, ["rev-parse", "HEAD"]);
+
+    const installationRoot = join(root, "installation");
+    mkdirSync(installationRoot, { recursive: true });
+    const manifest = join(installationRoot, "dependencies.json");
+    writeFileSync(
+      manifest,
+      JSON.stringify({
+        schemaVersion: 1,
+        dependencies: [
+          {
+            name: "recursive-example",
+            repository: parent,
+            version: "v1.0.0",
+            commit,
+            directory: "lib/recursive-example",
+          },
+        ],
+      }),
+    );
+    const globalConfiguration = join(root, "global.gitconfig");
+    const globalContents = "[core]\n\tautocrlf = true\n";
+    writeFileSync(globalConfiguration, globalContents);
+
+    const value = { root: installationRoot, manifest };
+    const result = install(value, {
+      GIT_ALLOW_PROTOCOL: "file",
+      GIT_CONFIG_GLOBAL: globalConfiguration,
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(verify(value).status, 0);
+
+    const installed = join(installationRoot, "lib", "recursive-example");
+    const expectedFiles = [
+      [join(installed, "Parent.sol"), "contract Parent {}\n"],
+      [join(installed, "lib", "middle", "Middle.sol"), "contract Middle {}\n"],
+      [
+        join(installed, "lib", "middle", "lib", "deepest", "Deep.sol"),
+        "contract Deep {}\n",
+      ],
+    ];
+    for (const [path, expected] of expectedFiles) {
+      const bytes = readFileSync(path);
+      assert.deepEqual(bytes, Buffer.from(expected));
+      assert.equal(bytes.includes(13), false);
+    }
+    assert.equal(readFileSync(globalConfiguration, "utf8"), globalContents);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("installer refuses an existing dirty checkout", () => {

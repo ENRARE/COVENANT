@@ -66,6 +66,24 @@ export function runGit(arguments_, options = {}) {
   });
 }
 
+const INSTALL_GIT_CONFIGURATION = Object.freeze({
+  GIT_CONFIG_COUNT: "2",
+  GIT_CONFIG_KEY_0: "core.autocrlf",
+  GIT_CONFIG_VALUE_0: "false",
+  GIT_CONFIG_KEY_1: "core.eol",
+  GIT_CONFIG_VALUE_1: "lf",
+});
+
+export function runInstallationGit(arguments_, options = {}) {
+  return runGit(arguments_, {
+    ...options,
+    env: {
+      ...options.env,
+      ...INSTALL_GIT_CONFIGURATION,
+    },
+  });
+}
+
 function gitResult(repositoryPath, arguments_, options = {}) {
   const safeDirectories = options.safeDirectories ?? [repositoryPath];
   const runOptions = { ...options };

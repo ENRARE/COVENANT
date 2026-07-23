@@ -330,9 +330,30 @@ export function createExecutorService(
       throw new ExecutorError("EXECUTION_RESULT_AMBIGUOUS");
     }
 
-    const operation = (async () => {
-      try {
-        return await repository.coordinateExecution(identity, async () => {
+    let resolveOperation!: (result: ExecutionResult) => void;
+    let rejectOperation!: (error: unknown) => void;
+    const operation = new Promise<ExecutionResult>((resolve, reject) => {
+      resolveOperation = resolve;
+      rejectOperation = reject;
+    });
+    pendingExecutions.set(identity, operation);
+
+    void (async () => {
+      let coreOperation: Promise<ExecutionResult> | undefined;
+      let repositoryCallbackClosed = false;
+      let signalRepositoryCallback!: () => void;
+      const repositoryCallbackInvoked = new Promise<void>((resolve) => {
+        signalRepositoryCallback = resolve;
+      });
+      const invokeCoreOperation = (): Promise<ExecutionResult> => {
+        if (coreOperation !== undefined) return coreOperation;
+        if (repositoryCallbackClosed) {
+          return Promise.reject(
+            new ExecutorError("EXECUTION_REPOSITORY_FAILURE"),
+          );
+        }
+        signalRepositoryCallback();
+        coreOperation = (async () => {
           const joinedState = localSubmissions.get(identity);
           if (joinedState?.status === "COMPLETED") return joinedState.result;
           if (
@@ -344,6 +365,16 @@ export function createExecutorService(
 
           await simulate(preparation);
           assertCurrentTime(preparation, await currentTime());
+          const stateBeforeSubmission = localSubmissions.get(identity);
+          if (stateBeforeSubmission?.status === "COMPLETED") {
+            return stateBeforeSubmission.result;
+          }
+          if (
+            stateBeforeSubmission?.status === "AMBIGUOUS" ||
+            stateBeforeSubmission?.status === "STARTED"
+          ) {
+            throw new ExecutorError("EXECUTION_RESULT_AMBIGUOUS");
+          }
           localSubmissions.set(identity, { status: "STARTED" });
 
           let submitted: ReturnType<
@@ -365,6 +396,11 @@ export function createExecutorService(
             throw new ExecutorError("EXECUTION_RESULT_AMBIGUOUS");
           }
           if (submitted.status === "REJECTED") {
+            const submissionState = localSubmissions.get(identity);
+            if (submissionState?.status !== "STARTED") {
+              localSubmissions.set(identity, { status: "AMBIGUOUS" });
+              throw new ExecutorError("EXECUTION_RESULT_AMBIGUOUS");
+            }
             localSubmissions.set(identity, { status: "RETRYABLE_REJECTED" });
             throw new ExecutorError("SUBMISSION_FAILURE");
           }
@@ -374,9 +410,45 @@ export function createExecutorService(
             execution: preparation.public,
             transactionId: submitted.transactionId,
           }) satisfies ExecutionResult;
+          const submissionState = localSubmissions.get(identity);
+          if (submissionState?.status !== "STARTED") {
+            localSubmissions.set(identity, { status: "AMBIGUOUS" });
+            throw new ExecutorError("EXECUTION_RESULT_AMBIGUOUS");
+          }
           localSubmissions.set(identity, { status: "COMPLETED", result });
           return result;
-        });
+        })();
+        return coreOperation;
+      };
+
+      try {
+        const repositoryCoordination = Promise.resolve().then(() =>
+          repository.coordinateExecution(identity, invokeCoreOperation),
+        );
+        const firstOutcome = await Promise.race([
+          repositoryCallbackInvoked.then(
+            () => ({ status: "INVOKED" }) as const,
+          ),
+          repositoryCoordination.then(
+            () => ({ status: "RETURNED" }) as const,
+            () => ({ status: "REJECTED" }) as const,
+          ),
+        ]);
+        if (firstOutcome.status === "INVOKED") {
+          const invokedOperation = coreOperation;
+          if (invokedOperation === undefined) {
+            throw new ExecutorError("EXECUTION_REPOSITORY_FAILURE");
+          }
+          return await invokedOperation;
+        }
+        if (coreOperation !== undefined) {
+          return await coreOperation;
+        }
+        repositoryCallbackClosed = true;
+        if (firstOutcome.status === "REJECTED") {
+          throw new ExecutorError("EXECUTION_REPOSITORY_FAILURE");
+        }
+        throw new ExecutorError("EXECUTION_REPOSITORY_FAILURE");
       } catch (error) {
         const state = localSubmissions.get(identity);
         if (state?.status === "COMPLETED") return state.result;
@@ -390,14 +462,18 @@ export function createExecutorService(
         if (error instanceof ExecutorError) throw sanitizedExecutorError(error);
         throw new ExecutorError("EXECUTION_REPOSITORY_FAILURE");
       }
-    })();
-    pendingExecutions.set(identity, operation);
-    try {
-      return await operation;
-    } finally {
-      if (pendingExecutions.get(identity) === operation)
-        pendingExecutions.delete(identity);
-    }
+    })().then(resolveOperation, rejectOperation);
+    void operation.then(
+      () => {
+        if (pendingExecutions.get(identity) === operation)
+          pendingExecutions.delete(identity);
+      },
+      () => {
+        if (pendingExecutions.get(identity) === operation)
+          pendingExecutions.delete(identity);
+      },
+    );
+    return operation;
   }
 
   return {
