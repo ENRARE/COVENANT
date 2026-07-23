@@ -65,6 +65,22 @@
 
 **MVP:** COV-003 contains no Circle credential, executor behavior, vault transaction construction, transaction broadcasting, HTTP endpoint, webhook, queue, worker, Supabase integration, agent behavior, live vendor API, or product UI.
 
+## COV-004 executor application boundary
+
+**MVP:** The executor is a pure application core that accepts only the signed PaymentIntent, canonical RuleResults, signed DecisionReceipt, and signed AuthorizationReceipt. Invoice remains authority-only evidence; DecisionReceipt and RuleResults are verified offchain and are not vault calldata.
+
+**MVP:** The executor loads and strictly parses the single Covenant through an injected trusted provider, passes original raw signed values to `@covenant/spec` complete-chain verification, and uses the verified parsed result to construct only `CovenantVault.executePayment`. Callers cannot supply deployment data, hashes, an ABI, a function, calldata, or native value.
+
+**MVP:** The full committed vault ABI is generated from Foundry output at the contracts boundary and checked for deterministic parity. The executor selects only `executePayment`, verifies selector `0x7ee0e4da`, independently decodes and re-encodes produced calldata, targets the trusted Arc Testnet vault, and fixes native value at zero.
+
+**MVP:** The executor owns no authorization key or funded transaction key. Its injected transport receives one immutable scalar transaction request for simulation and submission, owns no policy authority, and is not exposed as a generic forwarder.
+
+**MVP:** Current time is checked during preparation and again after successful simulation immediately before submission. Concurrent duplicates join pending work; successful duplicates return the stored result. Post-submit exceptions, timeouts, malformed results, ambiguity, and unsafe repository failures retain instance-local ambiguity and block resubmission.
+
+**MVP:** In-memory coordination is volatile and non-authoritative. CovenantVault remains authoritative for replay, budget, payment count, revocation, token balance, and settlement.
+
+**MVP:** COV-004 adds no Circle API or credential, live broadcasting, funded key, deployment, HTTP endpoint, queue, worker, webhook, Supabase integration, UI, agent behavior, arbitrary calldata, generic forwarding, additional chain, or additional Covenant.
+
 ## Deferred controls
 
 - **Production:** Hardware-backed keys, dual control, credential rotation, network isolation, tamper-evident centralized audit storage, and incident response are deferred.

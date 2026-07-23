@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {CovenantHashing} from "../src/CovenantHashing.sol";
 import {CovenantTypes} from "../src/CovenantTypes.sol";
+import {CovenantVault} from "../src/CovenantVault.sol";
 import {CovenantVaultTestBase} from "./CovenantVaultTestBase.t.sol";
 
 contract CovenantHashingHarness {
@@ -49,6 +50,10 @@ contract CovenantHashingHarness {
 
 contract CovenantHashParityTest is CovenantVaultTestBase {
     CovenantHashingHarness internal harness;
+
+    function testExecutePaymentSelectorMatchesGeneratedAbiBoundary() public pure {
+        assertEq(CovenantVault.executePayment.selector, bytes4(0x7ee0e4da));
+    }
 
     function setUp() public override {
         super.setUp();

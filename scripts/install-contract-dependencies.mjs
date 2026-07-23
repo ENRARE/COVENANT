@@ -5,7 +5,7 @@ import {
   dependencyIntegrityErrors,
   loadDependencyManifest,
   parseArguments,
-  runGit,
+  runInstallationGit,
 } from "./contract-dependencies.mjs";
 
 const arguments_ = parseArguments(process.argv.slice(2));
@@ -49,7 +49,7 @@ for (const dependency of manifest.dependencies) {
     ["-C", dependency.path, "submodule", "update", "--init", "--recursive"],
   ];
   for (const command of commands) {
-    const result = runGit(command, { stdio: "inherit" });
+    const result = runInstallationGit(command, { stdio: "inherit" });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
   const errors = dependencyIntegrityErrors(dependency);
