@@ -1,4 +1,10 @@
 import { describe, expect, it } from "vitest";
+import {
+  EIP712_DOMAIN_NAMES,
+  buildDecisionReceiptTypedData,
+  deriveSigningDomainForCovenant,
+  hashRuleResults,
+} from "@covenant/spec";
 import { cloneRequest, createTestHarness, TEST_NOW } from "./fixtures.js";
 
 function record(value: unknown): Record<string, unknown> {
@@ -22,6 +28,21 @@ function setPath(
   const final = path.at(-1);
   if (final === undefined) throw new Error("Mutation path is empty");
   target[final] = replacement;
+}
+
+function expectedChainMutationCode(name: string): string {
+  switch (name) {
+    case "wrong chain":
+      return "MALFORMED_EXECUTION_REQUEST";
+    case "wrong vault":
+      return "EXECUTION_TARGET_MISMATCH";
+    case "wrong token":
+      return "EXECUTION_TOKEN_MISMATCH";
+    case "wrong recipient":
+      return "EXECUTION_RECIPIENT_MISMATCH";
+    default:
+      return "INVALID_AUTHORIZATION_CHAIN";
+  }
 }
 
 describe("strict executor boundaries", () => {
@@ -131,10 +152,7 @@ describe("strict executor boundaries", () => {
       await expect(
         harness.service.executeAuthorizedPayment(request),
       ).rejects.toMatchObject({
-        code:
-          _name === "wrong chain"
-            ? "MALFORMED_EXECUTION_REQUEST"
-            : "INVALID_AUTHORIZATION_CHAIN",
+        code: expectedChainMutationCode(_name),
       });
       expect(harness.transportState.simulations).toHaveLength(0);
       expect(harness.transportState.submissions).toHaveLength(0);
@@ -185,6 +203,39 @@ describe("strict executor boundaries", () => {
       }),
     ).rejects.toMatchObject({ code: "INVALID_AUTHORIZATION_CHAIN" });
   });
+
+  it.each([
+    ["authenticated rejection", "REJECTED", "FAIL", "DECISION_NOT_APPROVED"],
+    ["inconsistent approved rules", "APPROVED", "FAIL", "RULES_NOT_APPROVED"],
+  ] as const)(
+    "maps %s to its stable executor error",
+    async (_name, decisionStatus, ruleStatus, expectedCode) => {
+      const harness = await createTestHarness();
+      const request: unknown = cloneRequest(harness.request);
+      const rules = array(record(request).ruleResults);
+      const firstRule = record(rules[0]);
+      firstRule.status = ruleStatus;
+      firstRule.actual = "failed";
+      firstRule.reason = "covenant_active failed";
+      const decisionEnvelope = record(record(request).decisionReceipt);
+      const decisionPayload = record(decisionEnvelope.payload);
+      decisionPayload.decision = decisionStatus;
+      decisionPayload.ruleResultsHash = hashRuleResults(rules);
+      const domain = deriveSigningDomainForCovenant(
+        harness.covenant,
+        EIP712_DOMAIN_NAMES.decisionReceipt,
+      );
+      decisionEnvelope.signature =
+        await harness.accounts.authorization.signTypedData(
+          buildDecisionReceiptTypedData(decisionPayload, domain),
+        );
+      await expect(
+        harness.service.executeAuthorizedPayment(request),
+      ).rejects.toMatchObject({ code: expectedCode });
+      expect(harness.transportState.simulations).toHaveLength(0);
+      expect(harness.transportState.submissions).toHaveLength(0);
+    },
+  );
 
   it.each([
     ["expired Covenant", TEST_NOW + 1_000n],

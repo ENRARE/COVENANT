@@ -1,5 +1,6 @@
 import {
   ARC_TESTNET_CHAIN_ID,
+  CovenantVerificationError,
   EIP712_DOMAIN_NAMES,
   covenantSpecSchema,
   deriveSigningDomainForCovenant,
@@ -7,7 +8,7 @@ import {
   hashDecisionReceipt,
   verifyAuthorizationChain,
 } from "@covenant/spec";
-import { encodeAbiParameters, keccak256, stringToHex, type Hex } from "viem";
+import { encodeAbiParameters, keccak256, stringToHex } from "viem";
 import { constructExecutePaymentRequest } from "./calldata/prepare-execute-payment.js";
 import {
   ExecutorError,
@@ -50,6 +51,24 @@ type LocalSubmissionState =
   | { status: "RETRYABLE_REJECTED" }
   | { status: "AMBIGUOUS" }
   | { status: "COMPLETED"; result: ExecutionResult };
+
+function authorizationChainError(error: unknown): ExecutorError {
+  if (error instanceof CovenantVerificationError) {
+    if (error.code === "DECISION_NOT_APPROVED")
+      return new ExecutorError("DECISION_NOT_APPROVED");
+    if (error.code === "RULE_RESULTS_NOT_ALL_PASSING")
+      return new ExecutorError("RULES_NOT_APPROVED");
+    if (error.code === "VAULT_MISMATCH")
+      return new ExecutorError("EXECUTION_TARGET_MISMATCH");
+    if (error.code === "CHAIN_MISMATCH")
+      return new ExecutorError("EXECUTION_CHAIN_MISMATCH");
+    if (error.code === "TOKEN_MISMATCH")
+      return new ExecutorError("EXECUTION_TOKEN_MISMATCH");
+    if (error.code === "RECIPIENT_MISMATCH")
+      return new ExecutorError("EXECUTION_RECIPIENT_MISMATCH");
+  }
+  return new ExecutorError("INVALID_AUTHORIZATION_CHAIN");
+}
 
 export type ExecutorDependencies = {
   clock: Clock;
@@ -142,8 +161,8 @@ export function createExecutorService(
         request.raw.ruleResults,
         request.raw.authorizationReceipt,
       );
-    } catch {
-      throw new ExecutorError("INVALID_AUTHORIZATION_CHAIN");
+    } catch (error) {
+      throw authorizationChainError(error);
     }
 
     const covenant = verified.covenantSpec;
@@ -387,5 +406,3 @@ export function createExecutorService(
     executeAuthorizedPayment,
   };
 }
-
-export type { Hex };
