@@ -21,7 +21,6 @@ import {
   type Hex,
 } from "viem";
 import { AgentError, callDependency } from "./errors.js";
-import { InMemoryProposalReservationRepository } from "./in-memory-proposal-reservation-repository.js";
 import type {
   Clock,
   CovenantProvider,
@@ -62,7 +61,7 @@ export type AgentDependencies = {
   covenantProvider: CovenantProvider;
   signer: PaymentIntentSigner;
   identifierGenerator: PaymentIntentIdentifierGenerator;
-  reservationRepository?: ProposalReservationRepository;
+  reservationRepository: ProposalReservationRepository;
   proposalRepository?: ProposalRepository;
   approvedVendor: unknown;
   approvedProductId: unknown;
@@ -272,9 +271,7 @@ export function createAgentService(
   dependencies: AgentDependencies,
 ): AgentService {
   const configuration = parseConfiguration(dependencies);
-  const reservationRepository =
-    dependencies.reservationRepository ??
-    new InMemoryProposalReservationRepository();
+  const { reservationRepository } = dependencies;
   const proposalRepository = dependencies.proposalRepository;
   const localOperations = new Map<string, Promise<AgentProposalResult>>();
 

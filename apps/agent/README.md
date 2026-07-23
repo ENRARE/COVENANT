@@ -20,7 +20,24 @@
 
 **MVP:** Invoice signature recovery, EIP-712 domains, typed-data construction, canonical signatures, hashing, money parsing, and PaymentIntent verification use `@covenant/spec`. Money, nonce, timestamps, and chain identifiers never use JavaScript `number`.
 
-**MVP:** Process-local single-flight and the in-memory reservation repository retain one intent ID, nonce, and exact raw PaymentIntent payload. A signer failure keeps the same payload for retry. An expired retained or completed proposal is never signed or returned.
+**MVP:** Process-local single-flight and an explicitly injected proposal reservation repository retain one intent ID, nonce, and exact raw PaymentIntent payload. The in-memory adapter remains available for isolated tests. The default adapter for the local hackathon demonstration is the durable append-only journal:
+
+```ts
+const reservationRepository = await createDurableProposalReservationRepository({
+  directory: ".covenant-agent-state",
+});
+
+const service = createAgentService({
+  ...dependencies,
+  reservationRepository,
+});
+```
+
+**MVP:** The durable repository uses fixed-version `RESERVED` and `COMPLETED` records, canonical JSON SHA-256 digests, flushed append writes, and one exclusive local lock per caller-supplied storage directory. Restart recovery preserves proposal identity, intent ID, nonce, creation and expiry times, exact raw PaymentIntent payload, and completed result. Completed evidence is fully revalidated before return. A signer failure keeps the same payload for retry, while an expired retained or completed proposal is never signed or returned.
+
+**MVP:** Call `close()` during normal shutdown to finish pending writes and release the lock. A second process or repository instance cannot use the same directory. For a confirmed stale local lock, first verify that no process owns the directory, then manually remove only `proposals.v1.jsonl.lock`; never delete or edit the journal as lock recovery.
+
+**MVP:** The journal contains proposal coordination evidence only. It is not authoritative spend, replay, revocation, or settlement state and does not provide distributed coordination. CovenantVault remains authoritative for financial replay and spend enforcement. The durable journal only prevents accidental duplicate proposal allocation across local restarts.
 
 **MVP:** The agent proposes. The authority decides. The executor reconstructs. The vault enforces. The agent has no authorization or execution authority.
 
@@ -28,6 +45,6 @@
 
 **V2:** Multiple vendors, products, agents, assets, procurement schemas, and pricing models require separately approved scope.
 
-**Production:** Durable repositories, distributed nonce coordination, managed proposal-signing custody, monitoring, rate limits, incident response, credential rotation, and high availability are deferred.
+**Production:** Distributed coordination, database replication, backup, operational lock recovery, finalized-vault reconciliation, managed proposal-signing custody, monitoring, rate limits, incident response, credential rotation, and high availability are deferred.
 
 **Protocol:** Generic policy languages, generalized procurement protocols, arbitrary execution, and multichain behavior are excluded.

@@ -22,6 +22,10 @@ export const AGENT_ERROR_CODES = [
   "PAYMENT_INTENT_SIGNING_FAILURE",
   "PAYMENT_INTENT_EXPIRED",
   "SELF_VERIFICATION_FAILED",
+  "DURABLE_REPOSITORY_INITIALIZATION_FAILURE",
+  "DURABLE_REPOSITORY_PERSISTENCE_FAILURE",
+  "DURABLE_REPOSITORY_CLOSE_FAILURE",
+  "DURABLE_REPOSITORY_CLOSED",
 ] as const;
 
 export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[number];
@@ -50,6 +54,12 @@ export const AGENT_ERROR_MESSAGES: Record<AgentErrorCode, string> = {
   PAYMENT_INTENT_SIGNING_FAILURE: "PaymentIntent signing failed",
   PAYMENT_INTENT_EXPIRED: "Retained PaymentIntent validity is exhausted",
   SELF_VERIFICATION_FAILED: "Signed PaymentIntent failed self-verification",
+  DURABLE_REPOSITORY_INITIALIZATION_FAILURE:
+    "Durable proposal repository initialization failed",
+  DURABLE_REPOSITORY_PERSISTENCE_FAILURE:
+    "Durable proposal repository persistence failed",
+  DURABLE_REPOSITORY_CLOSE_FAILURE: "Durable proposal repository close failed",
+  DURABLE_REPOSITORY_CLOSED: "Durable proposal repository is closed",
 };
 
 export class AgentError extends Error {

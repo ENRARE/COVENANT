@@ -91,17 +91,19 @@
 
 **MVP:** The agent signer port exposes only its address and exact PaymentIntent typed-data signing. It has no generic signing, Invoice signing, authorization signing, wallet, funded account, Circle, RPC, calldata, transaction, or executor capability. Every returned PaymentIntent is verified through `@covenant/spec` and compared field by field with the retained payload.
 
-**MVP:** Structured proposal identity excludes detached signatures and generated values. Service-local single-flight owns concurrency safety even when an injected coordinator invokes then rejects or never settles. One in-memory atomic reservation retains the exact intent ID, nonce, and raw canonical payload across signer failure.
+**MVP:** Structured proposal identity excludes detached signatures and generated values. Service-local single-flight owns concurrency safety even when an injected coordinator invokes then rejects or never settles. The caller explicitly injects either the in-memory test repository or the local durable repository. One atomic reservation retains the exact intent ID, nonce, and raw canonical payload across signer failure.
+
+**MVP:** The local demonstration may use a fixed-version append-only proposal journal. Flushed records preserve reservations and completed results across restart, and an exclusive local lock deliberately permits only one repository process per storage directory. Completed results are returned only after full Invoice and PaymentIntent evidence revalidation.
 
 **MVP:** A retained or completed proposal is checked against a fresh clock before use. Expired retained proposals permanently fail for that identity, completed expired proposals are not returned, and a new Invoice payload digest creates a new identity.
 
 **MVP:** Results are copied field by field and frozen. Fixed `AgentError` serialization exposes only name, code, and message; raw dependency output, exceptions, typed data, signatures, Invoice or PaymentIntent contents, URLs, secrets, and repository state are suppressed.
 
-**MVP:** The agent proposes. The authority decides. The executor reconstructs. The vault enforces. Process-local coordination is non-authoritative and cannot approve, execute, or establish spend or replay truth.
+**MVP:** The agent proposes. The authority decides. The executor reconstructs. The vault enforces. The local journal is non-authoritative and cannot approve, execute, or establish spend, replay, revocation, or settlement truth. CovenantVault remains authoritative for financial replay and spend enforcement; the journal only prevents accidental duplicate proposal allocation across local restarts.
 
 **V2:** Multiple vendors, products, agents, assets, procurement schemas, and pricing models are excluded.
 
-**Production:** Durable repositories, distributed nonce coordination, managed proposal-signing custody, monitoring, rate limits, incident response, credential rotation, and high availability are deferred.
+**Production:** Distributed coordination, database replication, backup, operational lock recovery, finalized-vault reconciliation, managed proposal-signing custody, monitoring, rate limits, incident response, credential rotation, and high availability are deferred.
 
 **Protocol:** Generic policy languages, generalized procurement protocols, arbitrary execution, and multichain behavior require separate specification.
 
@@ -109,6 +111,6 @@
 
 - **Production:** Hardware-backed keys, dual control, credential rotation, network isolation, tamper-evident centralized audit storage, and incident response are deferred.
 - **Production:** Continuous Circle/onchain reconciliation, redundant Arc RPCs, and formal recovery procedures are deferred.
-- **Production:** Durable reservation persistence and restart recovery must preserve identity-to-nonce bindings and reconcile them against finalized vault state.
+- **Production:** Replicated proposal persistence, operational lock recovery, backup, and restart reconciliation must preserve identity-to-nonce bindings and reconcile them against finalized vault state.
 - **Production:** No external audit or formal verification has occurred; both remain required before production use.
 - **Protocol:** Cross-chain and generalized policy boundaries require new specifications and are not inherited from the MVP.
