@@ -8,6 +8,7 @@ import {
   paymentIntentSchema,
   recoverInvoiceSigner,
   recoverPaymentIntentSigner,
+  signedInvoiceSchema,
   verifySignedPaymentIntentForCovenant,
   type CovenantSpec,
   type SignedInvoice,
@@ -171,13 +172,15 @@ function assertCurrent(
 }
 
 function assertInvoiceLinkage(input: {
-  request: ParsedRequest;
+  invoice: SignedInvoice;
+  productId: string;
+  expectedAmount: bigint;
   covenant: CovenantSpec;
   approvedVendor: Address;
   approvedProductId: string;
   recoveredVendor: Address;
 }): void {
-  const invoice = input.request.signedInvoice.payload;
+  const invoice = input.invoice.payload;
   if (input.recoveredVendor !== input.approvedVendor) {
     throw new AgentError("INVOICE_SIGNATURE_INVALID");
   }
@@ -186,7 +189,7 @@ function assertInvoiceLinkage(input: {
   }
   if (
     invoice.productId !== input.approvedProductId ||
-    input.request.productId !== input.approvedProductId
+    input.productId !== input.approvedProductId
   ) {
     throw new AgentError("INVOICE_PRODUCT_MISMATCH");
   }
@@ -199,7 +202,7 @@ function assertInvoiceLinkage(input: {
   if (invoice.purpose !== input.covenant.purpose) {
     throw new AgentError("INVOICE_PURPOSE_MISMATCH");
   }
-  if (invoice.amount !== input.request.expectedAmount) {
+  if (invoice.amount !== input.expectedAmount) {
     throw new AgentError("INVOICE_AMOUNT_MISMATCH");
   }
   if (invoice.amount > input.covenant.maxAmountPerPayment) {
@@ -303,34 +306,43 @@ export function createAgentService(
     return address;
   }
 
-  async function verifyInvoice(input: {
-    request: ParsedRequest;
+  async function verifyInvoiceEvidence(input: {
+    rawSignedInvoice: RawSignedInvoice;
+    signedInvoice: SignedInvoice;
+    productId: string;
+    expectedAmount: bigint;
     covenant: LoadedCovenant;
+    expectedInvoiceHash?: Hex;
   }): Promise<Hex> {
     const domain = deriveSigningDomainForCovenant(
       input.covenant.raw,
       EIP712_DOMAIN_NAMES.invoice,
     );
-    const invoiceHash = hashInvoice(
-      input.request.rawSignedInvoice.payload,
-      domain,
-    );
+    const invoiceHash = hashInvoice(input.rawSignedInvoice.payload, domain);
     let recoveredVendor: Address;
     try {
       recoveredVendor = await recoverInvoiceSigner(
-        input.request.rawSignedInvoice,
+        input.rawSignedInvoice,
         domain,
       );
     } catch {
       throw new AgentError("INVOICE_SIGNATURE_INVALID");
     }
     assertInvoiceLinkage({
-      request: input.request,
+      invoice: input.signedInvoice,
+      productId: input.productId,
+      expectedAmount: input.expectedAmount,
       covenant: input.covenant.parsed,
       approvedVendor: configuration.approvedVendor,
       approvedProductId: configuration.approvedProductId,
       recoveredVendor,
     });
+    if (
+      input.expectedInvoiceHash !== undefined &&
+      invoiceHash !== input.expectedInvoiceHash
+    ) {
+      throw new AgentError("SELF_VERIFICATION_FAILED");
+    }
     return invoiceHash;
   }
 
@@ -399,8 +411,19 @@ export function createAgentService(
     covenant: LoadedCovenant;
     signerAddress: Address;
     invoiceHash: Hex;
-  }): Promise<void> {
+  }): Promise<SignedInvoice> {
     try {
+      const storedInvoice = signedInvoiceSchema.parse(
+        input.result.signedInvoice,
+      );
+      const storedInvoiceHash = await verifyInvoiceEvidence({
+        rawSignedInvoice: input.result.signedInvoice,
+        signedInvoice: storedInvoice,
+        productId: input.request.productId,
+        expectedAmount: input.request.expectedAmount,
+        covenant: input.covenant,
+        expectedInvoiceHash: input.invoiceHash,
+      });
       const verified = await verifySignedPaymentIntentForCovenant(
         input.result.signedPaymentIntent,
         input.covenant.raw,
@@ -420,18 +443,13 @@ export function createAgentService(
       if (recovered !== input.signerAddress) {
         throw new AgentError("SELF_VERIFICATION_FAILED");
       }
-      const invoiceDomain = deriveSigningDomainForCovenant(
-        input.covenant.raw,
-        EIP712_DOMAIN_NAMES.invoice,
-      );
       if (
-        hashInvoice(input.result.signedInvoice.payload, invoiceDomain) !==
-          input.invoiceHash ||
-        hashInvoice(input.request.rawSignedInvoice.payload, invoiceDomain) !==
-          input.invoiceHash
+        verified.payload.invoiceHash !== storedInvoiceHash ||
+        storedInvoiceHash !== input.invoiceHash
       ) {
         throw new AgentError("SELF_VERIFICATION_FAILED");
       }
+      return storedInvoice;
     } catch {
       throw new AgentError("SELF_VERIFICATION_FAILED");
     }
@@ -492,7 +510,7 @@ export function createAgentService(
 
     if (reservation.completedResult !== undefined) {
       const stored = freezeResult(reservation.completedResult);
-      await verifySignedResult({
+      const verifiedStoredInvoice = await verifySignedResult({
         result: stored,
         reservation,
         request: input.request,
@@ -503,7 +521,7 @@ export function createAgentService(
       await assertFinalTime(
         stored,
         input.covenant.parsed,
-        input.request.signedInvoice,
+        verifiedStoredInvoice,
       );
       return freezeResult(stored);
     }
@@ -529,7 +547,7 @@ export function createAgentService(
       signedPaymentIntent,
       signedInvoice: input.request.rawSignedInvoice,
     });
-    await verifySignedResult({
+    const verifiedResultInvoice = await verifySignedResult({
       result,
       reservation,
       request: input.request,
@@ -537,11 +555,7 @@ export function createAgentService(
       signerAddress: input.signerAddress,
       invoiceHash: input.invoiceHash,
     });
-    await assertFinalTime(
-      result,
-      input.covenant.parsed,
-      input.request.signedInvoice,
-    );
+    await assertFinalTime(result, input.covenant.parsed, verifiedResultInvoice);
     await callDependency({
       operation: () =>
         reservationRepository.storeCompleted(input.identity, result),
@@ -591,7 +605,13 @@ export function createAgentService(
   ): Promise<AgentProposalResult> {
     const request = parsePublicRequest(publicInput);
     const covenant = await loadCovenant();
-    const invoiceHash = await verifyInvoice({ request, covenant });
+    const invoiceHash = await verifyInvoiceEvidence({
+      rawSignedInvoice: request.rawSignedInvoice,
+      signedInvoice: request.signedInvoice,
+      productId: request.productId,
+      expectedAmount: request.expectedAmount,
+      covenant,
+    });
     const currentTime = await now();
     assertCurrent(currentTime, request.signedInvoice, covenant.parsed);
     const address = await signerAddress(covenant.parsed);

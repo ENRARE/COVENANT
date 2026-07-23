@@ -60,6 +60,12 @@ export class AgentError extends Error {
     message = AGENT_ERROR_MESSAGES[code],
   ) {
     super(message);
+    Object.defineProperty(this, "stack", {
+      value: undefined,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
   }
 
   toJSON(): { name: string; code: AgentErrorCode; message: string } {

@@ -1,9 +1,92 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  AgentError,
+  createAgentService,
+  type AgentProposalResult,
+  type ProposalReservation,
+} from "../src/index.js";
+import {
+  CountingReservationRepository,
   createAgentHarness,
   proposalForInvoice,
   TEST_NOW,
 } from "./fixtures.js";
+
+type CompletedReservation = ProposalReservation & {
+  completedResult: AgentProposalResult;
+};
+
+async function completedReservation(
+  harness: Awaited<ReturnType<typeof createAgentHarness>>,
+): Promise<CompletedReservation> {
+  await harness.service.proposePayment(harness.request);
+  const identity = harness.identifierContexts[0];
+  if (
+    identity === undefined ||
+    !(harness.reservationRepository instanceof CountingReservationRepository)
+  ) {
+    throw new Error("Expected a completed in-memory reservation");
+  }
+  const reservation = (await harness.reservationRepository.delegate.get(
+    identity,
+  )) as ProposalReservation | undefined;
+  if (reservation?.completedResult === undefined) {
+    throw new Error("Expected a completed proposal result");
+  }
+  return reservation as CompletedReservation;
+}
+
+function serviceWithStoredResult(input: {
+  harness: Awaited<ReturnType<typeof createAgentHarness>>;
+  reservation: ProposalReservation;
+  completedResult: AgentProposalResult;
+}) {
+  const calls = {
+    identifier: 0,
+    nonce: 0,
+    signer: 0,
+    completion: 0,
+  };
+  const repositoryControlledValue = input.reservation.intentId;
+  const service = createAgentService({
+    ...input.harness.dependencies,
+    identifierGenerator: {
+      createId() {
+        calls.identifier += 1;
+        return Promise.resolve(input.reservation.intentId);
+      },
+    },
+    signer: {
+      address: input.harness.agentAccount.address,
+      signPaymentIntent() {
+        calls.signer += 1;
+        return Promise.reject(
+          new Error(`unexpected signer call ${repositoryControlledValue}`),
+        );
+      },
+    },
+    reservationRepository: {
+      get: () =>
+        Promise.resolve({
+          ...input.reservation,
+          completedResult: input.completedResult,
+        }),
+      reserve: () => {
+        calls.nonce += 1;
+        return Promise.reject(
+          new Error(`unexpected reservation ${repositoryControlledValue}`),
+        );
+      },
+      storeCompleted: () => {
+        calls.completion += 1;
+        return Promise.reject(
+          new Error(`unexpected completion ${repositoryControlledValue}`),
+        );
+      },
+    },
+  });
+  return { calls, repositoryControlledValue, service };
+}
 
 describe("service-local single-flight and retained reservations", () => {
   it("shares one reservation and signature across concurrent duplicates", async () => {
@@ -274,6 +357,110 @@ describe("service-local single-flight and retained reservations", () => {
       identifier: 1,
       signer: 0,
       reservation: 1,
+      completion: 0,
+    });
+  });
+});
+
+describe("completed-result Invoice evidence revalidation", () => {
+  it("rejects a stored Invoice signature copied from a different Invoice", async () => {
+    const harness = await createAgentHarness();
+    const reservation = await completedReservation(harness);
+    const differentInvoice = await harness.signInvoice({
+      ...harness.invoice,
+      invoiceId: `0x${"45".repeat(32)}`,
+      nonce: "45",
+    });
+    const corruptedSignature = differentInvoice.signature;
+    const completedResult: AgentProposalResult = {
+      ...reservation.completedResult,
+      signedInvoice: {
+        ...reservation.completedResult.signedInvoice,
+        signature: corruptedSignature,
+      },
+    };
+    const replay = serviceWithStoredResult({
+      harness,
+      reservation,
+      completedResult,
+    });
+    let caught: unknown;
+    let returned: AgentProposalResult | undefined;
+
+    try {
+      returned = await replay.service.proposePayment(harness.request);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(returned).toBeUndefined();
+    expect(caught).toBeInstanceOf(AgentError);
+    expect(caught).toMatchObject({ code: "SELF_VERIFICATION_FAILED" });
+    expect((caught as AgentError).stack).toBeUndefined();
+    const serialized = JSON.stringify(caught);
+    expect(serialized).not.toContain(corruptedSignature);
+    expect(serialized).not.toContain(replay.repositoryControlledValue);
+    expect(replay.calls).toEqual({
+      identifier: 0,
+      nonce: 0,
+      signer: 0,
+      completion: 0,
+    });
+  });
+
+  it("rejects a stored Invoice signed by another valid vendor key", async () => {
+    const harness = await createAgentHarness();
+    const reservation = await completedReservation(harness);
+    const attackerInvoice = await harness.signInvoice(
+      harness.invoice,
+      harness.attackerAccount,
+    );
+    const completedResult: AgentProposalResult = {
+      ...reservation.completedResult,
+      signedInvoice: {
+        ...reservation.completedResult.signedInvoice,
+        signature: attackerInvoice.signature,
+      },
+    };
+    const replay = serviceWithStoredResult({
+      harness,
+      reservation,
+      completedResult,
+    });
+
+    await expect(
+      replay.service.proposePayment(harness.request),
+    ).rejects.toMatchObject({ code: "SELF_VERIFICATION_FAILED" });
+    expect(replay.calls).toEqual({
+      identifier: 0,
+      nonce: 0,
+      signer: 0,
+      completion: 0,
+    });
+  });
+
+  it("fully revalidates and returns a valid stored completion without new work", async () => {
+    const harness = await createAgentHarness();
+    const reservation = await completedReservation(harness);
+    const replay = serviceWithStoredResult({
+      harness,
+      reservation,
+      completedResult: reservation.completedResult,
+    });
+
+    const result = await replay.service.proposePayment(harness.request);
+
+    expect(result).toEqual(reservation.completedResult);
+    expect(result).not.toBe(reservation.completedResult);
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.signedInvoice)).toBe(true);
+    expect(Object.isFrozen(result.signedInvoice.payload)).toBe(true);
+    expect(Object.isFrozen(result.signedPaymentIntent)).toBe(true);
+    expect(Object.isFrozen(result.signedPaymentIntent.payload)).toBe(true);
+    expect(replay.calls).toEqual({
+      identifier: 0,
+      nonce: 0,
+      signer: 0,
       completion: 0,
     });
   });

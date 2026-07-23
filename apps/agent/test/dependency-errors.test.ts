@@ -8,8 +8,15 @@ import {
 function expectSanitized(error: unknown, code: string): void {
   expect(error).toBeInstanceOf(AgentError);
   expect(error).toMatchObject({ code });
+  expect((error as AgentError).stack).toBeUndefined();
+  expect((error as AgentError).toJSON()).toEqual({
+    name: "AgentError",
+    code,
+    message: (error as AgentError).message,
+  });
   const serialized = JSON.stringify(error);
   expect(serialized).not.toContain("secret");
+  expect(serialized).not.toContain("stack");
   expect(Object.keys(JSON.parse(serialized) as object)).toEqual([
     "name",
     "code",
@@ -18,6 +25,20 @@ function expectSanitized(error: unknown, code: string): void {
 }
 
 describe("sanitized injected dependency boundary", () => {
+  it("suppresses stack access on the public AgentError contract", () => {
+    const error = new AgentError("CLOCK_FAILURE");
+    expect(error.stack).toBeUndefined();
+    expect(error.toJSON()).toEqual({
+      name: "AgentError",
+      code: "CLOCK_FAILURE",
+      message: "Agent clock failed",
+    });
+    expect(Object.keys(error.toJSON())).toEqual(["name", "code", "message"]);
+    expect(JSON.stringify(error)).toBe(
+      '{"name":"AgentError","code":"CLOCK_FAILURE","message":"Agent clock failed"}',
+    );
+  });
+
   it.each([
     ["approved vendor", { approvedVendor: "secret-invalid" }],
     ["approved product", { approvedProductId: "gpu-a100-hour" }],
