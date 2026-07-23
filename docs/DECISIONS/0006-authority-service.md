@@ -42,7 +42,9 @@ All capabilities in this decision are **MVP** unless explicitly labeled otherwis
 
 **MVP:** Authorization requires the original signed PaymentIntent and Invoice, canonical RuleResults, and signed DecisionReceipt. The application independently recomputes all hashes, verifies all signatures and cross-object linkages, rereads current evidence, and requires the hard financial and replay conditions to remain valid before reserving an authorization ID or nonce.
 
-**MVP:** Authorization identity includes Covenant ID, signed decision identifier and digest, PaymentIntent digest, and Invoice digest. Concurrent duplicates share one pending operation. One stable authorization ID and nonce are retained for the identity across signer failure; the nonce is never reassigned. Candidates already consumed onchain are skipped.
+**MVP:** Authorization identity includes Covenant ID, signed decision identifier and digest, PaymentIntent digest, and Invoice digest. Concurrent duplicates share one pending operation. One stable authorization ID and nonce are retained for the identity across signer failure; the nonce is never reassigned. Candidates already consumed before reservation are skipped. Every retry rechecks the retained candidate, and a subsequently consumed retained nonce terminates issuance with `AUTHORIZATION_NONCE_CONSUMED` without generating a replacement identifier, nonce, signature, or receipt.
+
+**MVP:** All injected calls use a common exception-sanitizing boundary with dependency-specific stable codes and static messages. This includes Covenant loading, clock reads, evidence and nonce-consumption reads, signer address access, both signing operations, identifier generation, and all three repositories. Concurrent joiners observe the same sanitized failure rather than raw adapter details.
 
 **MVP:** Authorization validity is `min(now + 300 seconds, PaymentIntent.expiresAt, Invoice.expiresAt, CovenantSpec.validUntil)` and must follow both current time and DecisionReceipt creation time.
 
@@ -55,6 +57,8 @@ All capabilities in this decision are **MVP** unless explicitly labeled otherwis
 **V2:** Multiple Covenants, agents, vendors, products, assets, or reviewed policy variants require a new approved scope.
 
 **Production:** Durable distributed coordination, managed key custody, signer authentication, finalized/quorum evidence, reorganization policy, monitoring, rate limiting, incident response, and real funds remain deferred.
+
+**Production:** Persistence recovery must durably bind authorization identity, identifier, and nonce across restarts and reconcile retained nonces against finalized vault state before retry or operator intervention.
 
 **Protocol:** Generic policy languages, arbitrary contract execution, multichain behavior, permissionless extensions, and upgradeability remain excluded.
 

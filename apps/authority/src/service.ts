@@ -1,17 +1,25 @@
 import {
+  CovenantVerificationError,
   EIP712_DOMAIN_NAMES,
   deriveSigningDomainForCovenant,
   hashDecisionReceipt,
   hashInvoice,
   hashPaymentIntent,
   hashRuleResults,
-  verifyAuthorizationChain,
   verifySignedDecisionReceiptForCovenant,
   verifySignedPaymentIntentForCovenant,
 } from "@covenant/spec";
-import { issueAuthorizationReceipt } from "./authorizations/issue-authorization.js";
+import {
+  issueAuthorizationReceipt,
+  verifyAuthorizationReceiptLinkage,
+} from "./authorizations/issue-authorization.js";
 import { issueDecision } from "./decisions/issue-decision.js";
-import { AuthorityError } from "./errors.js";
+import {
+  AUTHORITY_ERROR_MESSAGES,
+  AuthorityError,
+  callDependency,
+  type AuthorityErrorCode,
+} from "./errors.js";
 import { verifyInvoice } from "./invoices/verify-invoice.js";
 import {
   evaluatePolicy,
@@ -79,6 +87,36 @@ function minimum(...values: readonly bigint[]): bigint {
   );
 }
 
+function decisionVerificationError(error: unknown): AuthorityError {
+  let code: AuthorityErrorCode = "INVALID_DECISION";
+  if (error instanceof CovenantVerificationError) {
+    switch (error.code) {
+      case "COVENANT_ID_MISMATCH":
+        code = "DECISION_COVENANT_MISMATCH";
+        break;
+      case "POLICY_VERSION_MISMATCH":
+        code = "DECISION_POLICY_VERSION_MISMATCH";
+        break;
+      case "RULE_RESULTS_MISMATCH":
+        code = "DECISION_RULE_RESULTS_MISMATCH";
+        break;
+      case "RULE_RESULTS_NOT_ALL_PASSING":
+      case "DECISION_NOT_APPROVED":
+        code = "DECISION_STATUS_MISMATCH";
+        break;
+      case "UNTRUSTED_AUTHORIZATION_SIGNER":
+        code = "DECISION_SIGNER_MISMATCH";
+        break;
+      case "SIGNATURE_INVALID":
+        code = "DECISION_SIGNATURE_INVALID";
+        break;
+      default:
+        code = "INVALID_DECISION";
+    }
+  }
+  return new AuthorityError(code, AUTHORITY_ERROR_MESSAGES[code]);
+}
+
 export function createAuthorityService(
   dependencies: AuthorityDependencies,
 ): AuthorityService {
@@ -86,7 +124,6 @@ export function createAuthorityService(
   const approvedProductId = parseConfiguredProduct(
     dependencies.approvedProductId,
   );
-  const signerAddress = parseSignerAddress(dependencies.signer.address);
   const decisionRepository =
     dependencies.decisionRepository ?? new InMemoryDecisionRepository();
   const authorizationRepository =
@@ -96,27 +133,59 @@ export function createAuthorityService(
     dependencies.nonceRepository ?? new InMemoryNonceRepository();
 
   async function loadCovenant(): Promise<LoadedCovenant> {
-    let raw: unknown;
+    const raw = await callDependency({
+      operation: () => dependencies.covenantProvider.getCovenant(),
+      code: "COVENANT_PROVIDER_FAILURE",
+    });
+    const covenant = parseTrustedCovenant(raw);
+    const rawSignerAddress = await callDependency({
+      operation: () => dependencies.signer.address,
+      code: "SIGNER_ADDRESS_FAILURE",
+    });
+    let signerAddress: ReturnType<typeof parseSignerAddress>;
     try {
-      raw = await dependencies.covenantProvider.getCovenant();
+      signerAddress = parseSignerAddress(rawSignerAddress);
     } catch {
       throw new AuthorityError(
-        "DEPENDENCY_FAILURE",
-        "Trusted Covenant provider failed",
+        "SIGNER_ADDRESS_FAILURE",
+        AUTHORITY_ERROR_MESSAGES.SIGNER_ADDRESS_FAILURE,
       );
     }
-    const covenant = parseTrustedCovenant(raw);
     if (signerAddress !== covenant.parsed.authorizationSigner) {
       throw new AuthorityError(
         "SIGNER_MISMATCH",
-        "Configured signer does not match the Covenant authorization signer",
+        AUTHORITY_ERROR_MESSAGES.SIGNER_MISMATCH,
       );
     }
     return covenant;
   }
 
-  function now(): bigint {
-    return parseClockValue(dependencies.clock.now());
+  async function now(): Promise<bigint> {
+    return callDependency({
+      operation: () => parseClockValue(dependencies.clock.now()),
+      code: "CLOCK_FAILURE",
+    });
+  }
+
+  async function createIdentifier(
+    kind: "decision" | "authorization",
+    stableContext: string,
+  ) {
+    const raw = await callDependency({
+      operation: () =>
+        dependencies.identifierGenerator.createId(kind, stableContext),
+      code: "IDENTIFIER_GENERATION_FAILURE",
+    });
+    return parseGeneratedIdentifier(raw);
+  }
+
+  async function isAuthorizationNonceConsumed(nonce: bigint): Promise<boolean> {
+    const raw = await callDependency({
+      operation: () =>
+        dependencies.evidenceReader.isAuthorizationNonceUsed(nonce),
+      code: "EVIDENCE_READER_FAILURE",
+    });
+    return parseConsumedNonceResult(raw);
   }
 
   function paymentDigests(
@@ -148,20 +217,16 @@ export function createAuthorityService(
     covenant: LoadedCovenant,
     intentHash: `0x${string}`,
   ) {
-    let rawEvidence: unknown;
-    try {
-      rawEvidence = await dependencies.evidenceReader.readEvidence({
-        covenantId: covenant.parsed.covenantId,
-        intentHash,
-        intentId: request.signedPaymentIntent.payload.intentId,
-        agentNonce: request.signedPaymentIntent.payload.nonce,
-      });
-    } catch {
-      throw new AuthorityError(
-        "DEPENDENCY_FAILURE",
-        "Authority evidence reader failed",
-      );
-    }
+    const rawEvidence = await callDependency({
+      operation: () =>
+        dependencies.evidenceReader.readEvidence({
+          covenantId: covenant.parsed.covenantId,
+          intentHash,
+          intentId: request.signedPaymentIntent.payload.intentId,
+          agentNonce: request.signedPaymentIntent.payload.nonce,
+        }),
+      code: "EVIDENCE_READER_FAILURE",
+    });
     return parseEvidence(rawEvidence);
   }
 
@@ -221,7 +286,7 @@ export function createAuthorityService(
   ): Promise<EvaluationResult> {
     const request = parsePaymentRequest(input);
     const covenant = await loadCovenant();
-    const currentTime = now();
+    const currentTime = await now();
     const evaluation = await evaluateParsedRequest(
       request,
       covenant,
@@ -248,7 +313,7 @@ export function createAuthorityService(
             ? identity
             : `${identity}:rejected:${currentTime.toString()}`,
         createId: (stableContext) =>
-          dependencies.identifierGenerator.createId("decision", stableContext),
+          createIdentifier("decision", stableContext),
         signer: dependencies.signer,
       }),
     });
@@ -262,16 +327,11 @@ export function createAuthorityService(
       };
     }
 
-    let record: ApprovedDecisionRecord;
-    try {
-      record = await decisionRepository.getOrCreate(identity, create);
-    } catch (error) {
-      if (error instanceof AuthorityError) throw error;
-      throw new AuthorityError(
-        "IDEMPOTENCY_CONFLICT",
-        "Approved decision repository operation failed",
-      );
-    }
+    const record = await callDependency({
+      operation: () => decisionRepository.getOrCreate(identity, create),
+      code: "DECISION_REPOSITORY_FAILURE",
+      preserveAuthorityError: true,
+    });
     await verifyApprovedRecord(record, request, covenant, evaluation);
     return {
       status: "APPROVED",
@@ -285,7 +345,7 @@ export function createAuthorityService(
   ): Promise<RawSignedAuthorizationReceipt> {
     const request = parseAuthorizationRequest(input);
     const covenant = await loadCovenant();
-    const currentTime = now();
+    const currentTime = await now();
     const paymentRequest = {
       rawSignedPaymentIntent: request.rawSignedPaymentIntent,
       signedPaymentIntent: request.signedPaymentIntent,
@@ -314,31 +374,78 @@ export function createAuthorityService(
       });
       if (!invoice.signatureValid || !invoice.matchesIntent)
         throw new Error("Invoice verification failed");
-      const verifiedDecision = await verifySignedDecisionReceiptForCovenant(
+    } catch {
+      throw new AuthorityError(
+        "INVALID_DECISION",
+        AUTHORITY_ERROR_MESSAGES.INVALID_DECISION,
+      );
+    }
+
+    let verifiedDecision: Awaited<
+      ReturnType<typeof verifySignedDecisionReceiptForCovenant>
+    >;
+    try {
+      verifiedDecision = await verifySignedDecisionReceiptForCovenant(
         request.rawDecisionReceipt,
         request.ruleResults,
         covenant.raw,
       );
-      const decision = verifiedDecision.envelope.payload;
-      const intent = request.signedPaymentIntent.payload;
-      if (
-        decision.decision !== "APPROVED" ||
-        decision.covenantId !== covenant.parsed.covenantId ||
-        decision.intentId !== intent.intentId ||
-        decision.intentHash !== evaluation.intentHash ||
-        decision.policyVersion !== covenant.parsed.policyVersion ||
-        decision.createdAt > currentTime ||
-        decision.createdAt < intent.createdAt ||
-        decision.createdAt >= intent.expiresAt ||
-        hashRuleResults(request.ruleResults) !==
-          hashRuleResults(evaluation.ruleResults) ||
-        evaluation.status !== "APPROVED"
-      )
-        throw new Error("Decision linkage failed");
-    } catch {
+    } catch (error) {
+      throw decisionVerificationError(error);
+    }
+
+    const verifiedDecisionPayload = verifiedDecision.envelope.payload;
+    const verifiedIntentPayload = request.signedPaymentIntent.payload;
+    if (verifiedDecisionPayload.covenantId !== covenant.parsed.covenantId) {
       throw new AuthorityError(
-        "INVALID_DECISION",
-        "Authorization requires a currently valid approved decision",
+        "DECISION_COVENANT_MISMATCH",
+        AUTHORITY_ERROR_MESSAGES.DECISION_COVENANT_MISMATCH,
+      );
+    }
+    if (verifiedDecisionPayload.intentId !== verifiedIntentPayload.intentId) {
+      throw new AuthorityError(
+        "DECISION_INTENT_ID_MISMATCH",
+        AUTHORITY_ERROR_MESSAGES.DECISION_INTENT_ID_MISMATCH,
+      );
+    }
+    if (verifiedDecisionPayload.intentHash !== evaluation.intentHash) {
+      throw new AuthorityError(
+        "DECISION_INTENT_HASH_MISMATCH",
+        AUTHORITY_ERROR_MESSAGES.DECISION_INTENT_HASH_MISMATCH,
+      );
+    }
+    if (
+      verifiedDecisionPayload.policyVersion !== covenant.parsed.policyVersion
+    ) {
+      throw new AuthorityError(
+        "DECISION_POLICY_VERSION_MISMATCH",
+        AUTHORITY_ERROR_MESSAGES.DECISION_POLICY_VERSION_MISMATCH,
+      );
+    }
+    if (verifiedDecisionPayload.createdAt > currentTime) {
+      throw new AuthorityError(
+        "DECISION_CREATED_IN_FUTURE",
+        AUTHORITY_ERROR_MESSAGES.DECISION_CREATED_IN_FUTURE,
+      );
+    }
+    if (
+      verifiedDecisionPayload.decision !== "APPROVED" ||
+      verifiedDecisionPayload.createdAt < verifiedIntentPayload.createdAt ||
+      verifiedDecisionPayload.createdAt >= verifiedIntentPayload.expiresAt ||
+      evaluation.status !== "APPROVED"
+    ) {
+      throw new AuthorityError(
+        "DECISION_STATUS_MISMATCH",
+        AUTHORITY_ERROR_MESSAGES.DECISION_STATUS_MISMATCH,
+      );
+    }
+    if (
+      hashRuleResults(request.ruleResults) !==
+      hashRuleResults(evaluation.ruleResults)
+    ) {
+      throw new AuthorityError(
+        "DECISION_RULE_RESULTS_MISMATCH",
+        AUTHORITY_ERROR_MESSAGES.DECISION_RULE_RESULTS_MISMATCH,
       );
     }
 
@@ -375,77 +482,69 @@ export function createAuthorityService(
       evaluation.invoiceHash,
     ].join(":");
 
-    let receipt: RawSignedAuthorizationReceipt;
-    try {
-      receipt = await authorizationRepository.getOrCreate(
-        identity,
-        async () => {
-          const authorizationId = parseGeneratedIdentifier(
-            await dependencies.identifierGenerator.createId(
+    const receipt = await callDependency({
+      operation: () =>
+        authorizationRepository.getOrCreate(
+          identity,
+          async () => {
+            const authorizationId = await createIdentifier(
               "authorization",
               identity,
-            ),
-          );
-          const authorizationNonce = await nonceRepository.reserve(
-            identity,
-            async (candidate) => {
-              let consumed: unknown;
-              try {
-                consumed =
-                  await dependencies.evidenceReader.isAuthorizationNonceUsed(
-                    candidate,
-                  );
-              } catch {
-                throw new AuthorityError(
-                  "DEPENDENCY_FAILURE",
-                  "Authorization nonce evidence reader failed",
-                );
-              }
-              return parseConsumedNonceResult(consumed);
-            },
-          );
-          return { authorizationId, authorizationNonce };
-        },
-        (reservation) =>
-          issueAuthorizationReceipt({
-            rawCovenant: covenant.raw,
-            covenant: covenant.parsed,
-            rawSignedPaymentIntent: request.rawSignedPaymentIntent,
-            rawDecisionReceipt: request.rawDecisionReceipt,
-            ruleResults: request.ruleResults,
-            intentHash: evaluation.intentHash,
-            decisionId: decision.decisionId,
-            validUntil,
-            reservation,
-            signer: dependencies.signer,
-          }),
-      );
-    } catch (error) {
-      if (error instanceof AuthorityError) throw error;
-      throw new AuthorityError(
-        "IDEMPOTENCY_CONFLICT",
-        "Authorization repository operation failed",
-      );
-    }
+            );
+            const authorizationNonce = await callDependency({
+              operation: () =>
+                nonceRepository.reserve(identity, isAuthorizationNonceConsumed),
+              code: "NONCE_REPOSITORY_FAILURE",
+              preserveAuthorityError: true,
+            });
+            return { authorizationId, authorizationNonce };
+          },
+          async (reservation) => {
+            if (
+              await isAuthorizationNonceConsumed(reservation.authorizationNonce)
+            ) {
+              throw new AuthorityError(
+                "AUTHORIZATION_NONCE_CONSUMED",
+                AUTHORITY_ERROR_MESSAGES.AUTHORIZATION_NONCE_CONSUMED,
+              );
+            }
+            return issueAuthorizationReceipt({
+              rawCovenant: covenant.raw,
+              covenant: covenant.parsed,
+              rawSignedPaymentIntent: request.rawSignedPaymentIntent,
+              rawDecisionReceipt: request.rawDecisionReceipt,
+              ruleResults: request.ruleResults,
+              intentHash: evaluation.intentHash,
+              decisionId: decision.decisionId,
+              validUntil,
+              reservation,
+              signer: dependencies.signer,
+            });
+          },
+        ),
+      code: "AUTHORIZATION_REPOSITORY_FAILURE",
+      preserveAuthorityError: true,
+    });
 
     try {
-      const verified = await verifyAuthorizationChain(
-        covenant.raw,
-        request.rawSignedPaymentIntent,
-        request.rawDecisionReceipt,
-        request.ruleResults,
-        receipt,
-      );
+      const verified = await verifyAuthorizationReceiptLinkage({
+        rawCovenant: covenant.raw,
+        rawSignedPaymentIntent: request.rawSignedPaymentIntent,
+        rawDecisionReceipt: request.rawDecisionReceipt,
+        ruleResults: request.ruleResults,
+        authorizationReceipt: receipt,
+      });
       if (
         verified.signedAuthorizationReceipt.payload.validUntil <= currentTime ||
         verified.signedAuthorizationReceipt.payload.validUntil >
           invoice.expiresAt
       )
         throw new Error("Stored authorization expired");
-    } catch {
+    } catch (error) {
+      if (error instanceof AuthorityError) throw error;
       throw new AuthorityError(
         "SELF_VERIFICATION_FAILED",
-        "Stored AuthorizationReceipt failed verification",
+        AUTHORITY_ERROR_MESSAGES.SELF_VERIFICATION_FAILED,
       );
     }
     return receipt;

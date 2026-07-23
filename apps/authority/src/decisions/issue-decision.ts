@@ -11,7 +11,11 @@ import {
   type CovenantSpec,
   type SignedPaymentIntent,
 } from "@covenant/spec";
-import { AuthorityError } from "../errors.js";
+import {
+  AUTHORITY_ERROR_MESSAGES,
+  AuthorityError,
+  callDependency,
+} from "../errors.js";
 import { parseGeneratedIdentifier } from "../schemas.js";
 import type { ReceiptSigner } from "../ports/receipt-signer.js";
 import type { RawSignedDecisionReceipt } from "../types.js";
@@ -50,15 +54,17 @@ export async function issueDecision(input: {
   );
   const typedData = buildDecisionReceiptTypedData(rawPayload, domain);
 
+  const rawSignature = await callDependency({
+    operation: () => input.signer.signDecisionReceipt(typedData),
+    code: "DECISION_SIGNING_FAILURE",
+  });
   let signature: ReturnType<typeof signatureSchema.parse>;
   try {
-    signature = signatureSchema.parse(
-      await input.signer.signDecisionReceipt(typedData),
-    );
+    signature = signatureSchema.parse(rawSignature);
   } catch {
     throw new AuthorityError(
-      "SIGNING_FAILURE",
-      "Decision signing operation failed",
+      "DECISION_SIGNING_FAILURE",
+      AUTHORITY_ERROR_MESSAGES.DECISION_SIGNING_FAILURE,
     );
   }
 

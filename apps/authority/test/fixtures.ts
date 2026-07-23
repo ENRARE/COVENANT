@@ -65,6 +65,7 @@ export async function createTestHarness(): Promise<{
   request: { signedPaymentIntent: unknown; signedInvoice: unknown };
   evidence: EvidenceSnapshot;
   consumedAuthorizationNonces: Set<bigint>;
+  authorizationNonceChecks: bigint[];
   signer: TestReceiptSigner;
   agentAccount: PrivateKeyAccount;
   vendorAccount: PrivateKeyAccount;
@@ -212,6 +213,7 @@ export async function createTestHarness(): Promise<{
     usedAgentNonce: false,
   };
   const consumedAuthorizationNonces = new Set<bigint>();
+  const authorizationNonceChecks: bigint[] = [];
   const generatedIds: { kind: string; context: string; id: string }[] = [];
   let nextId = 1n;
   const dependencies: AuthorityDependencies = {
@@ -219,8 +221,10 @@ export async function createTestHarness(): Promise<{
     covenantProvider: { getCovenant: () => Promise.resolve(covenant) },
     evidenceReader: {
       readEvidence: () => Promise.resolve({ ...evidence }),
-      isAuthorizationNonceUsed: (nonce) =>
-        Promise.resolve(consumedAuthorizationNonces.has(nonce)),
+      isAuthorizationNonceUsed: (nonce) => {
+        authorizationNonceChecks.push(nonce);
+        return Promise.resolve(consumedAuthorizationNonces.has(nonce));
+      },
     },
     identifierGenerator: {
       createId: (kind, context) => {
@@ -244,6 +248,7 @@ export async function createTestHarness(): Promise<{
     request,
     evidence,
     consumedAuthorizationNonces,
+    authorizationNonceChecks,
     signer,
     agentAccount,
     vendorAccount,

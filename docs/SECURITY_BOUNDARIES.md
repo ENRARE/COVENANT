@@ -59,7 +59,9 @@
 
 **MVP:** Authorization issuance independently revalidates the original signed PaymentIntent, signed Invoice, canonical RuleResults, signed DecisionReceipt, all exact linkages, current request validity, and newly read authoritative evidence before reserving an ID or nonce. Authorization expires at the earliest of 300 seconds, PaymentIntent expiry, Invoice expiry, or Covenant expiry.
 
-**MVP:** In-memory decision, authorization, and nonce repositories coordinate issuance only. Concurrent duplicates share pending operations; authorization reservations survive signer failure and are never reassigned. The repositories are not authoritative accounting or replay state. CovenantVault remains authoritative for spend, payment count, revocation, intent replay, authorization replay, and settlement.
+**MVP:** In-memory decision, authorization, and nonce repositories coordinate issuance only. Concurrent duplicates share pending operations; authorization reservations survive signer failure and are never reassigned. A retry rechecks the retained nonce and fails closed with `AUTHORIZATION_NONCE_CONSUMED` if the vault reports it consumed, without advancing to a replacement. The repositories are not authoritative accounting or replay state. CovenantVault remains authoritative for spend, payment count, revocation, intent replay, authorization replay, and settlement.
+
+**MVP:** Every injected call crosses a common sanitizing boundary. Stable dependency-specific codes and static messages replace raw exceptions for providers, clocks, evidence, signer access and signing, identifiers, and repositories, including concurrent callers joined to the same rejected operation.
 
 **MVP:** COV-003 contains no Circle credential, executor behavior, vault transaction construction, transaction broadcasting, HTTP endpoint, webhook, queue, worker, Supabase integration, agent behavior, live vendor API, or product UI.
 
@@ -67,5 +69,6 @@
 
 - **Production:** Hardware-backed keys, dual control, credential rotation, network isolation, tamper-evident centralized audit storage, and incident response are deferred.
 - **Production:** Continuous Circle/onchain reconciliation, redundant Arc RPCs, and formal recovery procedures are deferred.
+- **Production:** Durable reservation persistence and restart recovery must preserve identity-to-nonce bindings and reconcile them against finalized vault state.
 - **Production:** No external audit or formal verification has occurred; both remain required before production use.
 - **Protocol:** Cross-chain and generalized policy boundaries require new specifications and are not inherited from the MVP.

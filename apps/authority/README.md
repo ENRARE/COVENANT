@@ -38,11 +38,15 @@
 
 **MVP:** Only approved decisions are idempotent. Their identity commits to the Covenant ID plus exact PaymentIntent and Invoice digests. Rejected decisions are never cached, so an invalid first submission cannot poison a later valid request.
 
-**MVP:** Authorization identity commits to the Covenant, signed decision identity and digest, PaymentIntent digest, and Invoice digest. Concurrent duplicates share one pending signing operation. A stable authorization ID and nonce reservation survives signer failure and is never reassigned. Detached signature bytes are never replay or idempotency identity.
+**MVP:** Authorization identity commits to the Covenant, signed decision identity and digest, PaymentIntent digest, and Invoice digest. Concurrent duplicates share one pending signing operation. A stable authorization ID and nonce reservation survives signer failure and is never reassigned. Every retry rechecks that retained nonce; if it has since been consumed, issuance fails with `AUTHORIZATION_NONCE_CONSUMED` without allocating another identifier or nonce. Detached signature bytes are never replay or idempotency identity.
 
 **MVP:** Authorization validity is the minimum of 300 seconds, PaymentIntent expiry, Invoice expiry, and Covenant expiry. Current evidence and the complete approval chain are independently revalidated before any authorization ID or nonce is reserved.
 
+**MVP:** Every injected provider, clock, evidence, signer, identifier, and repository call crosses one sanitized dependency boundary. Adapter exceptions become stable authority error codes and static messages, including for callers sharing a rejected concurrent operation; raw adapter messages, stacks, signatures, and typed data are not exposed.
+
 **MVP:** In-memory repositories coordinate demonstration issuance only. They are not authoritative replay, spend, payment-count, or revocation state. `CovenantVault` remains authoritative and rechecks every hard control at settlement.
+
+**Production:** Durable reservation storage, restart recovery, finalized-state reconciliation, and operator procedures are required before retained authorization identities can survive process loss or ambiguous settlement.
 
 ## Development
 
@@ -54,6 +58,8 @@ pnpm.cmd --filter @covenant/authority typecheck
 pnpm.cmd --filter @covenant/authority test
 pnpm.cmd --filter @covenant/authority build
 ```
+
+**MVP:** Authority development checks resolve the public `@covenant/spec` entry to its TypeScript source, so lint, type checking, and tests do not depend on stale generated output. Production builds retain the package's `dist` exports, and Turbo builds workspace dependencies first.
 
 **Production:** Durable distributed coordination, RPC freshness and finality controls, managed signer infrastructure, authentication, monitoring, and incident response remain deferred.
 

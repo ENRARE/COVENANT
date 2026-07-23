@@ -82,7 +82,7 @@ describe("authority service integration", () => {
       harness.service.issueAuthorization(
         authorizationInput(harness.request, rejected),
       ),
-    ).rejects.toMatchObject({ code: "INVALID_DECISION" });
+    ).rejects.toMatchObject({ code: "DECISION_STATUS_MISMATCH" });
     expect(
       harness.generatedIds.filter(({ kind }) => kind === "authorization"),
     ).toHaveLength(0);
@@ -160,7 +160,7 @@ describe("authority service integration", () => {
         harness.service.issueAuthorization(
           authorizationInput(harness.request, approved),
         ),
-      ).rejects.toMatchObject({ code: "INVALID_DECISION" });
+      ).rejects.toMatchObject({ code: "DECISION_STATUS_MISMATCH" });
       expect(harness.signer.authorizationCalls).toBe(0);
       expect(
         harness.generatedIds.filter(({ kind }) => kind === "authorization"),
@@ -180,7 +180,7 @@ describe("authority service integration", () => {
     });
     await expect(
       harness.service.issueAuthorization(authorizationInput(changed, approved)),
-    ).rejects.toMatchObject({ code: "INVALID_DECISION" });
+    ).rejects.toMatchObject({ code: "DECISION_INTENT_HASH_MISMATCH" });
 
     const invoiceOnly = await harness.rebuildRequest({
       invoice: { ...harness.invoice, productId: "gpu-a100-hour" },

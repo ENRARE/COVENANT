@@ -1,4 +1,5 @@
 import {
+  buildDecisionReceiptTypedData,
   buildPaymentIntentTypedData,
   deriveSigningDomainForCovenant,
   EIP712_DOMAIN_NAMES,
@@ -15,8 +16,9 @@ import { authorizationInput, createTestHarness, TEST_NOW } from "./fixtures.js";
 
 function mutateSignature(
   signature: string,
-  kind: "high-s" | "zero-r" | "zero-s" | "invalid-v",
+  kind: "all-zero" | "high-s" | "zero-r" | "zero-s" | "invalid-v",
 ): string {
+  if (kind === "all-zero") return `0x${"00".repeat(65)}`;
   const r = signature.slice(2, 66);
   const s = signature.slice(66, 130);
   const v = signature.slice(130, 132);
@@ -34,7 +36,7 @@ function mutateSignature(
 }
 
 describe("strict and adversarial authority boundaries", () => {
-  it.each(["high-s", "zero-r", "zero-s", "invalid-v"] as const)(
+  it.each(["all-zero", "high-s", "zero-r", "zero-s", "invalid-v"] as const)(
     "signs a rejection for schema-valid %s PaymentIntent signatures",
     async (kind) => {
       const harness = await createTestHarness();
@@ -251,6 +253,67 @@ describe("strict and adversarial authority boundaries", () => {
     },
   );
 
+  it.each([
+    [
+      "authorization request",
+      (input: Record<string, unknown>) => ({ ...input, executeNow: true }),
+    ],
+    [
+      "DecisionReceipt envelope",
+      (input: Record<string, unknown>) => ({
+        ...input,
+        decisionReceipt: {
+          ...(input.decisionReceipt as object),
+          executeNow: true,
+        },
+      }),
+    ],
+    [
+      "DecisionReceipt payload",
+      (input: Record<string, unknown>) => {
+        const decision = input.decisionReceipt as {
+          payload: object;
+          signature: string;
+        };
+        return {
+          ...input,
+          decisionReceipt: {
+            ...decision,
+            payload: { ...decision.payload, executeNow: true },
+          },
+        };
+      },
+    ],
+    [
+      "RuleResult entry",
+      (input: Record<string, unknown>) => ({
+        ...input,
+        ruleResults: (input.ruleResults as object[]).map((result, index) =>
+          index === 0 ? { ...result, executeNow: true } : result,
+        ),
+      }),
+    ],
+  ] as const)(
+    "strictly rejects unknown fields in the %s",
+    async (_label, mutate) => {
+      const harness = await createTestHarness();
+      const approved = await harness.service.evaluatePaymentRequest(
+        harness.request,
+      );
+      const input = authorizationInput(harness.request, approved);
+      await expect(
+        harness.service.issueAuthorization(
+          mutate(input as Record<string, unknown>),
+        ),
+      ).rejects.toMatchObject({ code: "MALFORMED_INPUT" });
+      expect(harness.signer.authorizationCalls).toBe(0);
+      expect(
+        harness.generatedIds.filter(({ kind }) => kind === "authorization"),
+      ).toHaveLength(0);
+      expect(harness.authorizationNonceChecks).toHaveLength(0);
+    },
+  );
+
   it("rejects every signed AuthorizationReceipt field mutation", async () => {
     const mutations: Record<string, unknown> = {
       version: "2",
@@ -289,6 +352,91 @@ describe("strict and adversarial authority boundaries", () => {
     }
   });
 
+  it.each(["all-zero", "high-s", "zero-r", "zero-s", "invalid-v"] as const)(
+    "rejects schema-valid %s DecisionReceipt signatures with a precise code",
+    async (kind) => {
+      const harness = await createTestHarness();
+      const approved = await harness.service.evaluatePaymentRequest(
+        harness.request,
+      );
+      const decision = approved.decisionReceipt as {
+        payload: unknown;
+        signature: string;
+      };
+      await expect(
+        harness.service.issueAuthorization({
+          ...authorizationInput(harness.request, approved),
+          decisionReceipt: {
+            ...decision,
+            signature: mutateSignature(decision.signature, kind),
+          },
+        }),
+      ).rejects.toMatchObject({ code: "DECISION_SIGNATURE_INVALID" });
+      expect(harness.signer.authorizationCalls).toBe(0);
+    },
+  );
+
+  it("rejects a DecisionReceipt signed by the wrong account or domain", async () => {
+    for (const wrongDomain of [false, true]) {
+      const harness = await createTestHarness();
+      const approved = await harness.service.evaluatePaymentRequest(
+        harness.request,
+      );
+      const decision = approved.decisionReceipt as {
+        payload: Record<string, unknown>;
+        signature: string;
+      };
+      const domain = deriveSigningDomainForCovenant(
+        harness.covenant,
+        EIP712_DOMAIN_NAMES.decisionReceipt,
+      );
+      const typedData = buildDecisionReceiptTypedData(decision.payload, domain);
+      const account = wrongDomain
+        ? harness.signer.account
+        : privateKeyToAccount(generatePrivateKey());
+      const signature = await account.signTypedData({
+        ...typedData,
+        domain: wrongDomain
+          ? { ...typedData.domain, chainId: 1n }
+          : typedData.domain,
+      });
+      await expect(
+        harness.service.issueAuthorization({
+          ...authorizationInput(harness.request, approved),
+          decisionReceipt: { payload: decision.payload, signature },
+        }),
+      ).rejects.toMatchObject({ code: "DECISION_SIGNER_MISMATCH" });
+      expect(harness.signer.authorizationCalls).toBe(0);
+    }
+  });
+
+  it.each([
+    ["short", `0x${"11".repeat(64)}`],
+    ["long", `0x${"11".repeat(66)}`],
+  ])(
+    "rejects %s DecisionReceipt signatures at the strict public boundary",
+    async (_label, signature) => {
+      const harness = await createTestHarness();
+      const approved = await harness.service.evaluatePaymentRequest(
+        harness.request,
+      );
+      const decision = approved.decisionReceipt as {
+        payload: unknown;
+        signature: string;
+      };
+      await expect(
+        harness.service.issueAuthorization({
+          ...authorizationInput(harness.request, approved),
+          decisionReceipt: { ...decision, signature },
+        }),
+      ).rejects.toMatchObject({ code: "MALFORMED_INPUT" });
+      expect(harness.signer.authorizationCalls).toBe(0);
+      expect(
+        harness.generatedIds.filter(({ kind }) => kind === "authorization"),
+      ).toHaveLength(0);
+    },
+  );
+
   it("sanitizes repository failures", async () => {
     const harness = await createTestHarness();
     const broken: ApprovedDecisionRepository = {
@@ -301,8 +449,8 @@ describe("strict and adversarial authority boundaries", () => {
     await expect(
       service.evaluatePaymentRequest(harness.request),
     ).rejects.toMatchObject({
-      code: "IDEMPOTENCY_CONFLICT",
-      message: "Approved decision repository operation failed",
+      code: "DECISION_REPOSITORY_FAILURE",
+      message: "Approved decision repository failed",
     });
   });
 
@@ -332,7 +480,7 @@ describe("strict and adversarial authority boundaries", () => {
     const approved = await service.evaluatePaymentRequest(harness.request);
     await expect(
       service.issueAuthorization(authorizationInput(harness.request, approved)),
-    ).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
+    ).rejects.toMatchObject({ code: "AUTHORIZATION_REPOSITORY_FAILURE" });
     expect(harness.signer.authorizationCalls).toBe(0);
   });
 });
