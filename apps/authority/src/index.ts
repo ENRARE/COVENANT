@@ -1,2 +1,13 @@
-export const scaffoldStatus =
-  "MVP scaffold: authority service not implemented" as const;
+export * from "./errors.js";
+export * from "./ports/clock.js";
+export * from "./ports/covenant-provider.js";
+export * from "./ports/evidence-reader.js";
+export * from "./ports/identifier-generator.js";
+export * from "./ports/receipt-signer.js";
+export * from "./ports/repositories.js";
+export * from "./repositories/in-memory-authorization-repository.js";
+export * from "./repositories/in-memory-decision-repository.js";
+export * from "./repositories/in-memory-nonce-repository.js";
+export { evidenceSnapshotSchema, type EvidenceSnapshot } from "./schemas.js";
+export * from "./service.js";
+export * from "./types.js";

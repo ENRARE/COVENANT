@@ -45,6 +45,24 @@
 - **MVP:** Runtime Solidity EIP-712 parity is limited to PaymentIntent and AuthorizationReceipt. CovenantSpec, Invoice, and DecisionReceipt are not runtime vault types.
 - **MVP:** Every `AuthorizationReceipt` commits to a nonzero `decisionId` identifying its contextual offchain `DecisionReceipt`. The trusted authorization-chain verifier validates that receipt and its cross-object linkage. The vault validates only the nonzero signed identifier and does not perform onchain `DecisionReceipt` verification.
 
+## COV-003 authority application boundary
+
+**MVP:** The authority application is a pure application core with no transport and no execution capability. It loads the one Covenant only through an injected trusted provider, strictly parses that value on every operation, derives all signing domains from it, and recomputes every PaymentIntent, Invoice, RuleResult, DecisionReceipt, and AuthorizationReceipt digest internally.
+
+**MVP:** The application coordinates an isolated signer through an injected public-address-bearing port. Separate methods sign exact DecisionReceipt and AuthorizationReceipt typed data and return detached signatures only. The application constructs each payload, validates the detached signature, assembles the envelope, and verifies it through `@covenant/spec`. It never owns, loads, derives, persists, logs, or exposes the authorization private key.
+
+**MVP:** The configured vendor boundary contains exactly one approved vendor signer and the `gpu-h100-hour` product. `invoice_signature_valid` requires canonical recovery plus equality of both recovered signer and `Invoice.vendor` with that configuration. `invoice_matches_intent` commits the recomputed Invoice digest, recipient, token, amount, and approved product. Both intent and Invoice purpose are enforced by `purpose_allowed`.
+
+**MVP:** All 11 canonical rules execute in frozen order without early exit. `covenant_active` includes matching evidence deployment, revocation, time, payment-count capacity, and evidence no older than 30 seconds. `amount_within_limit` includes per-payment and authoritative remaining-budget checks. `nonce_unused` includes the intent digest, intent identifier, and agent nonce.
+
+**MVP:** Structurally malformed public input receives no receipt. Every schema-valid rejection receives a signed DecisionReceipt, but only approved decisions are idempotent. Approved decision identity uses Covenant ID plus exact intent and Invoice digests. Authorization identity additionally uses the signed decision identifier and digest. Detached signatures never participate in either identity.
+
+**MVP:** Authorization issuance independently revalidates the original signed PaymentIntent, signed Invoice, canonical RuleResults, signed DecisionReceipt, all exact linkages, current request validity, and newly read authoritative evidence before reserving an ID or nonce. Authorization expires at the earliest of 300 seconds, PaymentIntent expiry, Invoice expiry, or Covenant expiry.
+
+**MVP:** In-memory decision, authorization, and nonce repositories coordinate issuance only. Concurrent duplicates share pending operations; authorization reservations survive signer failure and are never reassigned. The repositories are not authoritative accounting or replay state. CovenantVault remains authoritative for spend, payment count, revocation, intent replay, authorization replay, and settlement.
+
+**MVP:** COV-003 contains no Circle credential, executor behavior, vault transaction construction, transaction broadcasting, HTTP endpoint, webhook, queue, worker, Supabase integration, agent behavior, live vendor API, or product UI.
+
 ## Deferred controls
 
 - **Production:** Hardware-backed keys, dual control, credential rotation, network isolation, tamper-evident centralized audit storage, and incident response are deferred.
