@@ -50,7 +50,21 @@ importers:
 
   apps/agent: {}
 
-  apps/authority: {}
+  apps/authority:
+    dependencies:
+      '@covenant/spec':
+        specifier: workspace:*
+        version: link:../../packages/spec
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      viem:
+        specifier: ^2.33.3
+        version: 2.55.4(typescript@5.9.3)(zod@3.25.76)
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)
 
   apps/executor: {}
 
