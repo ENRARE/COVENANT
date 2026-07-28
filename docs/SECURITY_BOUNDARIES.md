@@ -107,6 +107,38 @@
 
 **Protocol:** Generic policy languages, generalized procurement protocols, arbitrary execution, and multichain behavior require separate specification.
 
+## COV-006 cross-service integration boundary
+
+**MVP:** COV-006 exercises the built agent, authority, executor, and
+specification package exports in one deterministic repository-level suite. It
+does not import application source files through relative paths or aliases.
+
+**MVP:** The agent's exact `{ signedPaymentIntent, signedInvoice }` result is
+accepted unchanged by the authority. The authority result is not itself an
+executor request. A test-local mapper rejects non-approved results and
+enumerates exactly the agent `signedPaymentIntent` plus the authority
+`ruleResults`, `decisionReceipt`, and `authorizationReceipt`. It accepts no
+chain, target, value, function, ABI, calldata, or signed-field override.
+
+**MVP:** The deterministic transport receives defensive copies of the same
+internally constructed transaction for simulation and submission. It performs
+no network access, selects no field, and returns only an opaque simulated
+submission identifier. That identifier is not a transaction hash, receipt,
+settlement, or finality claim.
+
+**MVP:** Malicious-proposer fixtures exist only inside the integration suite.
+They use the ephemeral agent proposal identity but receive no authorization
+signer, transaction transport, execution credential, or generic production
+agent method. Unauthorized-recipient and excessive-amount requests are rejected
+before transport.
+
+**MVP:** COV-006 creates no audit event schema and no authoritative offchain
+state. CovenantVault remains authoritative for spend, replay, payment count,
+revocation, token movement, and settlement.
+
+**MVP:** Real Circle and Arc behavior remains required for the final live
+demonstration but is outside COV-006.
+
 ## Deferred controls
 
 - **Production:** Hardware-backed keys, dual control, credential rotation, network isolation, tamper-evident centralized audit storage, and incident response are deferred.

@@ -26,7 +26,18 @@ pnpm verify
 
 **MVP:** `pnpm verify` validates formatting, root and workspace lint/type checks, script and schema tests, builds, environment-file policy, basic repository credential-pattern scanning, and Foundry tests. Missing Forge is a hard failure. `pnpm verify:without-contracts` is the explicitly partial local command.
 
-**MVP:** `pnpm test:integration`, `pnpm test:e2e`, and all `pnpm demo:*` commands intentionally return non-zero because those later MVP subsystems do not exist yet.
+**MVP:** `pnpm test:integration` runs the COV-006 repository-level suite after
+the built workspace packages exist. It proves the local Invoice-to-agent-to-
+authority-to-executor flow through package exports and an exact deterministic
+submission simulator. `pnpm test:e2e` and all `pnpm demo:*` commands
+intentionally remain non-zero because those later MVP subsystems do not exist
+yet.
+
+**MVP:** The COV-006 authority-to-executor handoff enumerates exactly
+`signedPaymentIntent`, `ruleResults`, `decisionReceipt`, and
+`authorizationReceipt`. The simulated transport performs no network operation.
+Its opaque `transactionId` is not a transaction hash, receipt, Circle execution,
+vault execution, Arc settlement, or finality claim.
 
 **MVP:** Security-critical JSON is strictly parsed before hashing. The four signed flows use detached `{ payload, signature }` envelopes, DecisionReceipt commits to the canonical rule collection, and only Arc Testnet chain ID `5042002` is accepted. Trusted verification anchors signer roles and domains to `CovenantSpec`, and complete authorization requires exact linkage through an approved all-PASS decision.
 

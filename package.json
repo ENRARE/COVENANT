@@ -21,19 +21,23 @@
     "verify:contract-abi": "node scripts/verify-contract-abi.mjs",
     "verify:cov002-files": "node scripts/verify-cov002-files.mjs",
     "test:contracts": "node scripts/test-contracts.mjs",
-    "test:integration": "node scripts/not-implemented.mjs integration-tests",
+    "test:integration": "vitest run --config tests/integration/vitest.config.ts",
     "test:e2e": "node scripts/not-implemented.mjs end-to-end-tests",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:env-files": "node scripts/check-env-files.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
-    "verify:without-contracts": "pnpm verify:cov002-files && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm check:env-files && pnpm scan:secrets",
+    "verify:without-contracts": "pnpm verify:cov002-files && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration && pnpm check:env-files && pnpm scan:secrets",
     "verify": "pnpm verify:without-contracts && pnpm verify:contract-abi && pnpm test:contracts",
     "demo:reset": "node scripts/not-implemented.mjs demo-reset",
     "demo:seed": "node scripts/not-implemented.mjs demo-seed",
     "demo:health": "node scripts/not-implemented.mjs demo-health"
   },
   "devDependencies": {
+    "@covenant/agent": "workspace:*",
+    "@covenant/authority": "workspace:*",
+    "@covenant/executor": "workspace:*",
+    "@covenant/spec": "workspace:*",
     "@eslint/js": "^9.31.0",
     "@playwright/test": "^1.54.1",
     "@types/node": "^24.1.0",
@@ -46,6 +50,7 @@
     "turbo": "^2.5.5",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
+    "viem": "^2.33.3",
     "vitest": "^3.2.4"
   }
 }
