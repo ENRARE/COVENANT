@@ -156,3 +156,32 @@ Each row states attack path, affected asset, MVP control, residual risk, deferre
   compliance, incident response, and high availability remain excluded.
 - **Protocol:** Generic forwarding, arbitrary calls, upgradeability, and
   multichain behavior remain excluded.
+
+## COV-007 local runtime controls
+
+- **MVP:** Public action injection is prevented by an exact string enum with no
+  options object or caller-controlled scenario fields.
+- **MVP:** Capability confusion is bounded by private composition: proposal,
+  authorization, and transport signers remain separate and no capability object
+  crosses the public projection.
+- **MVP:** Journal substitution, traversal, links, reparse points where
+  detectable, unknown entries, malformed records, sequence manipulation,
+  runtime mismatch, and illegal transitions fail closed before use.
+- **MVP:** A live lock blocks mutation and reset. Health reports valid stale
+  locks read-only; only reset may remove an unchanged valid stale lock after
+  confirming its PID is not live.
+- **MVP:** A crash after scenario events begin leaves an interrupted projection.
+  The lost ephemeral signers make cryptographic resume impossible, so seed and
+  run fail until reset.
+- **MVP:** Local journal deletion and coherent malicious rewriting remain
+  possible because audit state is explicitly non-authoritative and not
+  hash-chained.
+- **MVP:** Compromised-proposer evidence demonstrates rejection of a malicious
+  structured redirect. It models a possible downstream prompt-injection effect
+  but includes no LLM and proves no general prompt-injection resistance.
+- **MVP:** Simulated transport output is labeled only as simulated submission;
+  no Circle, Arc, vault execution, receipt, settlement, confirmation, or finality
+  inference is permitted.
+- **Production:** Tamper-evident centralized audit storage, managed keys,
+  distributed coordination, reconciliation, monitoring, and incident response
+  remain required before real funds.

@@ -20,6 +20,15 @@ granting it authorization or execution capability.
 
 **MVP:** `tests/e2e` remains a non-implemented Playwright scaffold.
 
+**MVP:** `@covenant/demo` unit tests cover strict actions, audit schemas,
+production-service composition, fixed-path persistence, locks, corruption,
+interruption, sanitized projections, and JSON-only command behavior using
+temporary repository roots.
+
+**MVP:** The repository integration suite imports the built `@covenant/demo`
+package by package name, executes the exact seventeen-event local demonstration,
+and proves a completed replay performs no additional journal write.
+
 **V2:** Additional organizations, agents, vendors, products, tokens, policies,
 and chains remain excluded.
 
