@@ -123,3 +123,36 @@ Each row states attack path, affected asset, MVP control, residual risk, deferre
 - **V2:** Multiple vendors, products, agents, assets, procurement schemas, and pricing models require a new threat-model review.
 - **Production:** Distributed coordination, database replication, backup, operational lock recovery, finalized-vault reconciliation, managed proposal-key custody, monitoring, rate limiting, credential rotation, incident response, and high availability remain required before real funds.
 - **Protocol:** Generic policy languages, generalized procurement protocols, arbitrary execution, and multichain behavior are outside this threat model.
+
+## COV-006 integration controls
+
+- **MVP:** The repository-level suite imports the built agent, authority,
+  executor, and specification packages by package name and proves one coherent
+  signed flow without introducing a runtime service.
+- **MVP:** The approved authority handoff is test-local and enumerates exactly
+  four fields. It cannot accept caller overrides, reconstruct signed payloads,
+  or map a rejected decision to execution.
+- **MVP:** The deterministic transport records defensive copies, preserves the
+  exact chain, target, zero value, and calldata, performs no network operation,
+  and returns only a stable opaque simulated-submission identifier.
+- **MVP:** An opaque executor `transactionId` is not treated as a transaction
+  hash, receipt, Circle execution, vault execution, Arc settlement, or finality
+  evidence.
+- **MVP:** Isolated compromised-proposer fixtures have only the agent proposal
+  signing identity. They demonstrate that unauthorized-recipient and
+  excessive-amount requests receive signed rejections without authorization,
+  simulation, or submission.
+- **MVP:** Ephemeral integration keys, detached signatures, complete calldata,
+  typed-data objects, stack traces, and dependency-controlled errors are not
+  logged or exposed by integration failures.
+- **MVP:** No browser, audit projection, database, RPC, Circle credential, or
+  funded wallet participates. CovenantVault remains the final authoritative
+  enforcement boundary.
+- **MVP:** Real Circle and Arc behavior remains required for the final live
+  demonstration but is outside COV-006.
+- **V2:** Additional organizations, agents, vendors, products, tokens,
+  policies, and chains remain excluded.
+- **Production:** Real custody, operational monitoring, reconciliation,
+  compliance, incident response, and high availability remain excluded.
+- **Protocol:** Generic forwarding, arbitrary calls, upgradeability, and
+  multichain behavior remain excluded.

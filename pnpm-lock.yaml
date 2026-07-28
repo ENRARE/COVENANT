@@ -8,6 +8,18 @@ importers:
 
   .:
     devDependencies:
+      '@covenant/agent':
+        specifier: workspace:*
+        version: link:apps/agent
+      '@covenant/authority':
+        specifier: workspace:*
+        version: link:apps/authority
+      '@covenant/executor':
+        specifier: workspace:*
+        version: link:apps/executor
+      '@covenant/spec':
+        specifier: workspace:*
+        version: link:packages/spec
       '@eslint/js':
         specifier: ^9.31.0
         version: 9.39.5
@@ -44,6 +56,9 @@ importers:
       typescript-eslint:
         specifier: ^8.38.0
         version: 8.64.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+      viem:
+        specifier: ^2.33.3
+        version: 2.55.4(typescript@5.9.3)(zod@3.25.76)
       vitest:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)
