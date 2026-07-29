@@ -143,6 +143,54 @@ demonstration but is outside COV-006.
 
 - **Production:** Hardware-backed keys, dual control, credential rotation, network isolation, tamper-evident centralized audit storage, and incident response are deferred.
 - **Production:** Continuous Circle/onchain reconciliation, redundant Arc RPCs, and formal recovery procedures are deferred.
+
+## COV-008 local contract-evidence boundary
+
+**MVP:** `tests/contract-evidence` starts one controlled loopback-only Anvil
+child with chain ID `5042002`. It selects ports from a bounded internal list,
+does not connect to an occupied candidate, captures rather than forwards child
+output, validates the child through JSON-RPC, and terminates only the child it
+started.
+
+**MVP:** Deployer, issuer, transaction payer, attacker transaction sender,
+agent proposal signer, authorization signer, vendor signer, and recipient are
+distinct. Unlocked Anvil accounts provide transaction-only roles without
+extracting keys. Proposal, authorization, and vendor signers are generated
+in-process, unfunded, never persisted, and never passed to a transaction
+transport.
+
+**MVP:** The agent receives only its exact PaymentIntent signer. The authority
+receives only its exact receipt signer and a live read-only vault evidence
+adapter. The payer transport receives only the exact executor request or fixed
+contract-evidence request. No proposal-producing component receives deployment,
+issuer, authorization, payer, RPC, or generic wallet authority.
+
+**MVP:** The executor transport performs actual local `eth_call` and returns
+only an opaque transaction hash after submission. The separate harness-local
+receipt reader accepts only registered hashes with fixed sender, target,
+zero-value, and status expectations. It verifies local receipts and filters
+decoded events by the exact vault or token emitter.
+
+**MVP:** Expected rejections require both decoded contract revert data from the
+exact pre-transaction state and a mined failed receipt produced with a fixed gas
+limit. Protected balances, accounting, revocation, and replay mappings must
+remain unchanged.
+
+**MVP:** Public evidence is a strict sanitized local result. It excludes keys,
+signer identities, addresses, RPC details, process details, signatures, signed
+objects, typed data, calldata, receipts, raw logs, provider errors, paths, and
+environment values.
+
+**Production:** External RPC diversity, durable deployment state, transaction
+reconciliation, managed custody, monitoring, incident response, and high
+availability remain deferred.
+
+**V2:** Additional Covenants, actors, products, tokens, policies, and chains
+remain deferred.
+
+**Protocol:** Generic ABI forwarding, arbitrary calls, generic policies,
+multichain execution, and upgradeability remain excluded.
+
 - **Production:** Replicated proposal persistence, operational lock recovery, backup, and restart reconciliation must preserve identity-to-nonce bindings and reconcile them against finalized vault state.
 - **Production:** No external audit or formal verification has occurred; both remain required before production use.
 - **Protocol:** Cross-chain and generalized policy boundaries require new specifications and are not inherited from the MVP.

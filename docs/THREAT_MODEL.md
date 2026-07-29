@@ -192,3 +192,45 @@ Each row states attack path, affected asset, MVP control, residual risk, deferre
 - **Production:** Tamper-evident centralized audit storage, managed keys,
   distributed coordination, reconciliation, monitoring, and incident response
   remain required before real funds.
+
+## COV-008 local contract-evidence controls
+
+**MVP:** Child-process substitution and port races are bounded by direct
+argument-array spawning with `shell: false`, a fixed executable and argument
+set, loopback binding, a bounded internal port sequence, preflight exclusion of
+occupied listeners, liveness checks, and an exact `eth_chainId` assertion.
+
+**MVP:** Anvil key disclosure is bounded by silent captured child output,
+transaction use through unlocked local accounts, in-process unfunded signing
+accounts, sanitized errors, and strict public-result schemas. No child output,
+provider error, key, signer, RPC URL, port, PID, address, signature, calldata,
+receipt, or raw log enters public evidence.
+
+**MVP:** Wrong-code and wrong-deployment risks are bounded by current Foundry
+artifact validation, exact MockUSDC runtime comparison, immutable-aware
+CovenantVault runtime comparison, every constructor getter, six-decimal token
+verification, initial-state checks, and exact expected transaction targets.
+
+**MVP:** Receipt and event spoofing are bounded by registered transaction
+hashes, exact sender/target/value/status checks, exact transaction and block
+identity, exact emitter filtering, ABI decoding, required-event cardinality,
+balance deltas, accounting, revocation state, and all five replay mappings.
+
+**MVP:** The fixed direct-bypass attempt uses a coherent agent-signed intent
+redirected to the attacker but receives no new authorization. The actual vault
+must return `InvalidPaymentIntent`, mine a failed receipt, emit no token
+transfer, and leave protected state unchanged.
+
+**MVP:** Local Anvil evidence does not mitigate malicious external RPCs,
+reorganizations, Arc transaction ambiguity, external funding, or custody
+failure because COV-008 performs no external network operation.
+
+**Production:** External RPC quorum, reorganization handling, durable
+deployment attestation, managed custody, nonce coordination, reconciliation,
+monitoring, and incident response remain deferred.
+
+**V2:** Additional Covenants, actors, products, tokens, policies, and chains
+remain deferred.
+
+**Protocol:** Generic execution, arbitrary ABI forwarding, multichain behavior,
+generic policies, and upgradeability remain excluded.

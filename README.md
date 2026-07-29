@@ -47,6 +47,21 @@ pnpm.cmd demo:run
 mode is `LOCAL_SIMULATED`; its simulated submission is not Circle execution, an
 Arc transaction, vault execution, a receipt, settlement, or finality.
 
+**MVP:** COV-008 separately proves the real `CovenantVault` enforcement path on
+an ephemeral loopback-only Anvil process with chain ID `5042002`. The command
+builds current Foundry artifacts, composes the production agent, authority, and
+executor cores, and verifies local receipts, exact events, token balances,
+replay state, bypass rejection, and revocation:
+
+```powershell
+pnpm.cmd --silent contracts:evidence:local
+```
+
+**MVP:** The command emits one sanitized JSON document. Local Anvil evidence is
+not Arc execution, Circle execution, external settlement, confirmation, or
+finality. It persists no deployment state or key and does not change the
+`LOCAL_SIMULATED` demo runtime.
+
 **MVP:** The COV-006 authority-to-executor handoff enumerates exactly
 `signedPaymentIntent`, `ruleResults`, `decisionReceipt`, and
 `authorizationReceipt`. The simulated transport performs no network operation.

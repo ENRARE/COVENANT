@@ -71,6 +71,26 @@ Pop-Location
 
 **MVP:** A later approved deployment should use the issuer wallet when practical, but vault authority never depends on `msg.sender` during construction.
 
+## Local execution evidence
+
+**MVP:** The non-broadcast Forge script above only simulates construction. It is
+not the COV-008 execution workflow and does not prove a token transfer,
+transaction receipt, bypass rejection, replay rejection, or revocation.
+
+**MVP:** COV-008 owns a separate deterministic harness under
+`tests/contract-evidence`. It starts its own loopback-only Anvil process on
+chain `5042002`, builds and deploys the current `MockUSDC` and `CovenantVault`
+artifacts, validates non-immutable runtime bytes and every immutable getter,
+then verifies actual local receipts, logs, balances, and vault state.
+
+```powershell
+pnpm.cmd --silent contracts:evidence:local
+```
+
+**MVP:** The harness persists no deployment, key, receipt, or runtime state.
+Its evidence is local EVM evidence only, not Arc or Circle execution,
+settlement, confirmation, or finality.
+
 ## Parity boundary
 
 **MVP:** Runtime Solidity and TypeScript parity is proven only for PaymentIntent struct hashes and EIP-712 digests, AuthorizationReceipt struct hashes and EIP-712 digests, both runtime domain separators, dynamic string hashing, and canonical low-`s` signature acceptance.

@@ -44,4 +44,16 @@ pnpm.cmd verify:contract-abi
 
 **Production:** Durable distributed idempotency, restart recovery, settlement reconciliation, finality tracking, managed transaction custody, RPC redundancy, monitoring, and incident response remain deferred.
 
+## COV-008 local transport evidence
+
+**MVP:** COV-008 supplies a harness-local `TransactionTransport` without
+changing this package's public API. It accepts only the executor-constructed
+Arc-chain-ID, trusted-vault, zero-value `executePayment` request, simulates it
+with a local `eth_call`, and submits it from a distinct local payer.
+
+**MVP:** Transport `SUBMITTED` still means only that a transaction hash was
+returned. A separate test-harness-local receipt reader verifies the mined local
+receipt, exact event emitters, balance movement, and vault state. That reader is
+not exported by the executor and makes no Arc confirmation or finality claim.
+
 **Protocol:** Generic forwarding, arbitrary calldata, batching, multicall, delegatecall, multiple chains, account abstraction, and upgradeability remain excluded.
