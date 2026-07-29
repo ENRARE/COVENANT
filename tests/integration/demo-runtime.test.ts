@@ -25,6 +25,14 @@ describe("COV-007 built demo package integration", () => {
       );
       process.chdir(root);
       const runtime = createDemoRuntime();
+      const executeDemoAction = runtime.executeDemoAction.bind(runtime);
+      await expect(
+        Reflect.apply(executeDemoAction, undefined, ["GET_STATE", {}]),
+      ).rejects.toMatchObject({
+        name: "DemoError",
+        code: "MALFORMED_ACTION",
+        message: "Demo action is malformed",
+      });
       const seeded = await runtime.executeDemoAction("SEED");
       expect(runtimeProjectionSchema.parse(seeded).status).toBe("SEEDED");
       const completed = await runtime.executeDemoAction("RUN_DEMO");

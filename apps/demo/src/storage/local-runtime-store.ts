@@ -51,6 +51,7 @@ const EXPECTED_ORDER = [
 ] as const;
 
 type Kind = "missing" | "directory" | "file" | "symlink" | "other";
+type FileIdentity = Readonly<{ device: bigint; inode: bigint }>;
 
 async function kind(path: string): Promise<Kind> {
   try {
@@ -70,6 +71,18 @@ async function kind(path: string): Promise<Kind> {
     }
     throw error;
   }
+}
+
+async function fileIdentity(path: string): Promise<FileIdentity> {
+  const status = await lstat(path, { bigint: true });
+  if (!status.isFile() || status.isSymbolicLink()) {
+    throw new DemoError("UNSAFE_STORAGE");
+  }
+  return { device: status.dev, inode: status.ino };
+}
+
+function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
+  return left.device === right.device && left.inode === right.inode;
 }
 
 function processIsLive(pid: string): boolean {
@@ -175,6 +188,11 @@ async function validateRepositoryRoot(root: string): Promise<void> {
 export type LocalRuntimeStoreOptions = Readonly<{
   repositoryRoot: string;
   now: () => bigint;
+  testHooks?: Readonly<{
+    afterResetLockAcquired?(): Promise<void>;
+    afterStaleLockRemoved?(): Promise<void>;
+    afterResetLockReleased?(): Promise<void>;
+  }>;
 }>;
 
 export function createLocalRuntimeStore(
@@ -206,12 +224,14 @@ export function createLocalRuntimeStore(
     state: LockState;
     metadata?: LockMetadata;
     bytes?: string;
+    identity?: FileIdentity;
   }> {
     const lockKind = await kind(lockPath);
     if (lockKind === "missing") return { state: "AVAILABLE" };
     if (lockKind !== "file") throw new DemoError("UNSAFE_STORAGE");
     let bytes: string;
     let metadata: LockMetadata;
+    const identity = await fileIdentity(lockPath);
     try {
       bytes = await readFile(lockPath, "utf8");
       metadata = lockMetadataSchema.parse(JSON.parse(bytes) as unknown);
@@ -222,6 +242,71 @@ export function createLocalRuntimeStore(
       state: processIsLive(metadata.pid) ? "BUSY" : "STALE",
       metadata,
       bytes,
+      identity,
+    };
+  }
+
+  async function acquireMutationLock(
+    runtimeId: string | null,
+  ): Promise<{ release(): Promise<void> }> {
+    if ((await kind(lockPath)) !== "missing") {
+      await readLock();
+      throw new DemoError("LOCK_BUSY");
+    }
+    let handle: FileHandle;
+    try {
+      handle = await open(lockPath, "wx", 0o600);
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "EEXIST"
+      ) {
+        await readLock();
+        throw new DemoError("LOCK_BUSY");
+      }
+      throw error;
+    }
+    let bytes: string;
+    let identity: FileIdentity;
+    try {
+      const metadata = lockMetadataSchema.parse({
+        schemaVersion: "1",
+        runtimeId,
+        pid: process.pid.toString(),
+        createdAt: options.now().toString(),
+      });
+      bytes = JSON.stringify(metadata);
+      await handle.writeFile(bytes, "utf8");
+      await handle.sync();
+      const status = await handle.stat({ bigint: true });
+      identity = { device: status.dev, inode: status.ino };
+    } catch (error) {
+      await handle.close().catch(() => undefined);
+      await unlink(lockPath).catch(() => undefined);
+      throw error;
+    }
+    let released = false;
+    return {
+      async release() {
+        if (released) return;
+        released = true;
+        try {
+          if ((await kind(lockPath)) !== "file") {
+            throw new DemoError("LOCK_BUSY");
+          }
+          if ((await readFile(lockPath, "utf8")) !== bytes) {
+            throw new DemoError("LOCK_BUSY");
+          }
+          if (!sameIdentity(await fileIdentity(lockPath), identity)) {
+            throw new DemoError("LOCK_BUSY");
+          }
+          await unlink(lockPath);
+        } finally {
+          await handle.close().catch(() => undefined);
+        }
+      },
     };
   }
 
@@ -257,7 +342,7 @@ export function createLocalRuntimeStore(
     runtimeId: string | null,
     operation: (session: MutationSession) => Promise<T>,
   ): Promise<T> {
-    let lockHandle: FileHandle | undefined;
+    let ownedLock: { release(): Promise<void> } | undefined;
     try {
       await validateRepositoryRoot(repositoryRoot);
       const directoryKind = await kind(directory);
@@ -266,19 +351,7 @@ export function createLocalRuntimeStore(
       } else {
         await inspectDirectory(false);
       }
-      if ((await kind(lockPath)) !== "missing") {
-        await readLock();
-        throw new DemoError("LOCK_BUSY");
-      }
-      lockHandle = await open(lockPath, "wx", 0o600);
-      const lockMetadata = lockMetadataSchema.parse({
-        schemaVersion: "1",
-        runtimeId,
-        pid: process.pid.toString(),
-        createdAt: options.now().toString(),
-      });
-      await lockHandle.writeFile(JSON.stringify(lockMetadata), "utf8");
-      await lockHandle.sync();
+      ownedLock = await acquireMutationLock(runtimeId);
 
       let timeline: AuditEvent[] = [];
       const journalKind = await kind(journalPath);
@@ -325,20 +398,22 @@ export function createLocalRuntimeStore(
       if (error instanceof DemoError) throw error;
       throw new DemoError("STORAGE_FAILURE");
     } finally {
-      if (lockHandle !== undefined) {
-        await lockHandle.close().catch(() => undefined);
-        await unlink(lockPath).catch(() => undefined);
-      }
+      await ownedLock?.release().catch(() => undefined);
     }
   }
 
   async function reset(): Promise<void> {
+    let ownedLock: { release(): Promise<void> } | undefined;
     try {
       if ((await inspectDirectory(true)) === "missing") return;
       const lock = await readLock();
       if (lock.state === "BUSY") throw new DemoError("LOCK_BUSY");
       if (lock.state === "STALE") {
-        if (lock.bytes === undefined || lock.metadata === undefined) {
+        if (
+          lock.bytes === undefined ||
+          lock.metadata === undefined ||
+          lock.identity === undefined
+        ) {
           throw new DemoError("LOCK_MALFORMED");
         }
         const secondBytes = await readFile(lockPath, "utf8");
@@ -348,21 +423,30 @@ export function createLocalRuntimeStore(
         if (
           secondBytes !== lock.bytes ||
           processIsLive(secondMetadata.pid) ||
-          (await kind(lockPath)) !== "file"
+          (await kind(lockPath)) !== "file" ||
+          !sameIdentity(await fileIdentity(lockPath), lock.identity)
         ) {
           throw new DemoError("LOCK_BUSY");
         }
         await unlink(lockPath);
+        await options.testHooks?.afterStaleLockRemoved?.();
       }
+      ownedLock = await acquireMutationLock(null);
+      await options.testHooks?.afterResetLockAcquired?.();
       if ((await kind(journalPath)) === "file") await unlink(journalPath);
       else if ((await kind(journalPath)) !== "missing")
         throw new DemoError("UNSAFE_STORAGE");
+      await ownedLock.release();
+      ownedLock = undefined;
+      await options.testHooks?.afterResetLockReleased?.();
       const entries = await readdir(directory);
       if (entries.length !== 0) throw new DemoError("UNSAFE_STORAGE");
       await rmdir(directory);
     } catch (error) {
       if (error instanceof DemoError) throw error;
       throw new DemoError("STORAGE_FAILURE");
+    } finally {
+      await ownedLock?.release().catch(() => undefined);
     }
   }
 

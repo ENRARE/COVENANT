@@ -17,7 +17,7 @@ import type { RuntimeStore } from "./storage/runtime-store.js";
 export type DemoActionResult = RuntimeProjection;
 
 export type DemoRuntime = {
-  executeDemoAction(action: unknown): Promise<DemoActionResult>;
+  executeDemoAction(...args: unknown[]): Promise<DemoActionResult>;
 };
 
 export type DemoRuntimeDependencies = Readonly<{
@@ -55,6 +55,7 @@ export function createDemoRuntimeWithDependencies(
 
   async function seed(): Promise<RuntimeProjection> {
     const initial = await getState();
+    if (initial.health.lock === "BUSY") throw new DemoError("LOCK_BUSY");
     if (initial.status === "SEEDED") return initial;
     if (initial.status === "COMPLETED")
       throw new DemoError("RUNTIME_COMPLETED");
@@ -149,10 +150,11 @@ export function createDemoRuntimeWithDependencies(
   }
 
   async function executeDemoAction(
-    action: unknown,
+    ...args: unknown[]
   ): Promise<RuntimeProjection> {
-    const parsed = parseDemoAction(action);
     try {
+      if (args.length !== 1) throw new DemoError("MALFORMED_ACTION");
+      const parsed = parseDemoAction(args[0]);
       if (parsed === "RESET") {
         await dependencies.store.reset();
         return await getState();

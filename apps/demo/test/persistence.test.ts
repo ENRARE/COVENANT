@@ -1,7 +1,14 @@
 import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createTestRoot, createTestRuntime } from "./helpers.js";
+import { createAuditEvent } from "../src/audit-events.js";
+import { createLocalRuntimeStore } from "../src/storage/local-runtime-store.js";
+import {
+  createTestRoot,
+  createTestRuntime,
+  TEST_NOW,
+  TEST_RUNTIME_ID,
+} from "./helpers.js";
 
 const expectedOrder = [
   "RUNTIME_INITIALIZED",
@@ -157,8 +164,9 @@ describe("local runtime persistence", () => {
     }
   });
 
-  it("reports live and stale locks and resets only a valid stale lock", async () => {
+  it("reports live and stale locks and takes ownership before stale reset deletion", async () => {
     const fixture = await createTestRoot();
+    let observedOwnedLock = false;
     try {
       const runtime = createTestRuntime(fixture.root);
       const seeded = await runtime.executeDemoAction("SEED");
@@ -196,9 +204,26 @@ describe("local runtime persistence", () => {
       expect((await runtime.executeDemoAction("GET_HEALTH")).health.lock).toBe(
         "STALE",
       );
-      expect((await runtime.executeDemoAction("RESET")).status).toBe(
+      const resetRuntime = createTestRuntime(fixture.root, {
+        storeHooks: {
+          afterResetLockAcquired: async () => {
+            observedOwnedLock = true;
+            expect(
+              (await runtime.executeDemoAction("GET_HEALTH")).health.lock,
+            ).toBe("BUSY");
+            expect(
+              await readFile(
+                join(fixture.root, ".covenant-demo-state", "events.v1.jsonl"),
+                "utf8",
+              ),
+            ).not.toBe("");
+          },
+        },
+      });
+      expect((await resetRuntime.executeDemoAction("RESET")).status).toBe(
         "UNINITIALIZED",
       );
+      expect(observedOwnedLock).toBe(true);
     } finally {
       await fixture.cleanup();
     }
@@ -227,7 +252,7 @@ describe("local runtime persistence", () => {
     }
   });
 
-  it("blocks reset while a run owns the live lock", async () => {
+  it("blocks reset without journal changes while a run owns the live lock", async () => {
     const fixture = await createTestRoot();
     let release!: () => void;
     const barrier = new Promise<void>((resolve) => {
@@ -240,11 +265,19 @@ describe("local runtime persistence", () => {
     try {
       const seedRuntime = createTestRuntime(fixture.root);
       await seedRuntime.executeDemoAction("SEED");
+      const journal = join(
+        fixture.root,
+        ".covenant-demo-state",
+        "events.v1.jsonl",
+      );
+      const before = await readFile(journal, "utf8");
       const runRuntime = createTestRuntime(fixture.root, {
-        runComposition: async () => {
+        runComposition: async (input) => {
           entered();
           await barrier;
-          throw new Error("intentional interruption");
+          const { runFrozenComposition } =
+            await import("../src/composition.js");
+          await runFrozenComposition(input);
         },
       });
       const operation = runRuntime.executeDemoAction("RUN_DEMO");
@@ -252,12 +285,162 @@ describe("local runtime persistence", () => {
       await expect(
         seedRuntime.executeDemoAction("RESET"),
       ).rejects.toMatchObject({ code: "LOCK_BUSY" });
+      expect(await readFile(journal, "utf8")).toBe(before);
       release();
-      await expect(operation).rejects.toMatchObject({
-        code: "RUNTIME_FAILURE",
+      await expect(operation).resolves.toMatchObject({ status: "COMPLETED" });
+    } finally {
+      release();
+      await fixture.cleanup();
+    }
+  });
+
+  it("holds reset ownership against a seed from another runtime", async () => {
+    const fixture = await createTestRoot();
+    let release!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered!: () => void;
+    const owned = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    try {
+      const seedRuntime = createTestRuntime(fixture.root);
+      await seedRuntime.executeDemoAction("SEED");
+      const resetRuntime = createTestRuntime(fixture.root, {
+        storeHooks: {
+          afterResetLockAcquired: async () => {
+            entered();
+            await barrier;
+          },
+        },
+      });
+      const reset = resetRuntime.executeDemoAction("RESET");
+      await owned;
+      await expect(seedRuntime.executeDemoAction("SEED")).rejects.toMatchObject(
+        {
+          code: "LOCK_BUSY",
+        },
+      );
+      release();
+      await expect(reset).resolves.toMatchObject({ status: "UNINITIALIZED" });
+      expect(await seedRuntime.executeDemoAction("GET_STATE")).toMatchObject({
+        status: "UNINITIALIZED",
+        timeline: [],
       });
     } finally {
       release();
+      await fixture.cleanup();
+    }
+  });
+
+  it("loses a stale takeover race without deleting the winning run", async () => {
+    const fixture = await createTestRoot();
+    let release!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered!: () => void;
+    const running = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let run: Promise<unknown> | undefined;
+    try {
+      const runtime = createTestRuntime(fixture.root);
+      const seeded = await runtime.executeDemoAction("SEED");
+      const lock = join(
+        fixture.root,
+        ".covenant-demo-state",
+        "runtime.v1.lock",
+      );
+      await writeFile(
+        lock,
+        JSON.stringify({
+          schemaVersion: "1",
+          runtimeId: seeded.runtimeId,
+          pid: "2147483647",
+          createdAt: TEST_NOW.toString(),
+        }),
+        "utf8",
+      );
+      const runRuntime = createTestRuntime(fixture.root, {
+        runComposition: async (input) => {
+          entered();
+          await barrier;
+          const { runFrozenComposition } =
+            await import("../src/composition.js");
+          await runFrozenComposition(input);
+        },
+      });
+      const resetRuntime = createTestRuntime(fixture.root, {
+        storeHooks: {
+          afterStaleLockRemoved: async () => {
+            run = runRuntime.executeDemoAction("RUN_DEMO");
+            await running;
+          },
+        },
+      });
+      await expect(
+        resetRuntime.executeDemoAction("RESET"),
+      ).rejects.toMatchObject({ code: "LOCK_BUSY" });
+      release();
+      await expect(run).resolves.toMatchObject({ status: "COMPLETED" });
+      expect((await runtime.executeDemoAction("GET_STATE")).status).toBe(
+        "COMPLETED",
+      );
+    } finally {
+      release();
+      await fixture.cleanup();
+    }
+  });
+
+  it("preserves replacement state created before final directory removal", async () => {
+    const fixture = await createTestRoot();
+    try {
+      const runtime = createTestRuntime(fixture.root);
+      await runtime.executeDemoAction("SEED");
+      const replacementStore = createLocalRuntimeStore({
+        repositoryRoot: fixture.root,
+        now: () => TEST_NOW,
+      });
+      const resetRuntime = createTestRuntime(fixture.root, {
+        storeHooks: {
+          afterResetLockReleased: async () => {
+            await replacementStore.mutate(null, async (session) => {
+              await session.append(
+                createAuditEvent({
+                  runtimeId: TEST_RUNTIME_ID,
+                  sequence: "1",
+                  eventType: "RUNTIME_INITIALIZED",
+                  occurredAt: TEST_NOW.toString(),
+                }),
+              );
+              await session.append(
+                createAuditEvent({
+                  runtimeId: TEST_RUNTIME_ID,
+                  sequence: "2",
+                  eventType: "SCENARIO_SEEDED",
+                  occurredAt: TEST_NOW.toString(),
+                  fields: {
+                    covenantId:
+                      "0x0101010101010101010101010101010101010101010101010101010101010101",
+                  },
+                }),
+              );
+            });
+          },
+        },
+      });
+      await expect(
+        resetRuntime.executeDemoAction("RESET"),
+      ).rejects.toMatchObject({ code: "UNSAFE_STORAGE" });
+      await expect(
+        runtime.executeDemoAction("GET_STATE"),
+      ).resolves.toMatchObject({
+        status: "SEEDED",
+        runtimeId: TEST_RUNTIME_ID,
+      });
+    } finally {
       await fixture.cleanup();
     }
   });

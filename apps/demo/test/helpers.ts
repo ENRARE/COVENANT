@@ -33,11 +33,20 @@ export function createTestRuntime(
     runComposition?: Parameters<
       typeof createDemoRuntimeWithDependencies
     >[0]["runComposition"];
+    storeHooks?: NonNullable<
+      Parameters<typeof createLocalRuntimeStore>[0]["testHooks"]
+    >;
   },
 ) {
   const now = overrides?.now ?? (() => TEST_NOW);
   return createDemoRuntimeWithDependencies({
-    store: createLocalRuntimeStore({ repositoryRoot: root, now }),
+    store: createLocalRuntimeStore({
+      repositoryRoot: root,
+      now,
+      ...(overrides?.storeHooks === undefined
+        ? {}
+        : { testHooks: overrides.storeHooks }),
+    }),
     now,
     createRuntimeId: overrides?.createRuntimeId ?? (() => TEST_RUNTIME_ID),
     ...(overrides?.runComposition === undefined
