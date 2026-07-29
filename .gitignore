@@ -18,3 +18,5 @@ pnpm-debug.log*
 playwright-report/
 test-results/
 .covenant-agent-state/
+.covenant-demo-state/
+.covenant-demo.lock

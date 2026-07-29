@@ -4,5 +4,6 @@ packages:
 
 allowBuilds:
   esbuild: true
+  os-lock: true
   sharp: true
   unrs-resolver: true

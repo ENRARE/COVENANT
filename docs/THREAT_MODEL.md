@@ -156,3 +156,39 @@ Each row states attack path, affected asset, MVP control, residual risk, deferre
   compliance, incident response, and high availability remain excluded.
 - **Protocol:** Generic forwarding, arbitrary calls, upgradeability, and
   multichain behavior remain excluded.
+
+## COV-007 local runtime controls
+
+- **MVP:** Public action injection is prevented by an exact string enum with no
+  options object or caller-controlled scenario fields.
+- **MVP:** Capability confusion is bounded by private composition: proposal,
+  authorization, and transport signers remain separate and no capability object
+  crosses the public projection.
+- **MVP:** Journal substitution, traversal, links, reparse points where
+  detectable, unknown entries, malformed records, sequence manipulation,
+  runtime mismatch, and illegal transitions fail closed before use.
+- **MVP:** Every demo read and mutation uses a nonblocking operating-system lock
+  bound to an open descriptor for the stable ignored repository-root
+  `.covenant-demo.lock` sentinel. Mutations retain exclusive ownership through
+  final state verification; reads retain shared ownership through replay; an
+  exclusive health probe reports `BUSY` or `AVAILABLE`.
+- **MVP:** The application never renames, replaces, or deletes the sentinel.
+  Process exit or descriptor close releases ownership automatically. No PID
+  metadata or stale-lock takeover grants authority. Interrupted state is
+  derived only from strict journal replay; `STALE` is a reserved schema value
+  that the runtime does not emit.
+- **MVP:** A crash after scenario events begin leaves an interrupted projection.
+  The lost ephemeral signers make cryptographic resume impossible, so seed and
+  run fail until reset.
+- **MVP:** Local journal deletion and coherent malicious rewriting remain
+  possible because audit state is explicitly non-authoritative and not
+  hash-chained.
+- **MVP:** Compromised-proposer evidence demonstrates rejection of a malicious
+  structured redirect. It models a possible downstream prompt-injection effect
+  but includes no LLM and proves no general prompt-injection resistance.
+- **MVP:** Simulated transport output is labeled only as simulated submission;
+  no Circle, Arc, vault execution, receipt, settlement, confirmation, or finality
+  inference is permitted.
+- **Production:** Tamper-evident centralized audit storage, managed keys,
+  distributed coordination, reconciliation, monitoring, and incident response
+  remain required before real funds.

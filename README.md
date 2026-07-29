@@ -8,6 +8,8 @@ COV-001 contains repository scaffolding, frozen schemas, exact money conversion,
 
 ## Workspace
 
+- **MVP:** `apps/demo` — private server-only local simulated demo runtime.
+
 - **MVP:** `apps/web` — compile-only Next.js demonstration-console scaffold.
 - **MVP:** `apps/agent` — untrusted procurement-agent scaffold.
 - **MVP:** `apps/authority` — deterministic authority-service scaffold.
@@ -29,9 +31,21 @@ pnpm verify
 **MVP:** `pnpm test:integration` runs the COV-006 repository-level suite after
 the built workspace packages exist. It proves the local Invoice-to-agent-to-
 authority-to-executor flow through package exports and an exact deterministic
-submission simulator. `pnpm test:e2e` and all `pnpm demo:*` commands
-intentionally remain non-zero because those later MVP subsystems do not exist
-yet.
+submission simulator. `pnpm test:e2e` intentionally remains non-zero because
+browser E2E is not implemented.
+
+**MVP:** The local simulated demo lifecycle is:
+
+```powershell
+pnpm.cmd demo:reset
+pnpm.cmd demo:health
+pnpm.cmd demo:seed
+pnpm.cmd demo:run
+```
+
+**MVP:** Demo commands emit JSON-only sanitized projections. The only runtime
+mode is `LOCAL_SIMULATED`; its simulated submission is not Circle execution, an
+Arc transaction, vault execution, a receipt, settlement, or finality.
 
 **MVP:** The COV-006 authority-to-executor handoff enumerates exactly
 `signedPaymentIntent`, `ruleResults`, `decisionReceipt`, and

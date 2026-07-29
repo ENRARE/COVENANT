@@ -146,3 +146,38 @@ demonstration but is outside COV-006.
 - **Production:** Replicated proposal persistence, operational lock recovery, backup, and restart reconciliation must preserve identity-to-nonce bindings and reconcile them against finalized vault state.
 - **Production:** No external audit or formal verification has occurred; both remain required before production use.
 - **Protocol:** Cross-chain and generalized policy boundaries require new specifications and are not inherited from the MVP.
+
+## COV-007 local demo boundary
+
+**MVP:** The demo is a private server-only orchestrator with exactly five fixed
+actions and one `LOCAL_SIMULATED` mode. It accepts no caller-controlled payment,
+signer, network, transaction, target, ABI, function, calldata, path, or shell
+value.
+
+**MVP:** One run creates pairwise-distinct ephemeral role accounts. The agent
+receives only its proposal signer, authority receives only its receipt signer,
+and executor receives only the deterministic simulated transport. Signers are
+not persisted, projected, logged, or exported.
+
+**MVP:** The local audit journal is a strict sanitized non-authoritative
+projection. It stores no signatures, signed bodies, typed data, calldata, keys,
+credentials, raw responses, paths, or dependency-controlled errors and cannot
+authorize, execute, revoke, or establish settlement truth.
+
+**MVP:** Runtime state access is confined to `.covenant-demo-state` and the
+stable ignored repository-root `.covenant-demo.lock` coordination sentinel.
+No-follow metadata checks reject links, non-regular entries, and unknown names.
+Every mutation holds an exclusive operating-system descriptor lock through
+final state verification; every state read holds a shared descriptor lock
+through replay; health uses an exclusive probe.
+
+**MVP:** The application never renames, replaces, or deletes the sentinel.
+Descriptor close or process exit releases ownership automatically. There is no
+PID ownership or stale-lock stealing; interrupted state is journal-derived.
+`STALE` remains reserved for projection-schema compatibility and is not emitted.
+This mutex coordinates only local-machine processes; distributed coordination
+remains Production scope.
+
+**MVP:** A simulated submission reference proves only local transport
+acceptance. Circle execution, Arc transactions, vault execution, receipts,
+settlement, and finality remain unclaimed.

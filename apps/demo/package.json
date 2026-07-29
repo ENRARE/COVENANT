@@ -1,0 +1,32 @@
+{
+  "name": "@covenant/demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm build && vitest run"
+  },
+  "dependencies": {
+    "@covenant/agent": "workspace:*",
+    "@covenant/authority": "workspace:*",
+    "@covenant/executor": "workspace:*",
+    "@covenant/spec": "workspace:*",
+    "os-lock": "2.0.0",
+    "viem": "^2.33.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  }
+}
