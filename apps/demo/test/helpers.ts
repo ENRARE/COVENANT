@@ -42,7 +42,6 @@ export function createTestRuntime(
   return createDemoRuntimeWithDependencies({
     store: createLocalRuntimeStore({
       repositoryRoot: root,
-      now,
       ...(overrides?.storeHooks === undefined
         ? {}
         : { testHooks: overrides.storeHooks }),

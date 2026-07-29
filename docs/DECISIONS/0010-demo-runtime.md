@@ -51,9 +51,18 @@ credentials.
 non-authoritative. They are not hash-chained and never own policy, spend,
 replay, revocation, submission, or settlement authority.
 
-**MVP:** Mutation uses one exclusive local lock. Read operations never mutate
-the lock or journal. Only reset may remove a valid unchanged stale lock after a
-negative process-liveness check.
+**MVP:** A stable ignored `.covenant-demo.lock` repository-root sentinel
+coordinates all runtime access through operating-system locks bound to open
+descriptors. Mutations use an exclusive nonblocking lock for their complete
+lifetime; reads use a shared nonblocking lock. Health uses an exclusive probe
+to report `BUSY` or `AVAILABLE`.
+
+**MVP:** The sentinel is never renamed, replaced, or deleted by the
+application and remains after reset removes `.covenant-demo-state`. The
+operating system releases ownership on descriptor close or process exit. No
+PID metadata or stale-lock takeover grants authority. `STALE` remains only as
+a reserved projection-schema compatibility value and is not emitted by the
+COV-007 runtime.
 
 **MVP:** Strict replay rejects invalid UTF-8, invalid JSON, truncation, unknown
 fields or events, unsafe identifiers, malformed amounts, duplicate or gapped
@@ -73,6 +82,9 @@ prove prompt-injection resistance.
 
 **MVP:** Ephemeral signers exist for one run and are never persisted.
 Interrupted cryptographic runs cannot resume and require reset.
+
+**Production:** The descriptor mutex coordinates only local processes.
+Distributed locking and high-availability coordination remain deferred.
 
 ## Scope
 

@@ -45,6 +45,11 @@ export function createDemoRuntimeWithDependencies(
     return projectRuntimeState(snapshot);
   }
 
+  async function getHealth(): Promise<RuntimeProjection> {
+    const snapshot = await dependencies.store.health();
+    return projectRuntimeState(snapshot);
+  }
+
   function occurredAt(): string {
     const value = dependencies.now();
     if (value <= 0n || value.toString().length > 20) {
@@ -54,18 +59,20 @@ export function createDemoRuntimeWithDependencies(
   }
 
   async function seed(): Promise<RuntimeProjection> {
-    const initial = await getState();
-    if (initial.health.lock === "BUSY") throw new DemoError("LOCK_BUSY");
-    if (initial.status === "SEEDED") return initial;
-    if (initial.status === "COMPLETED")
-      throw new DemoError("RUNTIME_COMPLETED");
-    if (initial.status === "INTERRUPTED" || initial.status === "RUNNING")
-      throw new DemoError("RUNTIME_INTERRUPTED");
-    const runtimeId = parseRuntimeId(dependencies.createRuntimeId());
-    await dependencies.store.mutate(null, async (session) => {
+    return dependencies.store.mutate(async (session) => {
+      const initial = projectRuntimeState({
+        timeline: session.timeline,
+        lock: "AVAILABLE",
+      });
+      if (initial.status === "SEEDED") return initial;
+      if (initial.status === "COMPLETED")
+        throw new DemoError("RUNTIME_COMPLETED");
+      if (initial.status === "INTERRUPTED" || initial.status === "RUNNING")
+        throw new DemoError("RUNTIME_INTERRUPTED");
       if (session.timeline.length !== 0) {
         throw new DemoError("STORAGE_CORRUPT");
       }
+      const runtimeId = parseRuntimeId(dependencies.createRuntimeId());
       await session.append(
         createAuditEvent({
           runtimeId,
@@ -89,20 +96,26 @@ export function createDemoRuntimeWithDependencies(
             : { eventIdGenerator: dependencies.eventIdGenerator }),
         }),
       );
+      return projectRuntimeState({
+        timeline: session.timeline,
+        lock: "AVAILABLE",
+      });
     });
-    return getState();
   }
 
   async function run(): Promise<RuntimeProjection> {
-    const before = await getState();
-    if (before.status === "COMPLETED") return before;
-    if (before.status === "UNINITIALIZED")
-      throw new DemoError("RUNTIME_UNINITIALIZED");
-    if (before.status !== "SEEDED" || before.runtimeId === null)
-      throw new DemoError("RUNTIME_INTERRUPTED");
-    const runtimeId = before.runtimeId;
     const runComposition = dependencies.runComposition ?? runFrozenComposition;
-    await dependencies.store.mutate(runtimeId, async (session) => {
+    return dependencies.store.mutate(async (session) => {
+      const before = projectRuntimeState({
+        timeline: session.timeline,
+        lock: "AVAILABLE",
+      });
+      if (before.status === "COMPLETED") return before;
+      if (before.status === "UNINITIALIZED")
+        throw new DemoError("RUNTIME_UNINITIALIZED");
+      if (before.status !== "SEEDED" || before.runtimeId === null)
+        throw new DemoError("RUNTIME_INTERRUPTED");
+      const runtimeId = before.runtimeId;
       if (
         session.timeline.length !== 2 ||
         session.timeline[0]?.runtimeId !== runtimeId
@@ -145,8 +158,11 @@ export function createDemoRuntimeWithDependencies(
             : { eventIdGenerator: dependencies.eventIdGenerator }),
         }),
       );
+      return projectRuntimeState({
+        timeline: session.timeline,
+        lock: "AVAILABLE",
+      });
     });
-    return getState();
   }
 
   async function executeDemoAction(
@@ -160,8 +176,8 @@ export function createDemoRuntimeWithDependencies(
         return await getState();
       }
       if (parsed === "SEED") return await seed();
-      if (parsed === "GET_HEALTH" || parsed === "GET_STATE")
-        return await getState();
+      if (parsed === "GET_HEALTH") return await getHealth();
+      if (parsed === "GET_STATE") return await getState();
       pendingRun ??= run().finally(() => {
         pendingRun = undefined;
       });
@@ -179,7 +195,6 @@ export function createDemoRuntime(): DemoRuntime {
   return createDemoRuntimeWithDependencies({
     store: createLocalRuntimeStore({
       repositoryRoot: resolve(process.cwd()),
-      now,
     }),
     now,
     createRuntimeId: () => `0x${randomBytes(32).toString("hex")}`,

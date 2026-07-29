@@ -164,10 +164,19 @@ projection. It stores no signatures, signed bodies, typed data, calldata, keys,
 credentials, raw responses, paths, or dependency-controlled errors and cannot
 authorize, execute, revoke, or establish settlement truth.
 
-**MVP:** Filesystem access is confined to the fixed direct child
-`.covenant-demo-state`. No-follow metadata checks reject links, non-regular
-entries, and unknown names. Mutation is exclusively locked, complete records are
-flushed, and strict replay fails closed without repair.
+**MVP:** Runtime state access is confined to `.covenant-demo-state` and the
+stable ignored repository-root `.covenant-demo.lock` coordination sentinel.
+No-follow metadata checks reject links, non-regular entries, and unknown names.
+Every mutation holds an exclusive operating-system descriptor lock through
+final state verification; every state read holds a shared descriptor lock
+through replay; health uses an exclusive probe.
+
+**MVP:** The application never renames, replaces, or deletes the sentinel.
+Descriptor close or process exit releases ownership automatically. There is no
+PID ownership or stale-lock stealing; interrupted state is journal-derived.
+`STALE` remains reserved for projection-schema compatibility and is not emitted.
+This mutex coordinates only local-machine processes; distributed coordination
+remains Production scope.
 
 **MVP:** A simulated submission reference proves only local transport
 acceptance. Circle execution, Arc transactions, vault execution, receipts,

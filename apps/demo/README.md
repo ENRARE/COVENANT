@@ -36,9 +36,16 @@ reconstructable, and non-authoritative.
 **MVP:** The journal never owns spend, replay, revocation, policy, execution, or
 settlement authority. `CovenantVault` remains the authoritative financial state.
 
-**MVP:** Mutation uses the exclusive `.covenant-demo-state/runtime.v1.lock`.
-Health inspects locks read-only. Only reset may remove a valid stale lock after
-confirming the recorded process is not live and the lock did not change.
+**MVP:** Every read and mutation coordinates through an operating-system lock
+bound to an open descriptor for the stable ignored `.covenant-demo.lock`
+sentinel at the repository root. The sentinel is never renamed, replaced, or
+deleted by the application and remains after reset removes
+`.covenant-demo-state`.
+
+**MVP:** The operating system releases descriptor ownership when its process
+exits. There is no PID authority or stale-lock stealing. An interrupted
+projection is derived only from strict journal replay. This is local-machine
+coordination; distributed locking remains Production scope.
 
 **MVP:** Every replay validates strict schemas, deterministic event IDs,
 runtime identity, continuous sequence numbers, exact event order, and a complete

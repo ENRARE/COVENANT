@@ -1,34 +1,34 @@
 import {
-  lstat,
   mkdir,
   open,
   readFile,
   readdir,
   rmdir,
   unlink,
-  type FileHandle,
 } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { TextDecoder } from "node:util";
 import { createAuditEvent, parseAndFreezeEvent } from "../audit-events.js";
 import { DemoError } from "../errors.js";
-import {
-  auditEventSchema,
-  lockMetadataSchema,
-  type AuditEvent,
-  type LockMetadata,
-} from "../schemas.js";
+import { auditEventSchema, type AuditEvent } from "../schemas.js";
 import type {
   JournalSnapshot,
-  LockState,
   MutationSession,
   RuntimeStore,
 } from "./runtime-store.js";
+import {
+  pathKind,
+  validateRepositoryRoot,
+  type PathKind,
+} from "./repository-root.js";
+import {
+  createRuntimeMutex,
+  type RuntimeMutexTestHooks,
+} from "./runtime-mutex.js";
 
 const RUNTIME_DIRECTORY = ".covenant-demo-state";
 const JOURNAL_FILE = "events.v1.jsonl";
-const LOCK_FILE = "runtime.v1.lock";
-const ALLOWED_ENTRIES = new Set([JOURNAL_FILE, LOCK_FILE]);
+const ALLOWED_ENTRIES = new Set([JOURNAL_FILE]);
 
 const EXPECTED_ORDER = [
   ["RUNTIME_INITIALIZED", ""],
@@ -49,55 +49,6 @@ const EXPECTED_ORDER = [
   ["SCENARIO_COMPLETED", "compromised-proposer-v1"],
   ["DEMO_COMPLETED", ""],
 ] as const;
-
-type Kind = "missing" | "directory" | "file" | "symlink" | "other";
-type FileIdentity = Readonly<{ device: bigint; inode: bigint }>;
-
-async function kind(path: string): Promise<Kind> {
-  try {
-    const status = await lstat(path);
-    if (status.isSymbolicLink()) return "symlink";
-    if (status.isDirectory()) return "directory";
-    if (status.isFile()) return "file";
-    return "other";
-  } catch (error) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
-      return "missing";
-    }
-    throw error;
-  }
-}
-
-async function fileIdentity(path: string): Promise<FileIdentity> {
-  const status = await lstat(path, { bigint: true });
-  if (!status.isFile() || status.isSymbolicLink()) {
-    throw new DemoError("UNSAFE_STORAGE");
-  }
-  return { device: status.dev, inode: status.ino };
-}
-
-function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
-  return left.device === right.device && left.inode === right.inode;
-}
-
-function processIsLive(pid: string): boolean {
-  try {
-    process.kill(Number(pid), 0);
-    return true;
-  } catch (error) {
-    return (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      error.code === "EPERM"
-    );
-  }
-}
 
 function validateTimeline(events: readonly AuditEvent[]): void {
   if (events.length > EXPECTED_ORDER.length) throw new Error("too many events");
@@ -157,42 +108,14 @@ function replayJournal(contents: Uint8Array): readonly AuditEvent[] {
   return Object.freeze(events);
 }
 
-async function validateRepositoryRoot(root: string): Promise<void> {
-  if (resolve(root) !== root || basename(root).length === 0) {
-    throw new DemoError("INVALID_REPOSITORY_ROOT");
-  }
-  const packagePath = join(root, "package.json");
-  const workspacePath = join(root, "pnpm-workspace.yaml");
-  if (
-    (await kind(packagePath)) !== "file" ||
-    (await kind(workspacePath)) !== "file"
-  ) {
-    throw new DemoError("INVALID_REPOSITORY_ROOT");
-  }
-  try {
-    const parsed = JSON.parse(await readFile(packagePath, "utf8")) as unknown;
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !("name" in parsed) ||
-      parsed.name !== "covenant"
-    ) {
-      throw new Error("wrong package marker");
-    }
-  } catch (error) {
-    if (error instanceof DemoError) throw error;
-    throw new DemoError("INVALID_REPOSITORY_ROOT");
-  }
-}
-
 export type LocalRuntimeStoreOptions = Readonly<{
   repositoryRoot: string;
-  now: () => bigint;
   testHooks?: Readonly<{
-    afterResetLockAcquired?(): Promise<void>;
-    afterStaleLockRemoved?(): Promise<void>;
-    afterResetLockReleased?(): Promise<void>;
-  }>;
+    afterExclusiveLockAcquired?(): Promise<void>;
+    beforeJournalDeletion?(): Promise<void>;
+    beforeLockRelease?(): Promise<void>;
+  }> &
+    RuntimeMutexTestHooks;
 }>;
 
 export function createLocalRuntimeStore(
@@ -201,11 +124,20 @@ export function createLocalRuntimeStore(
   const repositoryRoot = resolve(options.repositoryRoot);
   const directory = join(repositoryRoot, RUNTIME_DIRECTORY);
   const journalPath = join(directory, JOURNAL_FILE);
-  const lockPath = join(directory, LOCK_FILE);
+  const mutex = createRuntimeMutex({
+    repositoryRoot,
+    ...(options.testHooks?.afterSentinelOpened === undefined
+      ? {}
+      : {
+          testHooks: {
+            afterSentinelOpened: options.testHooks.afterSentinelOpened,
+          },
+        }),
+  });
 
-  async function inspectDirectory(allowMissing: boolean): Promise<Kind> {
+  async function inspectDirectory(allowMissing: boolean): Promise<PathKind> {
     await validateRepositoryRoot(repositoryRoot);
-    const directoryKind = await kind(directory);
+    const directoryKind = await pathKind(directory);
     if (directoryKind === "missing" && allowMissing) return directoryKind;
     if (directoryKind !== "directory") throw new DemoError("UNSAFE_STORAGE");
     const entries = await readdir(directory);
@@ -213,242 +145,148 @@ export function createLocalRuntimeStore(
       throw new DemoError("UNSAFE_STORAGE");
     }
     for (const entry of entries) {
-      if ((await kind(join(directory, entry))) !== "file") {
+      if ((await pathKind(join(directory, entry))) !== "file") {
         throw new DemoError("UNSAFE_STORAGE");
       }
     }
     return directoryKind;
   }
 
-  async function readLock(): Promise<{
-    state: LockState;
-    metadata?: LockMetadata;
-    bytes?: string;
-    identity?: FileIdentity;
-  }> {
-    const lockKind = await kind(lockPath);
-    if (lockKind === "missing") return { state: "AVAILABLE" };
-    if (lockKind !== "file") throw new DemoError("UNSAFE_STORAGE");
-    let bytes: string;
-    let metadata: LockMetadata;
-    const identity = await fileIdentity(lockPath);
-    try {
-      bytes = await readFile(lockPath, "utf8");
-      metadata = lockMetadataSchema.parse(JSON.parse(bytes) as unknown);
-    } catch {
-      throw new DemoError("LOCK_MALFORMED");
+  async function readJournal(): Promise<JournalSnapshot> {
+    if ((await inspectDirectory(true)) === "missing") {
+      return Object.freeze({
+        timeline: Object.freeze([]),
+        lock: "AVAILABLE",
+      });
     }
-    return {
-      state: processIsLive(metadata.pid) ? "BUSY" : "STALE",
-      metadata,
-      bytes,
-      identity,
-    };
+    const journalKind = await pathKind(journalPath);
+    if (journalKind === "missing") throw new DemoError("STORAGE_CORRUPT");
+    if (journalKind !== "file") throw new DemoError("UNSAFE_STORAGE");
+    const timeline = replayJournal(await readFile(journalPath));
+    return Object.freeze({ timeline, lock: "AVAILABLE" });
   }
 
-  async function acquireMutationLock(
-    runtimeId: string | null,
-  ): Promise<{ release(): Promise<void> }> {
-    if ((await kind(lockPath)) !== "missing") {
-      await readLock();
-      throw new DemoError("LOCK_BUSY");
-    }
-    let handle: FileHandle;
+  async function withExclusiveLock<T>(operation: () => Promise<T>): Promise<T> {
+    const lease = await mutex.acquireExclusive();
     try {
-      handle = await open(lockPath, "wx", 0o600);
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        error.code === "EEXIST"
-      ) {
-        await readLock();
-        throw new DemoError("LOCK_BUSY");
+      await options.testHooks?.afterExclusiveLockAcquired?.();
+      return await operation();
+    } finally {
+      try {
+        await options.testHooks?.beforeLockRelease?.();
+      } finally {
+        await lease.release();
       }
-      throw error;
     }
-    let bytes: string;
-    let identity: FileIdentity;
-    try {
-      const metadata = lockMetadataSchema.parse({
-        schemaVersion: "1",
-        runtimeId,
-        pid: process.pid.toString(),
-        createdAt: options.now().toString(),
-      });
-      bytes = JSON.stringify(metadata);
-      await handle.writeFile(bytes, "utf8");
-      await handle.sync();
-      const status = await handle.stat({ bigint: true });
-      identity = { device: status.dev, inode: status.ino };
-    } catch (error) {
-      await handle.close().catch(() => undefined);
-      await unlink(lockPath).catch(() => undefined);
-      throw error;
-    }
-    let released = false;
-    return {
-      async release() {
-        if (released) return;
-        released = true;
-        try {
-          if ((await kind(lockPath)) !== "file") {
-            throw new DemoError("LOCK_BUSY");
-          }
-          if ((await readFile(lockPath, "utf8")) !== bytes) {
-            throw new DemoError("LOCK_BUSY");
-          }
-          if (!sameIdentity(await fileIdentity(lockPath), identity)) {
-            throw new DemoError("LOCK_BUSY");
-          }
-          await unlink(lockPath);
-        } finally {
-          await handle.close().catch(() => undefined);
-        }
-      },
-    };
   }
 
   async function read(): Promise<JournalSnapshot> {
+    let lease: Awaited<ReturnType<typeof mutex.acquireShared>> | undefined;
     try {
-      if ((await inspectDirectory(true)) === "missing") {
-        return Object.freeze({
-          timeline: Object.freeze([]),
-          lock: "AVAILABLE",
-        });
-      }
-      const lock = await readLock();
-      const journalKind = await kind(journalPath);
-      if (journalKind === "missing") {
-        if (lock.state === "BUSY") {
-          return Object.freeze({
-            timeline: Object.freeze([]),
-            lock: lock.state,
-          });
-        }
-        throw new DemoError("STORAGE_CORRUPT");
-      }
-      if (journalKind !== "file") throw new DemoError("UNSAFE_STORAGE");
-      const timeline = replayJournal(await readFile(journalPath));
-      return Object.freeze({ timeline, lock: lock.state });
+      lease = await mutex.acquireShared();
+      return await readJournal();
     } catch (error) {
       if (error instanceof DemoError) throw error;
       throw new DemoError("STORAGE_CORRUPT");
+    } finally {
+      await lease?.release();
+    }
+  }
+
+  async function health(): Promise<JournalSnapshot> {
+    try {
+      return await withExclusiveLock(readJournal);
+    } catch (error) {
+      if (error instanceof DemoError && error.code === "LOCK_BUSY") {
+        return Object.freeze({
+          timeline: Object.freeze([]),
+          lock: "BUSY",
+        });
+      }
+      throw error;
     }
   }
 
   async function mutate<T>(
-    runtimeId: string | null,
     operation: (session: MutationSession) => Promise<T>,
   ): Promise<T> {
-    let ownedLock: { release(): Promise<void> } | undefined;
     try {
-      await validateRepositoryRoot(repositoryRoot);
-      const directoryKind = await kind(directory);
-      if (directoryKind === "missing") {
-        await mkdir(directory, { mode: 0o700 });
-      } else {
-        await inspectDirectory(false);
-      }
-      ownedLock = await acquireMutationLock(runtimeId);
+      return await withExclusiveLock(async () => {
+        await validateRepositoryRoot(repositoryRoot);
+        const directoryKind = await pathKind(directory);
+        if (directoryKind === "missing") {
+          await mkdir(directory, { mode: 0o700 });
+        } else {
+          await inspectDirectory(false);
+        }
+        let timeline: AuditEvent[] = [];
+        const journalKind = await pathKind(journalPath);
+        if (journalKind === "missing") {
+          const journal = await open(journalPath, "wx", 0o600);
+          await journal.sync();
+          await journal.close();
+        } else if (journalKind !== "file") {
+          throw new DemoError("UNSAFE_STORAGE");
+        } else {
+          timeline = [...replayJournal(await readFile(journalPath))];
+        }
 
-      let timeline: AuditEvent[] = [];
-      const journalKind = await kind(journalPath);
-      if (journalKind === "missing") {
-        const journal = await open(journalPath, "wx", 0o600);
-        await journal.sync();
-        await journal.close();
-      } else if (journalKind !== "file") {
-        throw new DemoError("UNSAFE_STORAGE");
-      } else {
-        timeline = [...replayJournal(await readFile(journalPath))];
-      }
-
-      let writeTail = Promise.resolve();
-      const session: MutationSession = {
-        get timeline() {
-          return Object.freeze(timeline.map((event) => event));
-        },
-        append(event) {
-          const parsed = auditEventSchema.parse(event);
-          const next = [...timeline, parsed];
-          validateTimeline(next);
-          const operation = writeTail.then(async () => {
-            const handle = await open(journalPath, "a", 0o600);
-            try {
-              await handle.writeFile(`${JSON.stringify(parsed)}\n`, "utf8");
-              await handle.sync();
-            } finally {
-              await handle.close();
-            }
-            timeline = next;
-          });
-          writeTail = operation.then(
-            () => undefined,
-            () => undefined,
-          );
-          return operation;
-        },
-      };
-      const result = await operation(session);
-      await writeTail;
-      return result;
+        let writeTail = Promise.resolve();
+        const session: MutationSession = {
+          get timeline() {
+            return Object.freeze(timeline.map((event) => event));
+          },
+          append(event) {
+            const parsed = auditEventSchema.parse(event);
+            const next = [...timeline, parsed];
+            validateTimeline(next);
+            const operation = writeTail.then(async () => {
+              const handle = await open(journalPath, "a", 0o600);
+              try {
+                await handle.writeFile(`${JSON.stringify(parsed)}\n`, "utf8");
+                await handle.sync();
+              } finally {
+                await handle.close();
+              }
+              timeline = next;
+            });
+            writeTail = operation.then(
+              () => undefined,
+              () => undefined,
+            );
+            return operation;
+          },
+        };
+        const result = await operation(session);
+        await writeTail;
+        return result;
+      });
     } catch (error) {
       if (error instanceof DemoError) throw error;
       throw new DemoError("STORAGE_FAILURE");
-    } finally {
-      await ownedLock?.release().catch(() => undefined);
     }
   }
 
   async function reset(): Promise<void> {
-    let ownedLock: { release(): Promise<void> } | undefined;
     try {
-      if ((await inspectDirectory(true)) === "missing") return;
-      const lock = await readLock();
-      if (lock.state === "BUSY") throw new DemoError("LOCK_BUSY");
-      if (lock.state === "STALE") {
-        if (
-          lock.bytes === undefined ||
-          lock.metadata === undefined ||
-          lock.identity === undefined
-        ) {
-          throw new DemoError("LOCK_MALFORMED");
+      await withExclusiveLock(async () => {
+        if ((await inspectDirectory(true)) === "missing") return;
+        await options.testHooks?.beforeJournalDeletion?.();
+        if ((await pathKind(journalPath)) === "file") await unlink(journalPath);
+        else if ((await pathKind(journalPath)) !== "missing")
+          throw new DemoError("UNSAFE_STORAGE");
+        const entries = await readdir(directory);
+        if (entries.length !== 0) throw new DemoError("UNSAFE_STORAGE");
+        await rmdir(directory);
+        if ((await pathKind(directory)) !== "missing") {
+          throw new DemoError("UNSAFE_STORAGE");
         }
-        const secondBytes = await readFile(lockPath, "utf8");
-        const secondMetadata = lockMetadataSchema.parse(
-          JSON.parse(secondBytes) as unknown,
-        );
-        if (
-          secondBytes !== lock.bytes ||
-          processIsLive(secondMetadata.pid) ||
-          (await kind(lockPath)) !== "file" ||
-          !sameIdentity(await fileIdentity(lockPath), lock.identity)
-        ) {
-          throw new DemoError("LOCK_BUSY");
-        }
-        await unlink(lockPath);
-        await options.testHooks?.afterStaleLockRemoved?.();
-      }
-      ownedLock = await acquireMutationLock(null);
-      await options.testHooks?.afterResetLockAcquired?.();
-      if ((await kind(journalPath)) === "file") await unlink(journalPath);
-      else if ((await kind(journalPath)) !== "missing")
-        throw new DemoError("UNSAFE_STORAGE");
-      await ownedLock.release();
-      ownedLock = undefined;
-      await options.testHooks?.afterResetLockReleased?.();
-      const entries = await readdir(directory);
-      if (entries.length !== 0) throw new DemoError("UNSAFE_STORAGE");
-      await rmdir(directory);
+      });
     } catch (error) {
       if (error instanceof DemoError) throw error;
       throw new DemoError("STORAGE_FAILURE");
-    } finally {
-      await ownedLock?.release().catch(() => undefined);
     }
   }
 
-  return { read, mutate, reset };
+  return { read, health, mutate, reset };
 }

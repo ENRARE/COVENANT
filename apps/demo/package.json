@@ -22,6 +22,7 @@
     "@covenant/authority": "workspace:*",
     "@covenant/executor": "workspace:*",
     "@covenant/spec": "workspace:*",
+    "os-lock": "2.0.0",
     "viem": "^2.33.3",
     "zod": "^3.25.76"
   },

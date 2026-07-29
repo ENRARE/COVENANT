@@ -14,10 +14,8 @@ export type MutationSession = {
 
 export type RuntimeStore = {
   read(): Promise<JournalSnapshot>;
-  mutate<T>(
-    runtimeId: string | null,
-    operation: (session: MutationSession) => Promise<T>,
-  ): Promise<T>;
+  health(): Promise<JournalSnapshot>;
+  mutate<T>(operation: (session: MutationSession) => Promise<T>): Promise<T>;
   reset(): Promise<void>;
 };
 

@@ -170,16 +170,6 @@ export const auditEventSchema = z.discriminatedUnion("eventType", [
 export type AuditEvent = z.infer<typeof auditEventSchema>;
 export type AuditEventType = (typeof auditEventTypes)[number];
 
-export const lockMetadataSchema = z
-  .object({
-    schemaVersion: z.literal("1"),
-    runtimeId: lowercaseNonzeroBytes32Schema.nullable(),
-    pid: z.string().max(20).regex(POSITIVE_DECIMAL),
-    createdAt: occurredAtSchema,
-  })
-  .strict();
-export type LockMetadata = z.infer<typeof lockMetadataSchema>;
-
 const healthSchema = z
   .object({
     storage: z.enum(["READY", "MISSING", "CORRUPT"]),

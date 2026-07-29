@@ -167,9 +167,16 @@ Each row states attack path, affected asset, MVP control, residual risk, deferre
 - **MVP:** Journal substitution, traversal, links, reparse points where
   detectable, unknown entries, malformed records, sequence manipulation,
   runtime mismatch, and illegal transitions fail closed before use.
-- **MVP:** A live lock blocks mutation and reset. Health reports valid stale
-  locks read-only; only reset may remove an unchanged valid stale lock after
-  confirming its PID is not live.
+- **MVP:** Every demo read and mutation uses a nonblocking operating-system lock
+  bound to an open descriptor for the stable ignored repository-root
+  `.covenant-demo.lock` sentinel. Mutations retain exclusive ownership through
+  final state verification; reads retain shared ownership through replay; an
+  exclusive health probe reports `BUSY` or `AVAILABLE`.
+- **MVP:** The application never renames, replaces, or deletes the sentinel.
+  Process exit or descriptor close releases ownership automatically. No PID
+  metadata or stale-lock takeover grants authority. Interrupted state is
+  derived only from strict journal replay; `STALE` is a reserved schema value
+  that the runtime does not emit.
 - **MVP:** A crash after scenario events begin leaves an interrupted projection.
   The lost ephemeral signers make cryptographic resume impossible, so seed and
   run fail until reset.

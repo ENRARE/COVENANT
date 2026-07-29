@@ -112,6 +112,9 @@ importers:
       '@covenant/spec':
         specifier: workspace:*
         version: link:../../packages/spec
+      os-lock:
+        specifier: 2.0.0
+        version: 2.0.0
       viem:
         specifier: ^2.33.3
         version: 2.55.4(typescript@5.9.3)(zod@3.25.76)
@@ -2133,6 +2136,9 @@ packages:
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
+
+  os-lock@2.0.0:
+    resolution: {integrity: sha512-gz01iHieWaDXZTtUEc5EZR3aO/g8+h7vk1IPix28jdeUYfWa6CzTeBD1NVtHQLqdwSW3yYSin8lG4lYp6S5Gcw==}
 
   own-keys@1.0.1:
     resolution: {integrity: sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg==}
@@ -4566,6 +4572,8 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
       word-wrap: 1.2.5
+
+  os-lock@2.0.0: {}
 
   own-keys@1.0.1:
     dependencies:
