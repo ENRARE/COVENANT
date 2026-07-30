@@ -29,6 +29,29 @@ temporary repository roots.
 package by package name, executes the exact seventeen-event local demonstration,
 and proves a completed replay performs no additional journal write.
 
+**MVP:** `tests/contract-evidence` is the COV-008 local-only execution harness.
+It starts and owns an ephemeral loopback Anvil child on chain `5042002`, deploys
+current Foundry artifacts, and composes the production agent, authority, and
+executor cores. Its exact command is:
+
+```powershell
+pnpm.cmd --silent contracts:evidence:local
+```
+
+**MVP:** The harness verifies deployment code and getters, funding receipts and
+events, successful `executePayment`, all five replay markers, replay rejection,
+the fixed direct-bypass rejection, non-issuer revocation rejection, issuer
+revocation, and rejection of an authorization prepared before revocation.
+
+**MVP:** The strict result contains only local evidence types and canonical
+decimal receipt counts. It contains no key, signer, RPC URL, port, PID,
+signature, signed envelope, typed data, calldata, address, receipt, raw log,
+provider error, filesystem path, or environment value.
+
+**MVP:** The harness persists no deployment or key. Its receipts, events,
+balances, and state are local EVM evidence, not Arc or Circle execution,
+external settlement, confirmation, or finality.
+
 **V2:** Additional organizations, agents, vendors, products, tokens, policies,
 and chains remain excluded.
 

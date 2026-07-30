@@ -69,8 +69,10 @@ with code `1`.
 
 ## Deferred scope
 
-**MVP:** Vault execution, direct bypass, revocation, and post-revocation
-behavior remain COV-008 scope.
+**MVP:** COV-008 proves vault execution, direct bypass rejection, revocation,
+and post-revocation rejection in the separate `tests/contract-evidence`
+ephemeral Anvil harness. These records do not enter this application's journal,
+and this application's only mode remains `LOCAL_SIMULATED`.
 
 **V2:** Additional actors, assets, scenarios, policies, and chains remain
 excluded.
