@@ -234,3 +234,57 @@ remain deferred.
 
 **Protocol:** Generic execution, arbitrary ABI forwarding, multichain behavior,
 generic policies, and upgradeability remain excluded.
+
+## COV-009 Arc readiness controls
+
+**MVP:** Wrong-chain risk is bounded by canonical decimal chain ID `5042002`,
+programmatic hexadecimal derivation, explicit rejection of the conflicting
+published `0x4CF4B2`, contract enforcement, strict plan anchors, and live
+preflight equality.
+
+**MVP:** Wrong-token and decimal-conflation risks are bounded by the fixed
+official USDC interface, separate native-RPC `18`, wallet-display `6`, and
+ERC-20/business `6` fields, strict constructor binding, and fixed USDC view
+calls.
+
+**MVP:** Wrong-bytecode and constructor drift are bounded by exact reviewed
+creation/runtime/ABI/reference-map commitments, exact Solidity ABI constructor
+encoding, separate constructor and init-code hashes, canonical plan hashing,
+explicit Prague metadata, and rejection of compiler, optimizer, metadata, ABI,
+or EVM-target drift.
+
+**MVP:** Runtime substitution is bounded by exact code length, every
+non-immutable byte including compiler metadata, complete non-overlapping
+immutable ranges, and exact expected immutable encodings. Metadata stripping
+is prohibited.
+
+**MVP:** Accidental broadcast and secret leakage are bounded by exposing only
+offline `arc:plan` and read-only `arc:preflight`. Neither command accepts a key,
+wallet, endpoint, signer, gas field, calldata, transaction, credential, or
+environment override. Outputs and failures are fixed and sanitized.
+
+**MVP:** Malicious-RPC risk remains only partially mitigated. Strict response
+parsing detects malformed, inconsistent, wrong-chain, missing-code, and wrong
+USDC responses, but a single provider may fabricate a coherent view, censor,
+or remain stale. Preflight results therefore make no authenticity, deployment,
+execution, or settlement claim.
+
+**MVP:** Expired-plan risk is bounded by exact absolute constructor timestamps
+and a frozen seven-day minimum remaining-validity buffer. Timestamps are never
+silently derived. COV-010 must revalidate the approved plan immediately before
+any explicitly authorized broadcast.
+
+**MVP:** Testnet reset and provider-outage risk remain operational. Arc warns of
+testnet instability and publishes no persistence guarantee relied upon here.
+COV-010 must fail closed on absent code and preserve historical deployment
+records rather than overwrite them.
+
+**Production:** Independent nodes or provider diversity, durable monitoring,
+custody, nonce/replacement handling, reconciliation, incident response, and
+high availability remain required before real funds.
+
+**V2:** Additional networks, assets, Covenants, actors, providers, or policies
+require separately reviewed profiles and threat models.
+
+**Protocol:** Generic RPC quorum, arbitrary calls, CREATE2 policy,
+upgradeability, and multichain execution remain excluded.

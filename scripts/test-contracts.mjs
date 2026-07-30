@@ -25,4 +25,15 @@ const result = spawnSync("forge", ["test", "--root", "packages/contracts"], {
   shell: process.platform === "win32",
   stdio: "inherit",
 });
-process.exit(result.status ?? 1);
+if (result.status !== 0) process.exit(result.status ?? 1);
+
+const arcAttestation = spawnSync(
+  process.execPath,
+  ["--test", "scripts/arc/artifact-attestation.test.mjs"],
+  {
+    shell: false,
+    stdio: "inherit",
+    windowsHide: true,
+  },
+);
+process.exit(arcAttestation.status ?? 1);

@@ -40,6 +40,20 @@ forge test --root packages/contracts
 
 **MVP:** Foundry tests set the chain ID to Arc Testnet `5042002`. The constructor rejects every other chain ID.
 
+**MVP:** `foundry.toml` explicitly compiles the reviewed vault artifact for
+Prague. Arc documentation verified on 2026-07-30 identifies the current
+testnet execution target as Osaka. COV-009 deliberately retains the older
+supported Prague instruction set; making that formerly implicit target
+explicit leaves creation bytecode, unpatched runtime bytecode, ABI, and
+immutable-reference commitments byte-identical.
+
+**MVP:** The reviewed artifact commitments cover compiler and optimizer
+metadata, complete creation and unpatched runtime bytes, canonical ABI, and
+the complete immutable-reference map. Runtime attestation compares exact code
+length and every non-immutable byte, including compiler metadata. It never
+strips metadata. Expected immutable encodings must cover every compiler
+reference exactly.
+
 ## Generated ABI
 
 **MVP:** `packages/contracts/abi/CovenantVault.json` is the committed full ABI generated directly from Foundry output. It is the TypeScript executor's contract-call source of truth and must not be edited by hand.
@@ -100,5 +114,12 @@ settlement, confirmation, or finality.
 **MVP deferred:** CovenantSpec, Invoice, and DecisionReceipt Solidity hashing parity is not claimed because those objects are not verified by the runtime vault.
 
 **Production:** Broadcast deployment, real funds, managed keys, operational monitoring, incident response, independent external audit, and formal verification remain deferred. No external audit or formal verification has occurred.
+
+**MVP deferred to COV-010:** Real Arc deployment, transaction signing,
+broadcast, deployed-address persistence, provider corroboration, and a real
+deployment manifest.
+
+**MVP deferred to COV-011:** USDC approval, vault funding, payment execution,
+rejection evidence, revocation, and post-revocation evidence.
 
 **Protocol:** Upgradeability, arbitrary calls, generalized policies, and multichain operation remain excluded.

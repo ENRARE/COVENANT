@@ -7,11 +7,18 @@
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"process.stdout.write('shared configuration has no runtime tests\\n')\""
+    "test": "vitest run"
   },
   "files": [
     "*.json",
     "*.mjs",
     "dist"
-  ]
+  ],
+  "dependencies": {
+    "viem": "^2.33.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  }
 }
