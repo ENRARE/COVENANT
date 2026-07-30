@@ -6,12 +6,10 @@ import {
   evidenceFailure,
   sanitizedEvidenceError,
 } from "./errors.js";
+import { ANVIL_LOOPBACK_HOST, ANVIL_PORT_CANDIDATES } from "./anvil-ports.mjs";
 import { LOCAL_CHAIN_ID, LOCAL_CHAIN_ID_BIGINT } from "./schemas.js";
 
-const LOOPBACK_HOST = "127.0.0.1";
-export const ANVIL_PORT_CANDIDATES = Object.freeze([
-  18_545, 18_546, 18_547, 18_548, 18_549, 18_550,
-]);
+export { ANVIL_PORT_CANDIDATES } from "./anvil-ports.mjs";
 const STARTUP_TIMEOUT_MS = 8_000;
 const SHUTDOWN_TIMEOUT_MS = 5_000;
 
@@ -36,7 +34,7 @@ async function portIsFree(port: number): Promise<boolean> {
     server.once("error", () => {
       resolve(false);
     });
-    server.listen({ host: LOOPBACK_HOST, port, exclusive: true }, () => {
+    server.listen({ host: ANVIL_LOOPBACK_HOST, port, exclusive: true }, () => {
       server.close(() => {
         resolve(true);
       });
@@ -143,7 +141,7 @@ export async function startControlledAnvil(): Promise<ControlledAnvil> {
         "anvil",
         [
           "--host",
-          LOOPBACK_HOST,
+          ANVIL_LOOPBACK_HOST,
           "--port",
           String(port),
           "--chain-id",
@@ -160,7 +158,7 @@ export async function startControlledAnvil(): Promise<ControlledAnvil> {
     } catch {
       evidenceFailure("MISSING_TOOL");
     }
-    const rpcUrl = `http://${LOOPBACK_HOST}:${String(port)}`;
+    const rpcUrl = `http://${ANVIL_LOOPBACK_HOST}:${String(port)}`;
     const publicClient = createPublicClient({ transport: http(rpcUrl) });
     const spawnState: { failureCode?: "MISSING_TOOL" } = {};
     child.once("error", () => {
