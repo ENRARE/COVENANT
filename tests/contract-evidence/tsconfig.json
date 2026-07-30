@@ -1,8 +1,15 @@
 {
   "extends": "../../packages/config/tsconfig.base.json",
   "compilerOptions": {
+    "baseUrl": "../..",
     "declaration": false,
     "noEmit": true,
+    "paths": {
+      "@covenant/agent": ["apps/agent/src/index.ts"],
+      "@covenant/authority": ["apps/authority/src/index.ts"],
+      "@covenant/executor": ["apps/executor/src/index.ts"],
+      "@covenant/spec": ["packages/spec/src/index.ts"]
+    },
     "types": ["node", "vitest/globals"]
   },
   "include": ["*.ts"]
