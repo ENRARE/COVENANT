@@ -13,11 +13,21 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
+import { createServer } from "node:net";
 import test from "node:test";
+import {
+  assertAnvilCandidatePortsReleased,
+  availableAnvilCandidatePorts,
+  candidatePortIsBindable,
+} from "./contract-evidence-port-cleanup.mjs";
 import {
   resolveRepositoryPnpmCli,
   runContractEvidence,
 } from "./run-contract-evidence.mjs";
+import {
+  ANVIL_LOOPBACK_HOST,
+  ANVIL_PORT_CANDIDATES,
+} from "../tests/contract-evidence/anvil-ports.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const evidenceTypes = Object.freeze([
@@ -205,23 +215,45 @@ function copyContractDependencies(checkout) {
   }
 }
 
-function anvilProcessIds() {
-  if (process.platform !== "win32") return new Set();
+function resolveRepositoryPnpmStore() {
   const result = spawnSync(
-    "tasklist.exe",
-    ["/FI", "IMAGENAME eq anvil.exe", "/FO", "CSV", "/NH"],
+    process.execPath,
+    [resolveRepositoryPnpmCli(), "store", "path"],
     {
+      cwd: root,
       encoding: "utf8",
       shell: false,
       windowsHide: true,
     },
   );
   assert.equal(result.status, 0, result.stderr);
-  return new Set(
-    [...result.stdout.matchAll(/"anvil\.exe","(\d+)"/giu)].map(
-      (match) => match[1],
-    ),
-  );
+  const store = result.stdout.trim();
+  assert.notEqual(store, "");
+  return store;
+}
+
+async function listenOnCandidate(port) {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(
+      { host: ANVIL_LOOPBACK_HOST, port, exclusive: true },
+      resolve,
+    );
+  });
+  return server;
+}
+
+async function closeServer(server) {
+  await new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error === undefined) {
+        resolve();
+      } else {
+        reject(error);
+      }
+    });
+  });
 }
 
 function assertEvidenceOutput(result) {
@@ -421,7 +453,80 @@ test("direct CLI arguments and a matching-suffix npm_execpath cannot select a co
   }
 });
 
-test("isolated documented command regenerates clean outputs and ignores hostile npm_execpath", () => {
+test("a previously free candidate remains free after cleanup assertion", async () => {
+  const available = await availableAnvilCandidatePorts();
+  assert.notEqual(available.length, 0);
+  assert.equal(
+    available.every((port) => ANVIL_PORT_CANDIDATES.includes(port)),
+    true,
+  );
+  await assertAnvilCandidatePortsReleased([available[0]]);
+  assert.equal(await candidatePortIsBindable(available[0]), true);
+});
+
+test("cleanup assertion detects a leaked candidate listener", async () => {
+  const [port] = await availableAnvilCandidatePorts();
+  assert.notEqual(port, undefined);
+  const leaked = await listenOnCandidate(port);
+  try {
+    await assert.rejects(
+      assertAnvilCandidatePortsReleased([port], { releaseTimeoutMs: 0 }),
+      /left a candidate port occupied/u,
+    );
+  } finally {
+    await closeServer(leaked);
+  }
+});
+
+test("a candidate occupied before the snapshot is not attributed to the harness", async () => {
+  const [port] = await availableAnvilCandidatePorts();
+  assert.notEqual(port, undefined);
+  const occupied = await listenOnCandidate(port);
+  try {
+    const available = await availableAnvilCandidatePorts();
+    assert.equal(available.includes(port), false);
+    await assertAnvilCandidatePortsReleased(available);
+    assert.equal(occupied.listening, true);
+  } finally {
+    await closeServer(occupied);
+  }
+});
+
+test("temporary probe sockets close when a cleanup assertion fails", async () => {
+  const available = await availableAnvilCandidatePorts();
+  assert.ok(available.length >= 2);
+  const leaked = await listenOnCandidate(available[0]);
+  try {
+    await assert.rejects(
+      assertAnvilCandidatePortsReleased(available.slice(0, 2), {
+        releaseTimeoutMs: 0,
+      }),
+      /left a candidate port occupied/u,
+    );
+    assert.equal(await candidatePortIsBindable(available[1]), true);
+  } finally {
+    await closeServer(leaked);
+  }
+});
+
+test("cleanup regression does not invoke global process enumeration", () => {
+  const source = [
+    readFileSync(resolve("scripts/run-contract-evidence.test.mjs"), "utf8"),
+    readFileSync(resolve("scripts/contract-evidence-port-cleanup.mjs"), "utf8"),
+  ].join("\n");
+  const forbiddenCommands = [
+    ["task", "list"].join(""),
+    ["w", "mic"].join(""),
+    ["Get", "-Cim", "Instance"].join(""),
+    ["Win32", "_Process"].join(""),
+  ];
+  assert.doesNotMatch(
+    source,
+    new RegExp(`(?:${forbiddenCommands.join("|")})`, "iu"),
+  );
+});
+
+test("isolated documented command regenerates clean outputs and ignores hostile npm_execpath", async () => {
   const temporaryRoot = mkdtempSync(join(tmpdir(), "covenant-evidence-"));
   const checkout = resolve(temporaryRoot, "checkout");
   const sentinel = resolve(temporaryRoot, "hostile-executed");
@@ -433,7 +538,7 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
     "bin",
     "pnpm.mjs",
   );
-  const beforeAnvil = anvilProcessIds();
+  const availableCandidatePorts = await availableAnvilCandidatePorts();
   try {
     mkdirSync(checkout, { recursive: true });
     copyTrackedCheckout(checkout);
@@ -447,6 +552,8 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
         "--offline",
         "--frozen-lockfile",
         "--ignore-scripts",
+        "--store-dir",
+        resolveRepositoryPnpmStore(),
         "--reporter=append-only",
       ],
       {
@@ -517,6 +624,7 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
             },
           );
     assertEvidenceOutput(documented);
+    await assertAnvilCandidatePortsReleased(availableCandidatePorts);
     for (const outputDirectory of outputDirectories) {
       assert.equal(existsSync(resolve(checkout, outputDirectory)), true);
     }
@@ -536,7 +644,7 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
     );
     assertEvidenceOutput(hostileEnvironment);
     assert.equal(existsSync(sentinel), false);
-    assert.deepEqual(anvilProcessIds(), beforeAnvil);
+    await assertAnvilCandidatePortsReleased(availableCandidatePorts);
   } finally {
     rmSync(temporaryRoot, {
       force: true,
