@@ -128,7 +128,13 @@ function expectedCalls() {
     },
     {
       command: "forge",
-      args: ["build", "--build-info", "--root", "packages/contracts"],
+      args: [
+        "build",
+        "--force",
+        "--build-info",
+        "--root",
+        "packages/contracts",
+      ],
     },
     {
       command: process.execPath,
@@ -609,6 +615,12 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
       hostileCli,
       `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(sentinel)}, "executed");`,
     );
+    const buildInfoDirectory = resolve(
+      checkout,
+      "packages/contracts/out/build-info",
+    );
+    mkdirSync(buildInfoDirectory, { recursive: true });
+    writeFileSync(resolve(buildInfoDirectory, "stale.json"), "{}\n");
     const localPnpmCli = realpathSync(
       resolve(checkout, "node_modules/pnpm/bin/pnpm.cjs"),
     );
@@ -625,10 +637,11 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
       },
     );
     assertEvidenceOutput(documented);
-    const buildInfoFiles = readdirSync(
-      resolve(checkout, "packages/contracts/out/build-info"),
-    ).filter((file) => file.endsWith(".json"));
+    const buildInfoFiles = readdirSync(buildInfoDirectory).filter((file) =>
+      file.endsWith(".json"),
+    );
     assert.equal(buildInfoFiles.length, 1);
+    assert.notEqual(buildInfoFiles[0], "stale.json");
     const plan = spawnSync(
       process.execPath,
       [
