@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -127,7 +128,7 @@ function expectedCalls() {
     },
     {
       command: "forge",
-      args: ["build", "--root", "packages/contracts"],
+      args: ["build", "--build-info", "--root", "packages/contracts"],
     },
     {
       command: process.execPath,
@@ -203,6 +204,18 @@ function copyTrackedCheckout(destination) {
     mkdirSync(dirname(target), { recursive: true });
     cpSync(source, target);
   }
+}
+
+function git(cwd, arguments_) {
+  const result = spawnSync("git", arguments_, {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+    shell: false,
+    windowsHide: true,
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  return result.stdout.trim();
 }
 
 function copyContractDependencies(checkout) {
@@ -528,7 +541,8 @@ test("cleanup regression does not invoke global process enumeration", () => {
 
 test("isolated documented command regenerates clean outputs and ignores hostile npm_execpath", async () => {
   const temporaryRoot = mkdtempSync(join(tmpdir(), "covenant-evidence-"));
-  const checkout = resolve(temporaryRoot, "checkout");
+  const repository = resolve(temporaryRoot, "repository");
+  const checkout = resolve(temporaryRoot, "detached worktree with spaces");
   const sentinel = resolve(temporaryRoot, "hostile-executed");
   const hostileCli = resolve(
     temporaryRoot,
@@ -540,8 +554,21 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
   );
   const availableCandidatePorts = await availableAnvilCandidatePorts();
   try {
-    mkdirSync(checkout, { recursive: true });
-    copyTrackedCheckout(checkout);
+    mkdirSync(repository, { recursive: true });
+    copyTrackedCheckout(repository);
+    git(repository, ["init"]);
+    git(repository, ["config", "core.autocrlf", "false"]);
+    git(repository, ["config", "core.eol", "lf"]);
+    git(repository, ["config", "user.name", "Covenant Test"]);
+    git(repository, ["config", "user.email", "covenant-test@example.invalid"]);
+    git(repository, ["add", "--all"]);
+    git(repository, ["commit", "-m", "detached worktree fixture"]);
+    const sourceCommit = git(repository, ["rev-parse", "HEAD"]);
+    git(repository, ["worktree", "add", "--detach", checkout, sourceCommit]);
+    assert.equal(
+      readFileSync(resolve(checkout, ".git"), "utf8").startsWith("gitdir: "),
+      true,
+    );
     copyContractDependencies(checkout);
 
     const install = spawnSync(
@@ -582,48 +609,49 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
       hostileCli,
       `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(sentinel)}, "executed");`,
     );
-    const localPnpmCommand = resolve(
-      checkout,
-      "node_modules",
-      ".bin",
-      process.platform === "win32" ? "pnpm.CMD" : "pnpm",
+    const localPnpmCli = realpathSync(
+      resolve(checkout, "node_modules/pnpm/bin/pnpm.cjs"),
     );
-    const documented =
-      process.platform === "win32"
-        ? spawnSync(
-            resolve(
-              process.env.SystemRoot ?? "C:\\Windows",
-              "System32",
-              "cmd.exe",
-            ),
-            [
-              "/d",
-              "/s",
-              "/c",
-              `${localPnpmCommand} --silent contracts:evidence:local`,
-            ],
-            {
-              cwd: checkout,
-              encoding: "utf8",
-              env: { ...process.env, npm_execpath: hostileCli },
-              maxBuffer: 32 * 1024 * 1024,
-              shell: false,
-              windowsHide: true,
-            },
-          )
-        : spawnSync(
-            localPnpmCommand,
-            ["--silent", "contracts:evidence:local"],
-            {
-              cwd: checkout,
-              encoding: "utf8",
-              env: { ...process.env, npm_execpath: hostileCli },
-              maxBuffer: 32 * 1024 * 1024,
-              shell: false,
-              windowsHide: true,
-            },
-          );
+    const documented = spawnSync(
+      process.execPath,
+      [localPnpmCli, "--silent", "contracts:evidence:local"],
+      {
+        cwd: checkout,
+        encoding: "utf8",
+        env: { ...process.env, npm_execpath: hostileCli },
+        maxBuffer: 32 * 1024 * 1024,
+        shell: false,
+        windowsHide: true,
+      },
+    );
     assertEvidenceOutput(documented);
+    const buildInfoFiles = readdirSync(
+      resolve(checkout, "packages/contracts/out/build-info"),
+    ).filter((file) => file.endsWith(".json"));
+    assert.equal(buildInfoFiles.length, 1);
+    const plan = spawnSync(
+      process.execPath,
+      [
+        localPnpmCli,
+        "--silent",
+        "arc:plan",
+        "--",
+        "--input",
+        "tests/fixtures/arc/deployment-plan-input.json",
+      ],
+      {
+        cwd: checkout,
+        encoding: "utf8",
+        maxBuffer: 32 * 1024 * 1024,
+        shell: false,
+        windowsHide: true,
+      },
+    );
+    assert.equal(plan.status, 0, `${plan.stdout}\n${plan.stderr}`);
+    assert.equal(plan.stderr, "");
+    const parsedPlan = JSON.parse(plan.stdout);
+    assert.equal(parsedPlan.planStatus, "BROADCASTABLE");
+    assert.equal(parsedPlan.sourceGitCommit, sourceCommit);
     await assertAnvilCandidatePortsReleased(availableCandidatePorts);
     for (const outputDirectory of outputDirectories) {
       assert.equal(existsSync(resolve(checkout, outputDirectory)), true);

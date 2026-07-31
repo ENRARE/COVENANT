@@ -161,7 +161,7 @@ export function runContractEvidence(options = {}) {
 
     const contractBuild = runCommand(
       "forge",
-      ["build", "--root", "packages/contracts"],
+      ["build", "--build-info", "--root", "packages/contracts"],
       commandOptions(),
     );
     if (contractBuild.status !== 0) {
