@@ -191,6 +191,52 @@ remain deferred.
 **Protocol:** Generic ABI forwarding, arbitrary calls, generic policies,
 multichain execution, and upgradeability remain excluded.
 
+## COV-009 Arc readiness boundary
+
+**MVP:** The Arc Testnet operational profile is trusted committed server-side
+configuration. Browser, CLI input, environment variables, and public callers
+cannot select or replace its RPC, chain, token, explorer, EVM targets, ABI, or
+finality policy. Provider injection exists only at the test seam.
+
+**MVP:** The security-profile digest commits to operational fields but excludes
+official-source URLs and verification dates. Rechecking provenance therefore
+does not silently change an approved deployment commitment. Changing an
+endpoint, chain, token, EVM target, or finality field does change the digest and
+requires review.
+
+**MVP:** `arc:plan` is offline and read-only. It accepts only `--input` with a
+bounded strict UTF-8 regular file, rejects links, unknown fields, secret-like
+material, wrong anchors, invalid roles, placeholders, and inadequate validity,
+and writes no deployment plan. Deployer and payer are plan metadata, not vault
+constructor fields. Vendor identity is absent from both.
+
+**MVP:** `arc:preflight` uses only `eth_chainId`,
+`eth_getBlockByNumber("latest", false)`, `eth_getCode` for the fixed USDC
+interface, and fixed `eth_call` views for `decimals`, `symbol`, and `name`.
+Requests are sequential with bounded timeouts and no retry. Output excludes the
+endpoint, raw responses, code, headers, environment, paths, and provider
+errors.
+
+**MVP:** One primary-RPC observation proves only connectivity and internally
+consistent reported state. It cannot independently prove chain authenticity,
+deployed code, receipt truth, balances, execution, or settlement. COV-010 must
+define and satisfy independent provider corroboration before making a verified
+deployment claim.
+
+**MVP:** COV-009 contains no wallet, signer, account enumeration, faucet,
+funding, transaction construction, deployment, manifest persistence, Circle
+API, or broadcast authority. COV-010 owns explicitly authorized deployment and
+manifest creation. COV-011 separately owns approval, funding, execution,
+revocation, and corresponding evidence.
+
+**Production:** Managed RPC credentials, self-operated nodes, quorum policy,
+custody, KMS/HSM, nonce operations, monitoring, durable reconciliation,
+incident response, and high availability remain deferred.
+
+**Protocol:** Generic RPC routing, arbitrary provider URLs, generic ABI
+forwarding, multichain profiles, CREATE2 policy, and upgradeability remain
+excluded.
+
 - **Production:** Replicated proposal persistence, operational lock recovery, backup, and restart reconciliation must preserve identity-to-nonce bindings and reconcile them against finalized vault state.
 - **Production:** No external audit or formal verification has occurred; both remain required before production use.
 - **Protocol:** Cross-chain and generalized policy boundaries require new specifications and are not inherited from the MVP.

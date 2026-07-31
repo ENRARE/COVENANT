@@ -22,6 +22,8 @@
     "verify:cov002-files": "node scripts/verify-cov002-files.mjs",
     "test:contracts": "node scripts/test-contracts.mjs",
     "contracts:evidence:local": "node scripts/run-contract-evidence.mjs",
+    "arc:plan": "node scripts/arc/plan.mjs",
+    "arc:preflight": "node scripts/arc/preflight.mjs",
     "test:integration": "vitest run --config tests/integration/vitest.config.ts",
     "test:e2e": "node scripts/not-implemented.mjs end-to-end-tests",
     "format": "prettier --write .",

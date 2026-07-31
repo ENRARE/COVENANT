@@ -14,6 +14,12 @@
 
 **MVP:** The executor owns no authorization signing key and no funded transaction key. Its narrow injected transport can simulate or submit only an internally constructed immutable transaction request and has no policy authority.
 
+**MVP:** COV-009 does not connect this package to Arc. The trusted operational
+profile and read-only preflight cannot enumerate accounts, construct a wallet,
+sign, broadcast, select a vault, or enter the executor transport. Browser,
+caller, CLI, and environment input cannot override RPC, chain, token, ABI, or
+transaction fields.
+
 **MVP:** The generated full `CovenantVault` ABI lives under `packages/contracts/abi`. Repository verification regenerates it from Foundry output and fails on byte-level drift. The executor selects only `executePayment`, requires selector `0x7ee0e4da`, independently decodes the calldata, and requires exact re-encoding.
 
 ## Coordination
@@ -43,6 +49,10 @@ pnpm.cmd verify:contract-abi
 **V2:** Multiple Covenants, organizations, agents, recipients, tokens, assets, or reviewed execution variants require separately approved scope.
 
 **Production:** Durable distributed idempotency, restart recovery, settlement reconciliation, finality tracking, managed transaction custody, RPC redundancy, monitoring, and incident response remain deferred.
+
+**MVP deferred to COV-010/COV-011:** Deployment and attestation are separated
+from later vault funding and execution evidence. Neither issue may give a
+payment-request generator transaction-payer authority.
 
 ## COV-008 local transport evidence
 
