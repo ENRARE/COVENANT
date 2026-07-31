@@ -248,15 +248,17 @@ ERC-20/business `6` fields, strict constructor binding, and fixed USDC view
 calls.
 
 **MVP:** Wrong-bytecode and constructor drift are bounded by exact reviewed
-creation/runtime/ABI/reference-map commitments, exact Solidity ABI constructor
-encoding, separate constructor and init-code hashes, canonical plan hashing,
-explicit Prague metadata, and rejection of compiler, optimizer, metadata, ABI,
-or EVM-target drift.
+creation/runtime/ABI/semantic-immutable-map commitments, exact Solidity ABI
+constructor encoding, separate constructor and init-code hashes, canonical
+plan hashing, explicit Prague metadata, and rejection of compiler, optimizer,
+metadata, ABI, or EVM-target drift. Raw compiler AST IDs remain diagnostic and
+cannot affect artifact identity or cross-checkout reproducibility.
 
 **MVP:** Runtime substitution is bounded by exact code length, every
 non-immutable byte including compiler metadata, complete non-overlapping
-immutable ranges, and exact expected immutable encodings. Metadata stripping
-is prohibited.
+immutable ranges, exact AST resolution to stable semantic labels, and exact
+expected immutable encodings including private inherited EIP-712 state.
+Metadata stripping is prohibited.
 
 **MVP:** Accidental broadcast and secret leakage are bounded by exposing only
 offline `arc:plan` and read-only `arc:preflight`. Neither command accepts a key,

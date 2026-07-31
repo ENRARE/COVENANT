@@ -32,7 +32,7 @@ const artifact = Object.freeze({
   creationBytecode: "0x60006000",
   creationBytecodeHash: keccak256("0x60006000"),
   unpatchedRuntimeBytecodeHash: `0x${"22".repeat(32)}`,
-  immutableReferenceMapDigest: `0x${"33".repeat(32)}`,
+  semanticImmutableMapDigest: `0x${"33".repeat(32)}`,
   canonicalAbiHash: `0x${"44".repeat(32)}`,
 });
 const toolchain = Object.freeze({

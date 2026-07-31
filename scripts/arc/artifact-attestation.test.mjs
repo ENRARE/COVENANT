@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 import {
@@ -11,6 +11,10 @@ import {
   validateProfileDigest,
   verifyImmutableAwareRuntime,
 } from "./artifact-attestation.mjs";
+import {
+  CANONICAL_FOUNDRY_REMAPPINGS,
+  isAbsoluteCompilerPath,
+} from "./build-environment.mjs";
 import { ARC_TESTNET_SECURITY_PROFILE_DIGEST } from "../../packages/config/src/arc-testnet.ts";
 
 const artifactPath = resolve(
@@ -26,11 +30,18 @@ function committedAbi() {
   return JSON.parse(readFileSync(abiPath, "utf8"));
 }
 
-function immutableValues(references, byte = "11") {
+function rawBuildInfo() {
+  const directory = resolve("packages/contracts/out/build-info");
+  const files = readdirSync(directory).filter((file) => file.endsWith(".json"));
+  assert.equal(files.length, 1);
+  return JSON.parse(readFileSync(resolve(directory, files[0]), "utf8"));
+}
+
+function immutableValues(semanticMap, byte = "11") {
   return Object.fromEntries(
-    Object.keys(references).map((identifier) => [
-      identifier,
-      `0x${byte.repeat(references[identifier][0].length)}`,
+    semanticMap.map(({ label, ranges }) => [
+      label,
+      `0x${byte.repeat(Number(ranges[0].length))}`,
     ]),
   );
 }
@@ -57,8 +68,8 @@ test("reviewed CovenantVault artifact commitments remain exact", () => {
     REVIEWED_COVENANT_ARTIFACT.canonicalAbiHash,
   );
   assert.equal(
-    artifact.immutableReferenceMapDigest,
-    REVIEWED_COVENANT_ARTIFACT.immutableReferenceMapDigest,
+    artifact.semanticImmutableMapDigest,
+    REVIEWED_COVENANT_ARTIFACT.semanticImmutableMapDigest,
   );
   assert.equal(
     (artifact.creationBytecode.length - 2) / 2,
@@ -82,6 +93,27 @@ test("Foundry configuration explicitly freezes Prague", () => {
   );
 });
 
+test("canonical compiler metadata is path independent and keeps IPFS metadata", () => {
+  const artifact = rawArtifact();
+  assert.deepEqual(
+    artifact.metadata.settings.remappings,
+    CANONICAL_FOUNDRY_REMAPPINGS,
+  );
+  assert.equal(artifact.metadata.settings.metadata.bytecodeHash, "ipfs");
+  assert.equal(
+    Object.keys(artifact.metadata.sources).some((sourceUnit) =>
+      isAbsoluteCompilerPath(sourceUnit),
+    ),
+    false,
+  );
+  assert.equal(
+    artifact.metadata.settings.remappings.some((remapping) =>
+      /(?:^[A-Za-z]:[\\/]|^\\\\|^\/)/u.test(remapping.split("=")[1]),
+    ),
+    false,
+  );
+});
+
 test("immutable reference validation rejects overlap and bounds errors", () => {
   assert.throws(() =>
     validateImmutableReferenceMap(
@@ -100,8 +132,10 @@ test("immutable reference validation rejects overlap and bounds errors", () => {
 test("runtime attestation preserves metadata and every non-immutable byte", () => {
   const artifact = loadReviewedCovenantVaultArtifact();
   const ignored = new Set();
-  for (const references of Object.values(artifact.immutableReferences)) {
-    for (const { start, length } of references) {
+  for (const { ranges } of artifact.semanticImmutableMap) {
+    for (const range of ranges) {
+      const start = Number(range.start);
+      const length = Number(range.length);
       for (let index = start; index < start + length; index += 1) {
         ignored.add(index);
       }
@@ -119,7 +153,7 @@ test("runtime attestation preserves metadata and every non-immutable byte", () =
         firstComparedByte,
       ),
       unpatchedRuntimeBytecode: artifact.unpatchedRuntimeBytecode,
-      immutableReferences: artifact.immutableReferences,
+      semanticImmutableMap: artifact.semanticImmutableMap,
     }),
   );
   assert.throws(() =>
@@ -129,41 +163,42 @@ test("runtime attestation preserves metadata and every non-immutable byte", () =
         REVIEWED_COVENANT_ARTIFACT.runtimeByteLength - 1,
       ),
       unpatchedRuntimeBytecode: artifact.unpatchedRuntimeBytecode,
-      immutableReferences: artifact.immutableReferences,
+      semanticImmutableMap: artifact.semanticImmutableMap,
     }),
   );
 });
 
 test("runtime attestation verifies exact immutable encodings", () => {
   const artifact = loadReviewedCovenantVaultArtifact();
-  const values = immutableValues(artifact.immutableReferences);
+  const values = immutableValues(artifact.semanticImmutableMap);
   const patched = patchExpectedImmutableRuntime(
     artifact.unpatchedRuntimeBytecode,
-    artifact.immutableReferences,
+    artifact.semanticImmutableMap,
     values,
   );
   assert.equal(
     verifyImmutableAwareRuntime({
       actualRuntimeBytecode: patched,
       unpatchedRuntimeBytecode: artifact.unpatchedRuntimeBytecode,
-      immutableReferences: artifact.immutableReferences,
+      semanticImmutableMap: artifact.semanticImmutableMap,
       expectedImmutableValues: values,
     }).runtimeByteLength,
     REVIEWED_COVENANT_ARTIFACT.runtimeByteLength,
   );
-  const firstRange = artifact.immutableRanges[0];
-  assert.throws(() =>
-    verifyImmutableAwareRuntime({
-      actualRuntimeBytecode: mutateByte(patched, firstRange.start),
-      unpatchedRuntimeBytecode: artifact.unpatchedRuntimeBytecode,
-      immutableReferences: artifact.immutableReferences,
-      expectedImmutableValues: values,
-    }),
-  );
+  for (const { ranges } of artifact.semanticImmutableMap) {
+    assert.throws(() =>
+      verifyImmutableAwareRuntime({
+        actualRuntimeBytecode: mutateByte(patched, Number(ranges[0].start)),
+        unpatchedRuntimeBytecode: artifact.unpatchedRuntimeBytecode,
+        semanticImmutableMap: artifact.semanticImmutableMap,
+        expectedImmutableValues: values,
+      }),
+    );
+  }
   assert.throws(() =>
     patchExpectedImmutableRuntime(
       artifact.unpatchedRuntimeBytecode,
-      artifact.immutableReferences,
+      artifact.semanticImmutableMap,
       { ...values, unexpected: `0x${"11".repeat(32)}` },
     ),
   );
@@ -186,17 +221,60 @@ test("artifact validation rejects compiler, EVM, metadata, and ABI drift", () =>
         REVIEWED_COVENANT_ARTIFACT.runtimeByteLength - 1,
       );
     },
+    (artifact) => {
+      const identifier = Object.keys(
+        artifact.deployedBytecode.immutableReferences,
+      )[0];
+      artifact.deployedBytecode.immutableReferences[identifier].pop();
+    },
+    (artifact) => {
+      const identifier = Object.keys(
+        artifact.deployedBytecode.immutableReferences,
+      )[0];
+      artifact.deployedBytecode.immutableReferences[identifier].push({
+        ...artifact.deployedBytecode.immutableReferences[identifier][0],
+      });
+    },
+    (artifact) => {
+      const references = Object.values(
+        artifact.deployedBytecode.immutableReferences,
+      ).flat();
+      const occupied = new Set();
+      for (const { start, length } of references) {
+        for (let index = start; index < start + length; index += 1) {
+          occupied.add(index);
+        }
+      }
+      const start = Array.from(
+        { length: REVIEWED_COVENANT_ARTIFACT.runtimeByteLength - 31 },
+        (_, index) => index,
+      ).find((candidate) =>
+        Array.from({ length: 32 }, (_, index) => candidate + index).every(
+          (index) => !occupied.has(index),
+        ),
+      );
+      assert.notEqual(start, undefined);
+      const identifier = Object.keys(
+        artifact.deployedBytecode.immutableReferences,
+      )[0];
+      artifact.deployedBytecode.immutableReferences[identifier].push({
+        start,
+        length: 32,
+      });
+    },
   ];
   for (const mutate of mutations) {
     const artifact = rawArtifact();
     mutate(artifact);
     assert.throws(() =>
-      validateCovenantVaultArtifact(artifact, committedAbi()),
+      validateCovenantVaultArtifact(artifact, committedAbi(), rawBuildInfo()),
     );
   }
   const wrongAbi = committedAbi();
   wrongAbi.pop();
-  assert.throws(() => validateCovenantVaultArtifact(rawArtifact(), wrongAbi));
+  assert.throws(() =>
+    validateCovenantVaultArtifact(rawArtifact(), wrongAbi, rawBuildInfo()),
+  );
 });
 
 test("profile commitment validation requires the exact digest", () => {

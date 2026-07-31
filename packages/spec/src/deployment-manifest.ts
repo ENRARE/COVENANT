@@ -87,6 +87,7 @@ export const arcDeploymentManifestSchema = z
     creationBytecodeHash: bytes32Schema,
     actualRuntimeCodeHash: bytes32Schema,
     canonicalAbiHash: bytes32Schema,
+    semanticImmutableMapDigest: bytes32Schema,
     constructorDigest: bytes32Schema,
     completeInitCodeHash: bytes32Schema,
     constructor: covenantVaultConstructorConfigurationSchema,

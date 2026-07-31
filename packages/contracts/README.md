@@ -43,16 +43,19 @@ forge test --root packages/contracts
 **MVP:** `foundry.toml` explicitly compiles the reviewed vault artifact for
 Prague. Arc documentation verified on 2026-07-30 identifies the current
 testnet execution target as Osaka. COV-009 deliberately retains the older
-supported Prague instruction set; making that formerly implicit target
-explicit leaves creation bytecode, unpatched runtime bytecode, ABI, and
-immutable-reference commitments byte-identical.
+supported Prague instruction set. Automatic remapping detection is disabled,
+and the two canonical relative remappings cover OpenZeppelin and forge-std
+without embedding a checkout path in compiler metadata.
 
 **MVP:** The reviewed artifact commitments cover compiler and optimizer
 metadata, complete creation and unpatched runtime bytes, canonical ABI, and
-the complete immutable-reference map. Runtime attestation compares exact code
-length and every non-immutable byte, including compiler metadata. It never
-strips metadata. Expected immutable encodings must cover every compiler
-reference exactly.
+the complete path-independent semantic immutable map. Raw compiler AST IDs are
+resolved through fresh build information to
+`<declaring-contract>.<variable>:<canonical-type>` labels and remain diagnostic
+only. Runtime attestation compares exact code length and every non-immutable
+byte, including compiler metadata. It never strips metadata. Expected immutable
+encodings, including inherited private EIP-712 values, must cover every
+compiler range exactly.
 
 ## Generated ABI
 

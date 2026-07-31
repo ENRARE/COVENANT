@@ -56,19 +56,56 @@ enabled for 200 runs, `via_ir`, and IPFS compiler metadata. Arc currently
 documents Osaka, which supports the reviewed Prague instruction set. COV-009
 does not recompile the vault for Osaka.
 
-**MVP:** Making Prague explicit preserves the reviewed creation bytecode,
-unpatched runtime bytecode, canonical ABI, and immutable-reference map
-byte-for-byte. Solidity source, constructor, ABI, errors, events, EIP-712
-domains, signed fields, and policy behavior remain unchanged.
+**MVP:** Compiler inputs use only the canonical relative remappings
+`@openzeppelin/=../../lib/openzeppelin-contracts/` and
+`forge-std/=../../lib/forge-std/src/`, with automatic remapping detection
+disabled. Builds fail when a conflicting `remappings.txt`, environment
+override, absolute remapping target, or absolute compiler source-unit name is
+present. The resulting complete creation bytecode, unpatched runtime bytecode,
+compiler metadata, and canonical ABI are identical across checkout paths,
+including a path containing spaces.
 
 **MVP:** Artifact validation rejects missing or empty code, linked libraries,
 compiler or target drift, optimizer or metadata drift, wrong ABI, wrong code
-length, invalid/overlapping/out-of-range immutable references, and any reviewed
+length, invalid/overlapping/out-of-range immutable references, unresolved or
+non-immutable AST nodes, duplicate semantic labels or ranges, and any reviewed
 commitment mismatch.
+
+**MVP:** Compiler AST IDs are diagnostic identifiers, not security identities.
+Each raw immutable-reference ID is resolved through fresh compiler build
+information to exactly one immutable variable declaration. Its stable identity
+is `<declaring-contract>.<variable>:<canonical-type>`. Labels are sorted
+lexicographically; each label's exact byte ranges are sorted numerically and
+encoded as canonical decimal strings. The semantic range union must equal the
+validated raw compiler range union exactly.
+
+**MVP:** The reviewed semantic map contains all 21 `CovenantVault` and inherited
+OpenZeppelin `EIP712` immutables. Its commitment is
+`keccak256(canonicalJson(semanticImmutableMap))`, currently
+`0x86bc8b62dbcfa9711069de846d779b2fc2095803f2909ec9944411f8abc68a82`.
+Raw AST IDs do not enter artifact identity, deployment plans, future manifests,
+or security digests.
+
+**MVP:** The original raw compiler-ID map digest
+`0x38ee98bdf1807194e8b73d2ee277a9dc428bb7ed04cc166e752ec3044026914b`
+is obsolete migration history. A canonical-input experiment produced raw
+compiler-ID digest
+`0x2facef0a671f9f800daab53a016a9430645c52f9362468fcd0f443a8456c3c2d`;
+it is intentionally not an active commitment because compiler IDs are not
+stable semantic identities.
 
 **MVP:** Runtime attestation compares exact length and every non-immutable byte,
 including compiler metadata. Expected immutable values must cover every
 compiler reference and match every repeated range. Metadata is never stripped.
+
+**MVP:** Expected values for public vault immutables come from the approved
+constructor configuration. `purposeHash` and `policyVersionHash` are the
+Keccak-256 hashes of their constructor strings. Inherited private `EIP712`
+values are derived from the fixed domain name `Covenant PaymentIntent`, version
+`1`, Arc chain ID, and deployed vault address: cached chain/address, domain
+separator, name/version hashes, and OpenZeppelin short-string encodings are all
+verified at every compiler range. Public getters are supplementary evidence,
+not substitutes for byte-range verification.
 
 ## Offline deployment plan
 
@@ -84,10 +121,10 @@ writes no file, and emits one canonical JSON document. Fixed sanitized errors
 replace raw tool, filesystem, and input details.
 
 **MVP:** A `BROADCASTABLE` plan contains the exact source commit, profile and
-artifact commitments, compiler settings, actual CovenantVault constructor,
-constructor encoding digest, complete init-code hash, chain and token anchors,
-deployer and payer public addresses, absolute validity, `CREATE`, and canonical
-plan digest.
+artifact commitments including `semanticImmutableMapDigest`, compiler settings,
+actual CovenantVault constructor, constructor encoding digest, complete
+init-code hash, chain and token anchors, deployer and payer public addresses,
+absolute validity, `CREATE`, and canonical plan digest.
 
 **MVP:** The constructor digest is
 `keccak256(abi.encode(configurationTuple))`. The complete init-code hash is

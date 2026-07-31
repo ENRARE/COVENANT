@@ -335,7 +335,7 @@ const arcDeploymentPlanCoreBaseSchema = z
     metadataBytecodeHash: z.literal("ipfs"),
     creationBytecodeHash: bytes32Schema,
     unpatchedRuntimeBytecodeHash: bytes32Schema,
-    immutableReferenceMapDigest: bytes32Schema,
+    semanticImmutableMapDigest: bytes32Schema,
     canonicalAbiHash: bytes32Schema,
     constructor: covenantVaultConstructorConfigurationSchema,
     constructorEncodingDigest: bytes32Schema,
@@ -401,7 +401,7 @@ export type ReviewedArtifactCommitments = Readonly<{
   creationBytecode: Hex;
   creationBytecodeHash: Hex;
   unpatchedRuntimeBytecodeHash: Hex;
-  immutableReferenceMapDigest: Hex;
+  semanticImmutableMapDigest: Hex;
   canonicalAbiHash: Hex;
 }>;
 
@@ -435,7 +435,7 @@ export function createArcDeploymentPlan(input: {
     metadataBytecodeHash: "ipfs",
     creationBytecodeHash: artifact.creationBytecodeHash,
     unpatchedRuntimeBytecodeHash: artifact.unpatchedRuntimeBytecodeHash,
-    immutableReferenceMapDigest: artifact.immutableReferenceMapDigest,
+    semanticImmutableMapDigest: artifact.semanticImmutableMapDigest,
     canonicalAbiHash: artifact.canonicalAbiHash,
     constructor: parsedInput.constructor,
     constructorEncodingDigest,

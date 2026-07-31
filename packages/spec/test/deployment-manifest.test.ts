@@ -48,6 +48,7 @@ const validManifest = {
   creationBytecodeHash: `0x${"05".repeat(32)}`,
   actualRuntimeCodeHash: `0x${"06".repeat(32)}`,
   canonicalAbiHash: `0x${"07".repeat(32)}`,
+  semanticImmutableMapDigest: `0x${"09".repeat(32)}`,
   constructorDigest: covenantVaultConstructorDigest(constructor),
   completeInitCodeHash: `0x${"08".repeat(32)}`,
   constructor,
