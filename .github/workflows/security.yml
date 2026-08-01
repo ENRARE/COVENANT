@@ -38,5 +38,5 @@ jobs:
       - name: Run repository security checks
         run: pnpm security:check
 
-      - name: Run script tests
-        run: pnpm test:scripts
+      - name: Run security tests
+        run: pnpm test:security
