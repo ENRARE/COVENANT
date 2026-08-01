@@ -39,7 +39,7 @@ const toolchain = Object.freeze({
   sourceGitCommit: "a".repeat(40),
   forgeVersion: "1.7.1",
 });
-const fixedDate = new Date("2026-07-30T16:29:33.000Z");
+const fixedDate = new Date("2026-08-01T16:29:33.000Z");
 const blockHash = `0x${"12".repeat(32)}`;
 const code = "0x60006000";
 const encodedUsdc = encodeAbiParameters([{ type: "string" }], ["USDC"]);
@@ -98,6 +98,11 @@ test("arc:plan emits one canonical broadcastable plan without network access", (
     assert.equal(output.length, 1);
     const parsed = arcDeploymentPlanSchema.parse(JSON.parse(output[0]));
     assert.equal(parsed.planStatus, "BROADCASTABLE");
+    assert.equal(parsed.networkEvmTarget, "prague");
+    assert.equal(
+      parsed.trustedNetworkProfileDigest,
+      "0x1675dcd65bbe5bd3d7fd454b6d979c17703139ad5c538bd1483021253f4016d1",
+    );
     assert.equal(output[0], `${canonicalDeploymentJson(parsed)}\n`);
     assert.doesNotMatch(
       output[0],
@@ -184,11 +189,34 @@ test("arc:plan rejects non-UTF-8 and oversized input", () => {
 
 test("arc:preflight uses the exact sequential read-only allowlist", async () => {
   const { calls, request } = successfulRpc();
+  const events = [];
+  const pacing = [];
   const result = await performArcPreflight({
-    request,
+    request: async (call) => {
+      events.push(call.method);
+      return request(call);
+    },
+    sleep: async (milliseconds) => {
+      pacing.push(milliseconds);
+      events.push(`sleep:${milliseconds}`);
+    },
     nowMilliseconds: () => 0,
     observedAt: fixedDate,
   });
+  assert.deepEqual(pacing, [1_000, 1_000, 1_000, 1_000, 1_000]);
+  assert.deepEqual(events, [
+    "eth_chainId",
+    "sleep:1000",
+    "eth_getBlockByNumber",
+    "sleep:1000",
+    "eth_getCode",
+    "sleep:1000",
+    "eth_call",
+    "sleep:1000",
+    "eth_call",
+    "sleep:1000",
+    "eth_call",
+  ]);
   assert.deepEqual(
     calls.map(({ method }) => method),
     [
@@ -244,6 +272,7 @@ test("arc:preflight emits one sanitized JSON result", async () => {
   const status = await runArcPreflight({
     commandArguments: [],
     request,
+    sleep: async () => {},
     nowMilliseconds: () => 0,
     observedAt: fixedDate,
     write: (value) => output.push(value),
@@ -317,6 +346,7 @@ test("arc:preflight rejects malformed block, code, and token views", async () =>
         index += 1;
         return current === mutation.index ? mutation.result : request(call);
       },
+      sleep: async () => {},
       nowMilliseconds: () => 0,
       write: (value) => output.push(value),
     });
@@ -327,6 +357,60 @@ test("arc:preflight rejects malformed block, code, and token views", async () =>
       message: "Arc read-only preflight could not be verified",
     });
   }
+});
+
+test("arc:preflight does not retry after a fifth-call HTTP 429", async () => {
+  const { request } = successfulRpc();
+  const pacing = [];
+  let requests = 0;
+  const output = [];
+  const status = await runArcPreflight({
+    commandArguments: [],
+    request: async (call) => {
+      requests += 1;
+      if (requests === 5) throw new Error("HTTP 429 request limit reached");
+      return request(call);
+    },
+    sleep: async (milliseconds) => pacing.push(milliseconds),
+    nowMilliseconds: () => 0,
+    write: (value) => output.push(value),
+  });
+  assert.equal(status, 1);
+  assert.equal(requests, 5);
+  assert.deepEqual(pacing, [1_000, 1_000, 1_000, 1_000]);
+  assert.deepEqual(JSON.parse(output[0]), {
+    name: "ArcPreflightError",
+    code: "PREFLIGHT_VALIDATION_FAILED",
+    message: "Arc read-only preflight could not be verified",
+  });
+});
+
+test("arc:preflight fails closed when total time expires during pacing", async () => {
+  let now = 0;
+  let requests = 0;
+  const pacing = [];
+  const output = [];
+  const status = await runArcPreflight({
+    commandArguments: [],
+    request: async () => {
+      requests += 1;
+      return "0x4cef52";
+    },
+    sleep: async (milliseconds) => {
+      pacing.push(milliseconds);
+      now += 20_000;
+    },
+    nowMilliseconds: () => now,
+    write: (value) => output.push(value),
+  });
+  assert.equal(status, 1);
+  assert.equal(requests, 1);
+  assert.deepEqual(pacing, [1_000]);
+  assert.deepEqual(JSON.parse(output[0]), {
+    name: "ArcPreflightError",
+    code: "PREFLIGHT_VALIDATION_FAILED",
+    message: "Arc read-only preflight could not be verified",
+  });
 });
 
 test("arc:preflight sanitizes timeout and rate-limit failures without retry", async () => {

@@ -41,9 +41,8 @@ forge test --root packages/contracts
 **MVP:** Foundry tests set the chain ID to Arc Testnet `5042002`. The constructor rejects every other chain ID.
 
 **MVP:** `foundry.toml` explicitly compiles the reviewed vault artifact for
-Prague. Arc documentation verified on 2026-07-30 identifies the current
-testnet execution target as Osaka. COV-009 deliberately retains the older
-supported Prague instruction set. Automatic remapping detection is disabled,
+Prague. Arc documentation verified on 2026-08-01 identifies Prague as the
+current testnet execution target. Automatic remapping detection is disabled,
 and the two canonical relative remappings cover OpenZeppelin and forge-std
 without embedding a checkout path in compiler metadata.
 

@@ -85,9 +85,9 @@ chain, block, code, and USDC view calls documented in ADR 0012. It has no
 account, key, signing, transaction, persistence, or endpoint-selection
 capability and is deliberately excluded from `pnpm.cmd verify`.
 
-**MVP:** Arc currently documents an Osaka execution target while the reviewed
-Covenant artifact remains explicitly compiled for Prague. Arc's decimal chain
-ID `5042002` derives to `0x4cef52`; the conflicting published value
+**MVP:** Arc currently documents a Prague execution target, matching the
+reviewed Covenant artifact target. Arc's decimal chain ID `5042002` derives to
+`0x4cef52`; the conflicting published value
 `0x4CF4B2` is rejected. Native JSON-RPC USDC accounting uses 18 decimals while
 wallet display, ERC-20 transfers, and Covenant business amounts use 6.
 

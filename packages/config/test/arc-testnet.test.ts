@@ -40,9 +40,21 @@ describe("trusted Arc Testnet profile", () => {
     );
   });
 
-  it("records Osaka separately from the reviewed Prague artifact", () => {
-    expect(ARC_TESTNET_PROFILE.networkEvmTarget).toBe("osaka");
+  it("records Prague for both the network and reviewed artifact", () => {
+    expect(ARC_TESTNET_PROFILE.networkEvmTarget).toBe("prague");
     expect(ARC_TESTNET_PROFILE.artifactEvmTarget).toBe("prague");
+    expect(ARC_TESTNET_PROFILE.primaryHttpsRpc).toBe(
+      "https://rpc.testnet.arc.network",
+    );
+    expect(ARC_TESTNET_PROFILE.primaryWebSocketRpc).toBe(
+      "wss://rpc.testnet.arc.network",
+    );
+    expect(ARC_TESTNET_PROFILE.sourceVerification.verifiedOn).toBe(
+      "2026-08-01",
+    );
+    expect(ARC_TESTNET_SECURITY_PROFILE_DIGEST).toBe(
+      "0x1675dcd65bbe5bd3d7fd454b6d979c17703139ad5c538bd1483021253f4016d1",
+    );
   });
 
   it("rejects unknown fields and operational overrides", () => {
@@ -65,7 +77,7 @@ describe("trusted Arc Testnet profile", () => {
       ...ARC_TESTNET_PROFILE,
       sourceVerification: {
         ...ARC_TESTNET_PROFILE.sourceVerification,
-        verifiedOn: "2026-07-31",
+        verifiedOn: "2026-08-02",
       },
     };
     expect(arcTestnetProfileSchema.parse(rechecked)).toEqual(rechecked);
@@ -81,7 +93,7 @@ describe("trusted Arc Testnet profile", () => {
     try {
       expect(securityProfileDigest()).toBe(before);
       expect(ARC_TESTNET_PROFILE.primaryHttpsRpc).toBe(
-        "https://rpc.testnet.arc.io",
+        "https://rpc.testnet.arc.network",
       );
     } finally {
       delete process.env.ARC_RPC_URL;
