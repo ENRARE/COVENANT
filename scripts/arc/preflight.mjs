@@ -13,6 +13,7 @@ const allowedMethodSet = new Set(ALLOWED_METHODS);
 const DECIMALS_CALL = "0x313ce567";
 const SYMBOL_CALL = "0x95d89b41";
 const NAME_CALL = "0x06fdde03";
+const PACING_DELAY_MS = 1_000;
 const PER_REQUEST_TIMEOUT_MS = 5_000;
 const TOTAL_TIMEOUT_MS = 20_000;
 const MAXIMUM_RESPONSE_BYTES = 1024 * 1024;
@@ -86,6 +87,12 @@ async function readResponseBody(response) {
   return JSON.parse(text);
 }
 
+function sleep(milliseconds) {
+  return new Promise((resolveSleep) => {
+    setTimeout(resolveSleep, milliseconds);
+  });
+}
+
 export async function requestPrimaryArcRpc(call) {
   if (!allowedMethodSet.has(call.method)) {
     throw new Error("JSON-RPC method is not allowlisted");
@@ -130,12 +137,14 @@ export async function requestPrimaryArcRpc(call) {
 export async function performArcPreflight(options = {}) {
   const request = options.request ?? requestPrimaryArcRpc;
   const nowMilliseconds = options.nowMilliseconds ?? (() => Date.now());
+  const pace = options.sleep ?? sleep;
   const started = nowMilliseconds();
   let id = 1;
   const call = async (method, params) => {
     if (!allowedMethodSet.has(method)) {
       throw new Error("JSON-RPC method is not allowlisted");
     }
+    if (id > 1) await pace(PACING_DELAY_MS);
     const remaining = TOTAL_TIMEOUT_MS - (nowMilliseconds() - started);
     if (remaining <= 0) throw new Error("Arc preflight timed out");
     const result = await request({

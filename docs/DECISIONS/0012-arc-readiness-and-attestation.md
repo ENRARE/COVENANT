@@ -21,20 +21,20 @@ function, never an endpoint.
 
 ## Frozen Arc profile
 
-**MVP:** Official Arc and Circle sources were verified on 2026-07-30. The
+**MVP:** Official Arc and Circle sources were verified on 2026-08-01. The
 profile freezes:
 
 - **MVP:** Network `arc-testnet`, named `Arc Testnet`.
 - **MVP:** Decimal chain ID `5042002`; its programmatically derived
   hexadecimal form is `0x4cef52`.
-- **MVP:** Primary HTTPS `https://rpc.testnet.arc.io` and WebSocket
-  `wss://rpc.testnet.arc.io`.
+- **MVP:** Primary HTTPS `https://rpc.testnet.arc.network` and WebSocket
+  `wss://rpc.testnet.arc.network`.
 - **MVP:** Explorer `https://testnet.arcscan.app`.
 - **MVP:** Native gas asset USDC with 18-decimal JSON-RPC accounting.
 - **MVP:** Six wallet-display and ERC-20/business decimals.
 - **MVP:** USDC interface
   `0x3600000000000000000000000000000000000000`.
-- **MVP:** Arc documented EVM target Osaka and reviewed artifact target Prague.
+- **MVP:** Arc network and reviewed artifact EVM target Prague.
 - **MVP:** Deterministic BFT finality with one required committed block.
 
 **MVP:** Arc's wallet documentation also prints `0x4CF4B2` beside decimal
@@ -52,9 +52,9 @@ public-RPC rate limit, or primary-endpoint service guarantee is assumed.
 ## Reviewed artifact
 
 **MVP:** Foundry explicitly targets Prague with Solidity `0.8.28`, optimizer
-enabled for 200 runs, `via_ir`, and IPFS compiler metadata. Arc currently
-documents Osaka, which supports the reviewed Prague instruction set. COV-009
-does not recompile the vault for Osaka.
+enabled for 200 runs, `via_ir`, and IPFS compiler metadata. Arc's network and
+the reviewed artifact now share the Prague EVM target. COV-009 does not
+recompile or otherwise change the vault artifact.
 
 **MVP:** Compiler inputs use only the canonical relative remappings
 `@openzeppelin/=../../lib/openzeppelin-contracts/` and

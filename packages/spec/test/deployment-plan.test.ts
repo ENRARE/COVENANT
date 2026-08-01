@@ -115,7 +115,7 @@ describe("Arc deployment plans", () => {
     expect(arcDeploymentPlanSchema.parse(first)).toEqual(first);
     expect(first.planStatus).toBe("BROADCASTABLE");
     expect(first.artifactEvmTarget).toBe("prague");
-    expect(first.networkEvmTarget).toBe("osaka");
+    expect(first.networkEvmTarget).toBe("prague");
     const { canonicalPlanDigest, ...core } = first;
     expect(canonicalPlanDigest).toBe(canonicalDeploymentDigest(core as never));
   });
