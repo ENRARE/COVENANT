@@ -20,3 +20,24 @@ test-results/
 .covenant-agent-state/
 .covenant-demo-state/
 .covenant-demo.lock
+
+# Private Covenant and Circle operational material
+**/role-wallets.local.json
+**/cov-010-deployment-operation.local.json
+**/covenant-circle-bootstrap/
+
+# Recovery artifacts
+**/*recovery*.local.*
+**/*recovery*.json
+**/*recovery*.txt
+**/*recovery*.csv
+**/*recovery*.zip
+**/*recovery*.enc
+**/*recovery*.pem
+**/*recovery*.key
+**/*recovery*.bak
+**/*recovery*.backup
+
+# Explicit credential artifacts
+**/*entity-secret*.local.*
+**/*circle-api-key*.local.*

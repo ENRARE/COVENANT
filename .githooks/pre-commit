@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+set -eu
+
+if command -v pnpm.cmd >/dev/null 2>&1; then
+  exec pnpm.cmd security:precommit
+fi
+
+exec pnpm security:precommit
