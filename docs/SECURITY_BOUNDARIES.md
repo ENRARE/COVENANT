@@ -275,3 +275,120 @@ remains Production scope.
 **MVP:** A simulated submission reference proves only local transport
 acceptance. Circle execution, Arc transactions, vault execution, receipts,
 settlement, and finality remain unclaimed.
+
+## COV-014 RunPod provider-transport boundary
+
+**V2:** COV-014 is documentation-only planning. The evaluated RunPod
+interfaces are not approved for implementation because no reviewed official
+RunPod documentation establishes a cryptographically authenticated immutable
+quote containing the complete COV-013 tuple. The exact recommendation is:
+**Do not implement using the evaluated provider interface.**
+
+**V2:** The proposed future component is a narrow quote-source adapter only.
+It may fetch and normalize advisory provider data after a separately accepted
+issue, but it may not propose, authorize, sign, submit, execute, or settle a
+payment. The browser, agent, authority signer, executor, Supabase, and public
+callers receive no generic HTTP client or arbitrary URL-fetch capability.
+
+### Trust and capability boundary
+
+**V2:** Public callers cannot select or override the provider, scheme, host,
+port, path, query, redirect target, method, headers, credentials, product, GPU
+model, quantity, duration, currency, timeout, retry, proxy, DNS, TLS,
+response-size policy, normalization rules, or replay namespace. These values
+would be fixed by server-owned configuration only in a separately authorized
+future review.
+
+**V2:** The future adapter receives no agent signing key, vendor invoice key,
+authorization signing key, wallet, funded account, Circle credential, RPC,
+transaction builder, calldata builder, executor capability, deployment
+capability, or payment capability. It must not construct Invoice,
+PaymentIntent, authorization, transaction, or settlement artifacts.
+
+**V2:** The agent remains proposal-only. RunPod data is evidence/advisory
+input, never authority. Supabase or another offchain store cannot become
+authoritative for Covenant spend, payment count, revocation, financial replay,
+authorization replay, or settlement. CovenantVault remains authoritative.
+
+### Authentication and data boundary
+
+**V2:** API-key client authentication means only that RunPod accepted a key for
+the request subject to its permissions. TLS endpoint authentication means
+that successful certificate and hostname validation authenticates the
+configured HTTPS endpoint through the configured PKI trust path. Neither claim
+is response-body authentication.
+
+**V2:** No reviewed official RunPod documentation describes a signature, MAC,
+signed webhook envelope, canonical signed input, verification-key discovery,
+or equivalent response-body control for the evaluated catalog/pricing
+responses. Immutable quote authenticity and independent verifiability are
+therefore not established. COV-013's `runpod` namespace and local fingerprint
+prove neither provider provenance nor authentication.
+
+**V2:** All future external response data enters as `unknown`, is strictly
+parsed, rejects duplicate keys and unknown fields where feasible, and is
+reconstructed field by field. Exact JSON content type, bounded size, safe
+numeric/timestamp representations, canonical USDC handling, and maximum
+lengths/collections must be fixed before implementation. The adapter performs
+no USD/USDC conversion, FX lookup, quantity or duration pricing, taxes, fees,
+or rounding.
+
+RunPod catalog pricing cannot directly populate COV-013: it lacks a documented
+immutable quote ID, issue/expiry timestamps, exact quantity/duration binding,
+explicit USDC currency, and exact total amount. Supplying these fields would
+require invention or prohibited pricing derivation/conversion.
+
+### Credential custody and network policy
+
+**V2:** RunPod documents `Restricted` and `Read Only` API-key choices but does
+not establish the exact minimum catalog-read permission. This is a blocker;
+no real key may be created, requested, read, stored, or used by COV-014.
+Future credentials, if separately approved, belong only to a dedicated
+fetcher process injected by a secret manager. They cannot reach browser code,
+public input, logs, errors, fixtures, snapshots, committed files, the agent,
+authority signer, executor, or Supabase. Production rotation, revocation,
+secret management, egress control, and incident response are **Production**
+requirements.
+
+**V2:** The conditional, non-authorizing network policy is
+HTTPS-only to `https://api.runpod.io`, port `443`, fixed `GET` catalog path,
+redirects disabled, no caller-selected proxy, controlled DNS with rejection
+of loopback/private/link-local/multicast/metadata/alternate encodings, TLS
+verification enabled, connect/header/body/total deadlines of 3/5/5/10
+seconds, 64 KiB maximum response, `application/json` with identity encoding,
+and one attempt with no automatic retry. `429` maps to a fixed sanitized
+rate-limit error. These values are planning analysis only and authorize no
+network implementation. Operational enforcement is **Production** scope.
+
+### Replay, errors, and tests
+
+**V2:** No authenticated replay identity currently exists and no quote replay
+repository may be introduced. A local fingerprint or unauthenticated quote ID
+cannot prevent first-writer poisoning. Only after source authenticity exists
+could a separately approved design consider an authenticated
+provider-account/endpoint/immutable-quote identity and body digest. Any such
+state would be non-authoritative and subordinate to CovenantVault.
+
+**V2:** The conditional sanitized error taxonomy is fixed to:
+`INVALID_PROVIDER_RESPONSE`, `SOURCE_AUTHENTICATION_FAILURE`, `STALE_EVIDENCE`,
+`UNSUPPORTED_PRODUCT_OR_CURRENCY`, `RATE_LIMITED`, `TIMEOUT`,
+`PROVIDER_REJECTED`, `TRANSPORT_FAILURE`, `CONFIGURATION_FAILURE`,
+`REPLAY_CONFLICT`, and `RETAINED_AMBIGUITY`, each with a static message and no
+raw upstream body, credential, header, URL, ID, amount, stack, cause, or
+dependency detail. This taxonomy is planning analysis only.
+
+**V2:** The conditional offline test plan uses fake transport and deterministic
+fixtures only, with no live network, API key, provider SDK, or environment
+credential. It covers strict schemas, duplicate keys, malformed/truncated/
+oversized bodies, content types, SSRF/DNS ranges, redirects, TLS/proxy,
+deadlines, cancellation, sanitized errors, redaction, freshness, canonical
+money, prohibited price derivation, concurrency, replay poisoning, and scans
+for forbidden signer, wallet, Circle, RPC, transaction, calldata, deployment,
+authorization, execution, and payment capabilities.
+
+**Production:** Live provider operation, durable non-authoritative retention,
+monitoring, reconciliation, outage handling, and incident response remain
+deferred.
+
+**Protocol:** Additional providers, products, currencies, chains, generalized
+quote protocols, arbitrary execution, and policy markets remain excluded.
