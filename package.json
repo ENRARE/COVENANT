@@ -35,12 +35,13 @@
     "test:e2e": "node scripts/not-implemented.mjs end-to-end-tests",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify:without-contracts": "pnpm verify:cov002-files && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration && pnpm security:check",
+    "verify:without-contracts": "pnpm verify:cov002-files && pnpm verify:cov010-evidence && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm test:integration && pnpm security:check",
     "verify": "pnpm verify:without-contracts && pnpm verify:contract-abi && pnpm test:contracts && pnpm contracts:evidence:local",
     "demo:reset": "pnpm --silent --filter @covenant/demo... build && node apps/demo/dist/cli.js RESET",
     "demo:seed": "pnpm --silent --filter @covenant/demo... build && node apps/demo/dist/cli.js SEED",
     "demo:health": "pnpm --silent --filter @covenant/demo... build && node apps/demo/dist/cli.js GET_HEALTH",
-    "demo:run": "pnpm --silent --filter @covenant/demo... build && node apps/demo/dist/cli.js RUN_DEMO"
+    "demo:run": "pnpm --silent --filter @covenant/demo... build && node apps/demo/dist/cli.js RUN_DEMO",
+    "verify:cov010-evidence": "pnpm --filter @covenant/spec build && node scripts/verify-cov010-deployment-evidence.mjs"
   },
   "devDependencies": {
     "@covenant/agent": "workspace:*",
