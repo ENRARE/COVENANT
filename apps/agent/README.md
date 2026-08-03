@@ -61,6 +61,16 @@ const service = createAgentService({
 
 **V2:** This adapter contains no network transport, HTTP, endpoint, environment-variable, credential, header, provider SDK, retry, wallet, signer, authority, executor, Circle, RPC, transaction, calldata, submission, execution, queue, or persistent-state capability. A real provider transport requires a separately approved task and threat review.
 
+## V2 unsigned normalized provider-quote evidence
+
+**V2:** `createProviderQuoteEvidenceBoundary(dependencies)` is a pure offline boundary that strictly validates and canonicalizes unknown GPU quote evidence for the one fixed proposed `providerId: "runpod"` namespace, `gpu-h100-hour` product, H100 model, quantity, duration, and USDC currency. The namespace is not proof that Runpod created or transmitted the evidence.
+
+**V2:** The evidence is unauthenticated. Trusted constructor configuration supplies only a clock, maximum amount, maximum quote age, and maximum quote lifetime. The boundary parses only those three limits as bigint values, reads the clock through a sanitized dependency boundary, enforces freshness, lifetime, and amount constraints, then returns a frozen normalized evidence object and deterministic ABI/Keccak-256 fingerprint as `unknown`.
+
+**V2:** The fingerprint proves deterministic local equality only. It is not a signature, attestation, authorization, payment request, or proof of provider provenance. It uses neither JSON serialization nor EIP-712.
+
+**V2:** Replay protection is intentionally deferred until an authenticated provider transport exists. This boundary has no replay repository, quote-ID registration, Covenant namespace, persistent state, Invoice or PaymentIntent construction, signer, wallet, credential, Circle, RPC, authority, executor, transaction, calldata, deployment, network, endpoint, environment access, provider key, price conversion, FX, fee, tax, quantity pricing, duration pricing, or rounding capability.
+
 **Production:** Distributed coordination, database replication, backup, operational lock recovery, finalized-vault reconciliation, managed proposal-signing custody, monitoring, rate limits, incident response, credential rotation, and high availability are deferred.
 
 **Protocol:** Generic policy languages, generalized procurement protocols, arbitrary execution, and multichain behavior are excluded.

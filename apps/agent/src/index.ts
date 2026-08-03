@@ -8,5 +8,6 @@ export {
 export * from "./in-memory-proposal-reservation-repository.js";
 export * from "./ports.js";
 export * from "./procurement-integration.js";
+export * from "./provider-quote-evidence.js";
 export * from "./service.js";
 export * from "./types.js";
