@@ -53,6 +53,14 @@ const service = createAgentService({
 
 **V2:** Multiple vendors, products, agents, assets, procurement schemas, and pricing models require separately approved scope.
 
+## V2 offline Agentic API invoice source
+
+**V2:** `createAgenticApiInvoiceSource(dependencies)` is a provider-agnostic reference adapter for the existing `ProcurementInvoiceSource` boundary. Its frozen source exposes only `requestSignedInvoice(request)`, strictly accepts the fixed product and a canonical positive USDC maximum amount, and calls an injected narrow client at most once.
+
+**V2:** The adapter returns the client's untrusted candidate unchanged. COV-011 remains responsible for signed-Invoice validation, product compatibility, and amount-cap enforcement.
+
+**V2:** This adapter contains no network transport, HTTP, endpoint, environment-variable, credential, header, provider SDK, retry, wallet, signer, authority, executor, Circle, RPC, transaction, calldata, submission, execution, queue, or persistent-state capability. A real provider transport requires a separately approved task and threat review.
+
 **Production:** Distributed coordination, database replication, backup, operational lock recovery, finalized-vault reconciliation, managed proposal-signing custody, monitoring, rate limits, incident response, credential rotation, and high availability are deferred.
 
 **Protocol:** Generic policy languages, generalized procurement protocols, arbitrary execution, and multichain behavior are excluded.
