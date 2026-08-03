@@ -1,6 +1,6 @@
 # ADR 0016: Unsigned normalized provider-quote evidence
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-03
 - Scope: V2
 
