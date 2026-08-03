@@ -43,6 +43,14 @@ const service = createAgentService({
 
 **MVP:** This package contains no HTTP, UI, LLM, vendor fetching, pricing, Circle, RPC, wallet, funded key, authorization key, calldata construction, transaction submission, DecisionReceipt, AuthorizationReceipt, or RuleResult behavior.
 
+## V2 procurement integration
+
+**V2:** `createProcurementIntegration(dependencies)` is a narrow dependency-injected wrapper around the existing agent. Its only method, `procurePayment(request: unknown)`, accepts exactly `productId: "gpu-h100-hour"` and a positive USDC `maximumAmount` decimal string.
+
+**V2:** The wrapper makes at most one call to an injected, untrusted `ProcurementInvoiceSource`. The source receives only the frozen product ID and canonical maximum amount, and its result is strictly parsed as an existing signed Invoice before any agent handoff.
+
+**V2:** A compatible Invoice is passed unchanged to `proposePayment` with the frozen product ID and the Invoice amount as canonical `expectedAmount`. The wrapper returns the exact agent result and has no authorization, execution, transport, wallet, signing, Circle, RPC, calldata, transaction, retry, ranking, negotiation, catalog, or persistent-state capability.
+
 **V2:** Multiple vendors, products, agents, assets, procurement schemas, and pricing models require separately approved scope.
 
 **Production:** Distributed coordination, database replication, backup, operational lock recovery, finalized-vault reconciliation, managed proposal-signing custody, monitoring, rate limits, incident response, credential rotation, and high availability are deferred.
