@@ -29,6 +29,12 @@ export const AGENT_ERROR_CODES = [
   "DURABLE_REPOSITORY_PERSISTENCE_FAILURE",
   "DURABLE_REPOSITORY_CLOSE_FAILURE",
   "DURABLE_REPOSITORY_CLOSED",
+  "QUOTE_EVIDENCE_INVALID",
+  "QUOTE_EVIDENCE_NOT_CURRENT",
+  "QUOTE_EVIDENCE_LIFETIME_INVALID",
+  "QUOTE_AMOUNT_EXCEEDS_MAXIMUM",
+  "QUOTE_EVIDENCE_CONFIGURATION_INVALID",
+  "QUOTE_EVIDENCE_CLOCK_FAILURE",
 ] as const;
 
 export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[number];
@@ -67,6 +73,16 @@ export const AGENT_ERROR_MESSAGES: Record<AgentErrorCode, string> = {
     "Durable proposal repository persistence failed",
   DURABLE_REPOSITORY_CLOSE_FAILURE: "Durable proposal repository close failed",
   DURABLE_REPOSITORY_CLOSED: "Durable proposal repository is closed",
+  QUOTE_EVIDENCE_INVALID: "Normalized provider quote evidence is invalid",
+  QUOTE_EVIDENCE_NOT_CURRENT:
+    "Normalized provider quote evidence is not current",
+  QUOTE_EVIDENCE_LIFETIME_INVALID:
+    "Normalized provider quote evidence lifetime is invalid",
+  QUOTE_AMOUNT_EXCEEDS_MAXIMUM:
+    "Normalized provider quote amount exceeds the maximum",
+  QUOTE_EVIDENCE_CONFIGURATION_INVALID:
+    "Provider quote evidence configuration is invalid",
+  QUOTE_EVIDENCE_CLOCK_FAILURE: "Provider quote evidence clock failed",
 };
 
 export class AgentError extends Error {
