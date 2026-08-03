@@ -1,5 +1,8 @@
 export const AGENT_ERROR_CODES = [
   "MALFORMED_INPUT",
+  "PROCUREMENT_SOURCE_FAILURE",
+  "PROCUREMENT_INVOICE_INVALID",
+  "PROCUREMENT_AMOUNT_EXCEEDS_MAXIMUM",
   "CONFIGURATION_INVALID",
   "COVENANT_PROVIDER_FAILURE",
   "COVENANT_INVALID",
@@ -32,6 +35,10 @@ export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[number];
 
 export const AGENT_ERROR_MESSAGES: Record<AgentErrorCode, string> = {
   MALFORMED_INPUT: "Public proposal request is malformed",
+  PROCUREMENT_SOURCE_FAILURE: "Procurement invoice source failed",
+  PROCUREMENT_INVOICE_INVALID: "Procurement source returned an invalid Invoice",
+  PROCUREMENT_AMOUNT_EXCEEDS_MAXIMUM:
+    "Procurement Invoice amount exceeds the requested maximum",
   CONFIGURATION_INVALID: "Agent configuration is invalid",
   COVENANT_PROVIDER_FAILURE: "Trusted Covenant provider failed",
   COVENANT_INVALID: "Trusted Covenant configuration is invalid",
