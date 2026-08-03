@@ -1,5 +1,6 @@
 export * from "./constants.js";
 export * from "./context.js";
+export * from "./cov010-deployment-evidence.js";
 export * from "./deployment-manifest.js";
 export * from "./deployment-plan.js";
 export * from "./errors.js";

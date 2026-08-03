@@ -8,16 +8,16 @@ COV-001 contains repository scaffolding, frozen schemas, exact money conversion,
 
 ## Workspace
 
-- **MVP:** `apps/demo` — private server-only local simulated demo runtime.
+- **MVP:** `apps/demo` â€” private server-only local simulated demo runtime.
 
-- **MVP:** `apps/web` — compile-only Next.js demonstration-console scaffold.
-- **MVP:** `apps/agent` — untrusted procurement-agent scaffold.
-- **MVP:** `apps/authority` — deterministic authority-service scaffold.
-- **MVP:** `apps/executor` — submission-only executor scaffold.
-- **MVP:** `packages/spec` — strict signed and operational schemas, USDC helpers, typed data, fixtures, and tests.
-- **MVP:** `packages/contracts` — Foundry-only immutable-vault scaffold.
-- **MVP:** `packages/sdk` — empty SDK scaffold.
-- **MVP:** `packages/config` — shared strict TypeScript configuration and the trusted Arc Testnet operational profile.
+- **MVP:** `apps/web` â€” compile-only Next.js demonstration-console scaffold.
+- **MVP:** `apps/agent` â€” untrusted procurement-agent scaffold.
+- **MVP:** `apps/authority` â€” deterministic authority-service scaffold.
+- **MVP:** `apps/executor` â€” submission-only executor scaffold.
+- **MVP:** `packages/spec` â€” strict signed and operational schemas, USDC helpers, typed data, fixtures, and tests.
+- **MVP:** `packages/contracts` â€” Foundry-only immutable-vault scaffold.
+- **MVP:** `packages/sdk` â€” empty SDK scaffold.
+- **MVP:** `packages/config` â€” shared strict TypeScript configuration and the trusted Arc Testnet operational profile.
 
 ## Local validation
 
@@ -95,6 +95,24 @@ wallet display, ERC-20 transfers, and Covenant business amounts use 6.
 is assumed. A successful single-provider preflight is connectivity evidence
 only, not deployment, execution, settlement, or independent chain
 authenticity.
+
+**MVP:** COV-010 records one completed CovenantVault deployment on Arc Testnet
+as strict public evidence at
+`evidence/arc-testnet/cov-010/deployment-manifest.json`.
+
+The record identifies contract
+`0x2405Da1115B47A9D60499E12aA216874dc44c75a`, deployment transaction
+`0x7b43a398b54f505131d6edc968a5c491bcdc8136f42e35cff73be1781fbf2ff4`,
+and deployment block `54829529`. It adds no wallet, signing, broadcast,
+funding, payment, Circle, or settlement capability.
+
+The committed record can be verified offline with
+`pnpm.cmd verify:cov010-evidence`.
+
+The verifier strictly parses the manifest and checks its frozen deployment,
+profile, plan, source, token, runtime, and canonical-document commitments. It
+performs no network operation and makes no claim about current testnet
+persistence, funding, payment execution, or settlement. See ADR 0013.
 
 **MVP:** The COV-006 authority-to-executor handoff enumerates exactly
 `signedPaymentIntent`, `ruleResults`, `decisionReceipt`, and
