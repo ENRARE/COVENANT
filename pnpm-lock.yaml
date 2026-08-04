@@ -179,6 +179,28 @@ importers:
         specifier: ^4.1.11
         version: 4.3.3
 
+  packages/audit:
+    dependencies:
+      '@covenant/demo':
+        specifier: workspace:*
+        version: link:../../apps/demo
+      '@covenant/spec':
+        specifier: workspace:*
+        version: link:../spec
+      viem:
+        specifier: ^2.33.3
+        version: 2.55.4(typescript@5.9.3)(zod@3.25.76)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@covenant/executor':
+        specifier: workspace:*
+        version: link:../../apps/executor
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)
+
   packages/config:
     dependencies:
       viem:

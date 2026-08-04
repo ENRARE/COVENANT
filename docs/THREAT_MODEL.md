@@ -354,3 +354,41 @@ monitoring, reconciliation, and incident response remain deferred.
 
 **Protocol:** Additional providers, chains, currencies, products, and
 generalized execution remain excluded.
+
+## COV-015 audit-projection threat register
+
+**MVP:** COV-015 exposes only deterministic sanitized observational evidence.
+Every outcome below is exactly one of `Prevented`, `Bounded`, `Detected`,
+`Accepted`, or `Out of scope`.
+
+<!-- prettier-ignore -->
+| Threat | Scope | Attack path | Control | Residual risk | Outcome |
+| --- | --- | --- | --- | --- | --- |
+| Forged audit input | MVP | A caller supplies structurally plausible but invented source JSON. | Strict closed schemas, unchanged-formula demo ID checks, global demo ID/body conflict detection, signed-flow cross-links and rule hashes, exact COV-008 shape, and COV-010 anchor/digest verification fail malformed or conflicting input closed. | Demo journal provenance and COV-008 harness provenance remain upstream trust assumptions; `VALIDATED_SIGNED_FLOW` still trusts that its digest identities came from the upstream trusted verification boundary; the projection is never financial authority. | Bounded |
+| Event omission | MVP | A caller removes a required predecessor to make a later event appear independent. | Required predecessor lookup and topological causality reject the entire projection. | Independent source families intentionally expose only their own bounded claims. | Prevented |
+| Event reordering | MVP | Input arrays, filesystem order, source time, or ingestion order attempt to alter presentation. | Fixed source positions, frozen ranks, normalized IDs, and deterministic topological sorting ignore ingestion and wall-clock order. | A defect in frozen rank review could produce an undesirable but still non-authoritative display order. | Prevented |
+| Duplicate identity | MVP | The same evidence is repeated to exaggerate activity. | Identical normalized identity and canonical body collapse deterministically. | Duplicate upstream storage may still consume input-processing capacity within the fixed bundle limit. | Prevented |
+| Conflicting identity | MVP | One stable identity is paired with a changed body or semantic outcome. | Demo source ID/body and runtime/sequence conflicts are tracked across wrappers; normalized identity/body, logical predecessor, decision-outcome, and execution/transaction conflicts reject the entire projection; no first writer wins. | Deliberate conflict injection can deny timeline availability. | Detected |
+| Simulated evidence presented as execution | MVP | A simulated submission reference is labeled as a chain transaction or successful execution. | Closed mapping permits only simulated transport acceptance/reference stages and contains no descendant execution mapping. | Consumers outside this repository could ignore labels. | Prevented |
+| Transport acceptance presented as execution | MVP | Executor `SUBMITTED` is treated as a successful receipt or settlement. | `SUBMITTED` maps only to transport acceptance; transaction, execution, and settlement require distinct evidence sources. | Adapter-specific opaque identifiers may resemble transaction hashes but retain only transport meaning. | Prevented |
+| Unsupported executor failure provenance | MVP | A caller fabricates rejection, ambiguity, or generic error audit JSON with a stable execution link the executor did not produce. | The closed executor audit schema accepts only faithfully sourced `PREPARED`, `SIMULATED`, and `SUBMITTED` outputs; unsupported failure shapes fail parsing and cannot create timeline events. | External failure recovery and audit projection remain unavailable until a separately reviewed producer can prove operation and link provenance. | Prevented |
+| Local evidence presented as external evidence | MVP | COV-008 Anvil receipts and state are displayed as Circle or Arc settlement. | Every local claim uses `LOCAL_ANVIL_*`; top-level Circle/Arc-payment claims remain false. | Consumers could deliberately remove labels after export. | Prevented |
+| Deployment finality presented as payment finality | MVP | COV-010 `FINAL_ARC_TRANSACTION` is generalized from deployment to payment. | The field is paired with `ARC_DEPLOYMENT_TRANSACTION_ONLY`; no payment-finality event exists. | The committed manifest says nothing about current deployment persistence. | Prevented |
+| Database authority confusion | MVP | A redirected file or future projection table is treated as spend, replay, revocation, or settlement truth. | Output fixes `authoritative: false` and `databaseFinancialAuthority: false`; the projector writes no database; CovenantVault remains authoritative. | External consumers can misuse observational data despite explicit boundaries. | Bounded |
+| Raw evidence or secret leakage | MVP | Signatures, envelopes, calldata, receipts, logs, paths, credentials, or dependency errors enter output. | Strict event-specific schemas and field-by-field reconstruction omit all prohibited artifacts; fixed errors expose no raw values, stacks, paths, or causes. | An opaque identifier could itself be sensitive if an upstream adapter violates its sanitization contract; characters and length are bounded. | Bounded |
+| Compromised proposer creates misleading descendants | MVP | A malicious proposal attempts to create authorization, simulation, submission, or settlement events after policy rejection. | Rejected decisions prohibit authorization and downstream demo events; the fixed derived rejection requires exactly one proposal, canonical rules with only `recipient_allowed: FAIL`, exactly one rejected decision, matching identifiers, and no authorization or transport descendants. | The fixed scenario does not prove general prompt-injection resistance. | Prevented |
+| Causal cycle | MVP | Conflicting source links attempt to create a cycle or impossible successor graph. | Missing parents and incomplete topological output fail `AUDIT_CAUSALITY_FAILURE` without partial output. | Generic adapters are excluded, so current sources cannot caller-define arbitrary cause edges. | Prevented |
+| Projection denial of service | MVP | A caller sends many valid or conflicting records to consume resources or force failure. | Strict bundle and source collection limits, bounded command input, closed parsing, and fail-closed behavior bound local work. | The offline command has no production rate limit and can still consume bounded local resources. | Bounded |
+
+**MVP:** No audit event authorizes or executes a payment. The projector owns no
+signer, wallet, Circle credential, RPC, transport, transaction builder,
+calldata builder, deployment helper, database client, or command-execution
+capability.
+
+**Production:** Durable retention, independent reconciliation, monitoring,
+access control, backup, privacy policy, and incident response remain deferred.
+
+**V2:** Additional sources and actors require separate threat modeling.
+
+**Protocol:** Generic ingestion, arbitrary schemas, policy composition, and
+arbitrary execution remain excluded.

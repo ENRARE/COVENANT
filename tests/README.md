@@ -52,6 +52,17 @@ provider error, filesystem path, or environment value.
 balances, and state are local EVM evidence, not Arc or Circle execution,
 external settlement, confirmation, or finality.
 
+**MVP:** `@covenant/audit` tests cover COV-015 strict source and timeline
+schemas, deterministic projection and canonical JSON, source shuffling,
+deduplication and identity conflicts, approved and rejected paths, executor
+successful-output mappings, rejection of unsupported executor failure shapes,
+global demo identity conflicts, lifecycle continuity, observational demo
+classification, exact compromised-scenario derivation, all nine COV-008
+mappings, the committed COV-010 manifest, claim boundaries, deep freezing,
+sanitized failures, and structural absence of network, custody, signing,
+transaction, deployment, database, and command-execution imports. They run
+offline and do not start Anvil.
+
 **V2:** Additional organizations, agents, vendors, products, tokens, policies,
 and chains remain excluded.
 
