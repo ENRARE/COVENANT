@@ -1,8 +1,12 @@
 {
   "extends": "../config/tsconfig.base.json",
   "compilerOptions": {
+    "baseUrl": "../..",
     "outDir": "dist",
-    "rootDir": ".",
+    "paths": {
+      "@covenant/demo/audit-schema": ["apps/demo/src/schemas.ts"],
+      "@covenant/spec": ["packages/spec/src/index.ts"]
+    },
     "types": ["node", "vitest/globals"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
