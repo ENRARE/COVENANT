@@ -15,6 +15,7 @@ COV-001 contains repository scaffolding, frozen schemas, exact money conversion,
 - **MVP:** `apps/authority` â€” deterministic authority-service scaffold.
 - **MVP:** `apps/executor` â€” submission-only executor scaffold.
 - **MVP:** `packages/spec` â€” strict signed and operational schemas, USDC helpers, typed data, fixtures, and tests.
+- **MVP:** `packages/audit` â€” pure offline deterministic non-authoritative audit projection.
 - **MVP:** `packages/contracts` â€” Foundry-only immutable-vault scaffold.
 - **MVP:** `packages/sdk` â€” empty SDK scaffold.
 - **MVP:** `packages/config` â€” shared strict TypeScript configuration and the trusted Arc Testnet operational profile.
@@ -113,6 +114,29 @@ The verifier strictly parses the manifest and checks its frozen deployment,
 profile, plan, source, token, runtime, and canonical-document commitments. It
 performs no network operation and makes no claim about current testnet
 persistence, funding, payment execution, or settlement. See ADR 0013.
+
+## Offline audit timeline
+
+**MVP:** COV-015 adds a deterministic non-authoritative projector over strict
+already validated demo, signed-flow, executor, local-Anvil, and committed Arc
+deployment evidence. It emits one canonical sanitized JSON timeline and makes
+no Circle execution, external Arc payment settlement, reconciliation, or
+payment-finality claim.
+
+**MVP:** Demo-derived timeline entries are observational journal evidence, not
+cryptographically verified signed artifacts or independently verified policy
+outputs. Executor inputs are limited to faithfully sourced `PREPARED`,
+`SIMULATED`, and `SUBMITTED` outputs; `SUBMITTED` is transport acceptance only.
+The projector trusts the provenance of strict upstream demo and COV-008 public
+results while checking their closed schemas and supported cross-links.
+
+```sh
+pnpm audit:project < audit-source-bundle.json
+```
+
+**MVP:** The command accepts no path or network configuration and writes no
+file or database. Redirected output remains observational and reconstructable.
+`CovenantVault` remains authoritative for financial state.
 
 **MVP:** The COV-006 authority-to-executor handoff enumerates exactly
 `signedPaymentIntent`, `ruleResults`, `decisionReceipt`, and

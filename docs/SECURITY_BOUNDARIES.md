@@ -392,3 +392,83 @@ deferred.
 
 **Protocol:** Additional providers, products, currencies, chains, generalized
 quote protocols, arbitrary execution, and policy markets remain excluded.
+
+## COV-015 deterministic audit-projection boundary
+
+**MVP:** COV-015 is a pure offline observer. It may strictly parse the five
+closed source kinds, reconstruct allowlisted fields, verify source links and
+causal consistency, compute deterministic identities, deduplicate identical
+events, topologically sort them, deeply freeze the result, and serialize one
+canonical JSON document. It cannot generate a proposal, evaluate policy, issue
+a receipt, sign, construct calldata, simulate, submit, execute, deploy, fund,
+query a network, settle, reconcile, or establish finality.
+
+**MVP:** Demo events enter only through the existing strict demo audit schema.
+They are observational journal records, not signed envelopes or independently
+verified policy artifacts. Direct demo-derived events use
+`OBSERVATIONAL_DEMO_AUDIT`. The projector verifies the unchanged demo event-ID
+formula, tracks every source ID and complete body across all wrappers, rejects
+runtime/sequence or logical-lifecycle conflicts, and enforces all shared
+predecessor identifiers. It still trusts the upstream journal's provenance.
+Signed-flow evidence enters only as already validated artifacts plus validated
+digest identities and is reparsed before use. Executor evidence accepts only
+faithfully sourced `PREPARED`, `SIMULATED`, and `SUBMITTED` outputs with stable
+execution/digest links and an allowlisted opaque identifier where applicable.
+Unsupported failure shapes fail strict parsing. COV-008 uses the shared exact
+ordered result schema and trusts the upstream harness provenance after its
+private receipt, event, balance, and state checks. COV-010 must pass the
+existing offline anchor and canonical-digest verifier.
+
+**MVP:** Every normalized event retains its exact source event type. Proposal,
+policy decision, signed authorization, transport preparation, transport
+acceptance, transaction submission, execution evidence, settlement evidence,
+security control, revocation, and deployment evidence remain separate stages.
+An earlier stage never implies a later stage.
+
+**MVP:** `SUBMISSION_SIMULATED` remains a simulated opaque reference.
+Executor `SUBMITTED` remains transport acceptance and has no downstream success
+event. Executor rejection, ambiguity, and generic error audit variants are not
+accepted because COV-015 has no repository-owned producer that can prove their
+complete provenance and stable execution link. No accepted transport result
+proves a transaction hash, receipt, Circle execution, Arc inclusion, vault
+execution, settlement, or finality.
+
+**MVP:** COV-008 execution and settlement events are explicitly scoped to
+`LOCAL_ANVIL`. The settlement event is only a local token-movement and
+vault-accounting observation. COV-010 finality is explicitly scoped to the
+recorded deployment transaction. No current source supports external payment
+settlement or payment finality, and the taxonomy contains no payment-finality
+event.
+
+**MVP:** Normalized identity excludes sequence, time, ingestion order, paths,
+signatures, receipts, display text, and nondeterministic metadata. Identical
+identity/body pairs collapse; identity/body conflicts, semantic source
+conflicts, missing parents, and cycles fail the entire projection. Ordering uses
+only frozen ranks, canonical source position, and event identity.
+
+**MVP:** The output schemas reconstruct every object field by field and reject
+unknown properties. Output contains no full signed envelope, signature,
+typed-data document, calldata, raw transaction, receipt, log, provider body,
+dependency error, stack, cause, RPC URL, port, PID, path, lock detail,
+environment value, credential, or repository state.
+
+**MVP:** The command reads one bounded JSON document from standard input,
+accepts no arguments or caller-selected path, writes one JSON document to
+standard output, performs no network call, and persists nothing. The existing
+demo journal remains unchanged.
+
+**MVP:** Every audit projection and redirected local output is observational,
+replaceable, reconstructable, and non-authoritative. No local file, Supabase
+table, or database owns spend, remaining budget, payment count, financial
+replay, revocation, token movement, settlement, or finality. CovenantVault
+remains authoritative for financial enforcement.
+
+**Production:** Centralized retention, tamper-evident storage, reconciliation,
+monitoring, backup, access control, privacy retention, and incident response
+remain deferred.
+
+**V2:** Additional source families, organizations, agents, vendors, assets,
+products, policies, or chains require a separately reviewed closed adapter.
+
+**Protocol:** Generic event ingestion, arbitrary schemas, generalized policy,
+arbitrary calls, and generalized execution remain excluded.

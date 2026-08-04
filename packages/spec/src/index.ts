@@ -5,6 +5,7 @@ export * from "./deployment-manifest.js";
 export * from "./deployment-plan.js";
 export * from "./errors.js";
 export * from "./fixtures.js";
+export * from "./local-contract-evidence.js";
 export * from "./money.js";
 export * from "./primitives.js";
 export * from "./schemas.js";

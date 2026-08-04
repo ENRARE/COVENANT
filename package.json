@@ -32,6 +32,7 @@
     "arc:plan": "node scripts/arc/plan.mjs",
     "arc:preflight": "node scripts/arc/preflight.mjs",
     "test:integration": "vitest run --config tests/integration/vitest.config.ts",
+    "test:audit": "pnpm --filter @covenant/audit... build && pnpm --filter @covenant/audit test",
     "test:e2e": "node scripts/not-implemented.mjs end-to-end-tests",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -41,6 +42,7 @@
     "demo:seed": "pnpm --silent --filter @covenant/demo... build && node apps/demo/dist/cli.js SEED",
     "demo:health": "pnpm --silent --filter @covenant/demo... build && node apps/demo/dist/cli.js GET_HEALTH",
     "demo:run": "pnpm --silent --filter @covenant/demo... build && node apps/demo/dist/cli.js RUN_DEMO",
+    "audit:project": "pnpm --silent --filter @covenant/audit... build && node packages/audit/dist/cli.js",
     "verify:cov010-evidence": "pnpm --filter @covenant/spec build && node scripts/verify-cov010-deployment-evidence.mjs"
   },
   "devDependencies": {

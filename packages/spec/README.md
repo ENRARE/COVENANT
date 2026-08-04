@@ -5,3 +5,9 @@
 **MVP:** All external inputs must be parsed before hashing. JSON money, counters, chain IDs, nonces, and Unix-second timestamps are strings; safe internal forms use `bigint`. This package does not sign, submit, authorize, or settle payments.
 
 **MVP:** Low-level recovery helpers prove cryptographic self-consistency only. Trusted verification derives signer roles and EIP-712 domains from `CovenantSpec`; `verifyAuthorizationChain` additionally verifies the complete signed Covenant-to-intent-to-decision-to-authorization relationship. A signer address inside a payload never establishes authority by itself.
+
+**MVP:** COV-015 moves the unchanged strict COV-008 public-result schema into
+this package so the local evidence producer and offline audit projector share
+one definition. The schema contains only ordered evidence labels, `PASS`, mode,
+chain ID, overall verification status, and canonical decimal receipt counts. It
+adds no contract, RPC, Anvil, receipt, execution, or settlement capability.
