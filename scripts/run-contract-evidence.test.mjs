@@ -630,7 +630,7 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
       {
         cwd: checkout,
         encoding: "utf8",
-        env: { ...process.env, npm_execpath: hostileCli },
+        env: { ...process.env, CI: "true", npm_execpath: hostileCli },
         maxBuffer: 32 * 1024 * 1024,
         shell: false,
         windowsHide: true,
@@ -677,7 +677,7 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
       {
         cwd: checkout,
         encoding: "utf8",
-        env: { ...process.env, npm_execpath: hostileCli },
+        env: { ...process.env, CI: "true", npm_execpath: hostileCli },
         maxBuffer: 32 * 1024 * 1024,
         shell: false,
         windowsHide: true,
