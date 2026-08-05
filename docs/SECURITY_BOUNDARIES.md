@@ -144,6 +144,20 @@ demonstration but is outside COV-006.
 - **Production:** Hardware-backed keys, dual control, credential rotation, network isolation, tamper-evident centralized audit storage, and incident response are deferred.
 - **Production:** Continuous Circle/onchain reconciliation, redundant Arc RPCs, and formal recovery procedures are deferred.
 
+## COV-016 audit-console boundary
+
+**MVP:** The web console displays exactly one committed deterministic COV-015 fixture. A server-only adapter strictly parses the import as `unknown`, reconstructs allowlisted fields, and deeply freezes the display model before it crosses into the untrusted browser.
+
+**MVP:** Validation is all-or-nothing. Invalid schema, identity, sequence, classification, or claim-boundary data produces only fixed sanitized unavailable content. No partial evidence, raw error, path, stack, digest detail, source bundle, signature, receipt, calldata, or credential is rendered.
+
+**MVP:** Browser controls only filter the received model in memory and reset on reload. The console has no API route, server action, persistence, RPC, Circle, Supabase, signing, wallet, payment, revocation, or execution capability. It cannot establish authorization, Circle execution, Arc payment settlement, payment finality, or authoritative spend state.
+
+**MVP:** Browser verification uses a repository-owned runner rather than Playwright's platform-dependent `webServer` lifecycle. The runner refuses an occupied `http://127.0.0.1:3100` origin, directly builds and owns the local production Next.js child, waits for the exact root response, always stops only that child, and verifies origin release. Telemetry is disabled in build, server, and test processes.
+
+**MVP:** An automatic pre-navigation route guard permits only the exact `http://127.0.0.1:3100` HTTP origin, blocks service workers, aborts every other request, rejects every WebSocket, and fails the responsible test.
+
+**MVP:** The lockfile-pinned local Playwright CLI provisions Chromium only through the explicit `pnpm e2e:install-browser` command. Normal verification performs a non-mutating executable preflight and never installs a browser, uses an ambient browser, or requires internet access after provisioning.
+
 ## COV-008 local contract-evidence boundary
 
 **MVP:** `tests/contract-evidence` starts one controlled loopback-only Anvil

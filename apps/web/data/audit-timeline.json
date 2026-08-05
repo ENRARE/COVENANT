@@ -1,0 +1,503 @@
+{
+  "authoritative": false,
+  "claimBoundary": {
+    "arcPaymentSettlement": false,
+    "circleExecution": false,
+    "databaseFinancialAuthority": false,
+    "paymentFinality": false
+  },
+  "events": [
+    {
+      "causes": [],
+      "claimScope": "ARC_DEPLOYMENT_TRANSACTION_ONLY",
+      "details": {
+        "actualRuntimeCodeHash": "0x8aa1e18527b2881d48aa6a682dd886665edb7cd0b7d54303e374b98d51c8f3bb",
+        "chainId": "5042002",
+        "contractAddress": "0x2405Da1115B47A9D60499E12aA216874dc44c75a",
+        "deploymentBlockHash": "0x50e75512cad861a3bcb693992c22b182f32313cd53349bef3545d50d6b7483d6",
+        "deploymentBlockNumber": "54829529",
+        "deploymentTransactionHash": "0x7b43a398b54f505131d6edc968a5c491bcdc8136f42e35cff73be1781fbf2ff4",
+        "finalityScope": "ARC_DEPLOYMENT_TRANSACTION_ONLY",
+        "finalityState": "FINAL_ARC_TRANSACTION",
+        "manifestDigest": "0xe9cad77d9357394692f3ce01dc489376de189bb80f7f11206daefa01369cbd4e",
+        "planDigest": "0x7927a803fd187edd5b87b2a2761cdb91aaad5d9900d06926a192b8941f86796e",
+        "providerCorroborationState": "INDEPENDENTLY_CORROBORATED",
+        "receiptStatus": "SUCCESSFUL_EXECUTION",
+        "sourceGitCommit": "6212111a12ed387e529911e6cb8164ae078d4168",
+        "trustedNetworkProfileDigest": "0x1675dcd65bbe5bd3d7fd454b6d979c17703139ad5c538bd1483021253f4016d1"
+      },
+      "eventId": "0xd0e06aa35774e62ad29c32aa4a818be841b85d125465b5c2f084338c9e2016ee",
+      "eventType": "ARC_DEPLOYMENT_EVIDENCE_VERIFIED",
+      "evidenceClass": "COMMITTED_ARC_DEPLOYMENT_EVIDENCE",
+      "outcome": "VERIFIED",
+      "schemaVersion": "1",
+      "sequence": "1",
+      "source": {
+        "eventType": "COV-010_DEPLOYMENT_MANIFEST",
+        "identity": "0x8ed4903f6cb624bef99744362cb66bab96bbe2a827400de1696f0183418e08ee",
+        "kind": "ARC_DEPLOYMENT_EVIDENCE",
+        "position": "1"
+      },
+      "stage": "DEPLOYMENT_EVIDENCE",
+      "subject": {
+        "covenantId": "0x0982b0ffb2c5585995515dcd93162f77beb6075d450c33bc19a881b745d7f2d7"
+      }
+    },
+    {
+      "causes": [],
+      "claimScope": "LOCAL_ANVIL_DEPLOYMENT_EVIDENCE",
+      "details": { "mode": "LOCAL_ANVIL", "status": "PASS" },
+      "eventId": "0x640453a1c6519b58aae312c9a5ac14f38068254ac0e7cdb12508bbd996de6876",
+      "eventType": "LOCAL_DEPLOYMENT_EVIDENCE_VERIFIED",
+      "evidenceClass": "LOCAL_EVM_RECEIPT_STATE_EVIDENCE",
+      "outcome": "VERIFIED",
+      "schemaVersion": "1",
+      "sequence": "2",
+      "source": {
+        "eventType": "LOCAL_EVM_DEPLOYMENT_VERIFIED",
+        "identity": "0x474f34b95346341b16dcd20a453b424a7acfe3552334842c1f0bbfad793a47ab",
+        "kind": "LOCAL_CONTRACT_EVIDENCE",
+        "position": "1"
+      },
+      "stage": "DEPLOYMENT_EVIDENCE",
+      "subject": {}
+    },
+    {
+      "causes": [
+        "0x640453a1c6519b58aae312c9a5ac14f38068254ac0e7cdb12508bbd996de6876"
+      ],
+      "claimScope": "LOCAL_ANVIL_FUNDING_EVIDENCE",
+      "details": { "mode": "LOCAL_ANVIL", "status": "PASS" },
+      "eventId": "0x4485ee40e64c6e8c78aae400baf4f029e9a8ea455e69472706c8cb34ecf229df",
+      "eventType": "LOCAL_VAULT_FUNDING_EVIDENCE_VERIFIED",
+      "evidenceClass": "LOCAL_EVM_RECEIPT_STATE_EVIDENCE",
+      "outcome": "VERIFIED",
+      "schemaVersion": "1",
+      "sequence": "3",
+      "source": {
+        "eventType": "LOCAL_VAULT_FUNDED_VERIFIED",
+        "identity": "0xaf550ec55c64235db31d56ba196d2b28adad7d7ff302febd1fc43070ddd2cc98",
+        "kind": "LOCAL_CONTRACT_EVIDENCE",
+        "position": "2"
+      },
+      "stage": "DEPLOYMENT_EVIDENCE",
+      "subject": {}
+    },
+    {
+      "causes": [],
+      "claimScope": "PROPOSAL_ONLY",
+      "details": { "amount": "1.25" },
+      "eventId": "0xc505b9d7a2a66eb1de533e849bef9831fa358082bcad5e91bbeaa9a25d6b9236",
+      "eventType": "PROPOSAL_CREATED",
+      "evidenceClass": "VERIFIED_SIGNED_ARTIFACT",
+      "outcome": "OBSERVED",
+      "schemaVersion": "1",
+      "sequence": "4",
+      "source": {
+        "eventType": "PaymentIntent",
+        "identity": "0x4444444444444444444444444444444444444444444444444444444444444444",
+        "kind": "VALIDATED_SIGNED_FLOW",
+        "occurredAt": "1000",
+        "position": "1"
+      },
+      "stage": "PROPOSAL",
+      "subject": {
+        "covenantId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "intentId": "0x3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    },
+    {
+      "causes": [],
+      "claimScope": "PROPOSAL_ONLY",
+      "details": { "amount": "1.25" },
+      "eventId": "0xfc7eed2f3c1585f4a08f14b4da261b7a6cc94e10fb33a6e15c1c13b980a4c980",
+      "eventType": "PROPOSAL_CREATED",
+      "evidenceClass": "OBSERVATIONAL_DEMO_AUDIT",
+      "outcome": "OBSERVED",
+      "schemaVersion": "1",
+      "sequence": "5",
+      "source": {
+        "eventType": "PAYMENT_INTENT_PROPOSED",
+        "identity": "0xd70c047a8a3b346dd32dd5351033d5a544db7a2e31d771cb36783a5f4a5f3888",
+        "kind": "DEMO_AUDIT",
+        "occurredAt": "10020",
+        "position": "20"
+      },
+      "stage": "PROPOSAL",
+      "subject": {
+        "covenantId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "intentId": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "invoiceId": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "causes": [
+        "0xc505b9d7a2a66eb1de533e849bef9831fa358082bcad5e91bbeaa9a25d6b9236"
+      ],
+      "claimScope": "POLICY_DECISION_ONLY",
+      "details": {
+        "decision": "APPROVED",
+        "ruleResults": [
+          { "ruleId": "covenant_active", "status": "PASS" },
+          { "ruleId": "intent_signature_valid", "status": "PASS" },
+          { "ruleId": "agent_authorized", "status": "PASS" },
+          { "ruleId": "recipient_allowed", "status": "PASS" },
+          { "ruleId": "token_allowed", "status": "PASS" },
+          { "ruleId": "amount_within_limit", "status": "PASS" },
+          { "ruleId": "invoice_signature_valid", "status": "PASS" },
+          { "ruleId": "invoice_matches_intent", "status": "PASS" },
+          { "ruleId": "purpose_allowed", "status": "PASS" },
+          { "ruleId": "intent_not_expired", "status": "PASS" },
+          { "ruleId": "nonce_unused", "status": "PASS" }
+        ]
+      },
+      "eventId": "0x3607022950877c6162c3f377a161696bb90e3360cfce7a68fdf252a4fe9e2c09",
+      "eventType": "POLICY_DECISION_RECORDED",
+      "evidenceClass": "VERIFIED_POLICY_OUTPUT",
+      "outcome": "APPROVED",
+      "schemaVersion": "1",
+      "sequence": "6",
+      "source": {
+        "eventType": "DecisionReceipt",
+        "identity": "0x6666666666666666666666666666666666666666666666666666666666666666",
+        "kind": "VALIDATED_SIGNED_FLOW",
+        "occurredAt": "1010",
+        "position": "2"
+      },
+      "stage": "POLICY_DECISION",
+      "subject": {
+        "covenantId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "decisionId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+        "intentId": "0x3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    },
+    {
+      "causes": [
+        "0xfc7eed2f3c1585f4a08f14b4da261b7a6cc94e10fb33a6e15c1c13b980a4c980"
+      ],
+      "claimScope": "POLICY_DECISION_ONLY",
+      "details": {
+        "decision": "REJECTED",
+        "ruleResults": [
+          { "ruleId": "covenant_active", "status": "PASS" },
+          { "ruleId": "intent_signature_valid", "status": "PASS" },
+          { "ruleId": "agent_authorized", "status": "PASS" },
+          { "ruleId": "recipient_allowed", "status": "FAIL" },
+          { "ruleId": "token_allowed", "status": "PASS" },
+          { "ruleId": "amount_within_limit", "status": "PASS" },
+          { "ruleId": "invoice_signature_valid", "status": "PASS" },
+          { "ruleId": "invoice_matches_intent", "status": "PASS" },
+          { "ruleId": "purpose_allowed", "status": "PASS" },
+          { "ruleId": "intent_not_expired", "status": "PASS" },
+          { "ruleId": "nonce_unused", "status": "PASS" }
+        ]
+      },
+      "eventId": "0xcdd6078da36c65c842b6e9cc03b8a62e3d4178609287d8ae0d0d6b94e7858b60",
+      "eventType": "POLICY_DECISION_RECORDED",
+      "evidenceClass": "OBSERVATIONAL_DEMO_AUDIT",
+      "outcome": "REJECTED",
+      "schemaVersion": "1",
+      "sequence": "7",
+      "source": {
+        "eventType": "DECISION_REJECTED",
+        "identity": "0xc48f6571fefef7a98d7c63b1a14085743f500e1d10e16e70df21398668e9a198",
+        "kind": "DEMO_AUDIT",
+        "occurredAt": "10022",
+        "position": "22"
+      },
+      "stage": "POLICY_DECISION",
+      "subject": {
+        "covenantId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "decisionId": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "intentId": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    {
+      "causes": [
+        "0x3607022950877c6162c3f377a161696bb90e3360cfce7a68fdf252a4fe9e2c09"
+      ],
+      "claimScope": "SIGNED_AUTHORIZATION_ONLY",
+      "details": { "validUntil": "1200" },
+      "eventId": "0x9d65003496c84b85f81ee4ac0d41934f338b729e7603d6db87e47ee8eb86ad2a",
+      "eventType": "SIGNED_AUTHORIZATION_CREATED",
+      "evidenceClass": "VERIFIED_SIGNED_ARTIFACT",
+      "outcome": "OBSERVED",
+      "schemaVersion": "1",
+      "sequence": "8",
+      "source": {
+        "eventType": "AuthorizationReceipt",
+        "identity": "0x8888888888888888888888888888888888888888888888888888888888888888",
+        "kind": "VALIDATED_SIGNED_FLOW",
+        "position": "3"
+      },
+      "stage": "SIGNED_AUTHORIZATION",
+      "subject": {
+        "authorizationId": "0x7777777777777777777777777777777777777777777777777777777777777777",
+        "covenantId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "decisionId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+        "intentId": "0x3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    },
+    {
+      "causes": [
+        "0x9d65003496c84b85f81ee4ac0d41934f338b729e7603d6db87e47ee8eb86ad2a"
+      ],
+      "claimScope": "AUTHORIZED_REQUEST_PREPARATION_ONLY",
+      "details": {},
+      "eventId": "0x4cc53e773db1fcec7cf12b9dcbc57f9db7a57b5385e8d4975e0cc35d8b84ddc7",
+      "eventType": "EXECUTOR_REQUEST_PREPARED",
+      "evidenceClass": "EXECUTOR_TRANSPORT_OUTPUT",
+      "outcome": "OBSERVED",
+      "schemaVersion": "1",
+      "sequence": "9",
+      "source": {
+        "eventType": "PREPARED",
+        "identity": "0x9999999999999999999999999999999999999999999999999999999999999999",
+        "kind": "EXECUTOR_RESULT",
+        "position": "1"
+      },
+      "stage": "TRANSPORT_PREPARATION",
+      "subject": {
+        "authorizationId": "0x7777777777777777777777777777777777777777777777777777777777777777",
+        "covenantId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "decisionId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+        "executionId": "0x9999999999999999999999999999999999999999999999999999999999999999",
+        "intentId": "0x3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    },
+    {
+      "causes": [
+        "0x4cc53e773db1fcec7cf12b9dcbc57f9db7a57b5385e8d4975e0cc35d8b84ddc7"
+      ],
+      "claimScope": "EXECUTOR_TRANSPORT_ACCEPTANCE_ONLY",
+      "details": { "transactionId": "opaque-transport-reference-1" },
+      "eventId": "0x1b0f96959398d7313010dab9a429abca8899f45f1e8ed9b6cce9d33b4b350df9",
+      "eventType": "TRANSPORT_SUBMISSION_ACCEPTED",
+      "evidenceClass": "EXECUTOR_TRANSPORT_OUTPUT",
+      "outcome": "ACCEPTED",
+      "schemaVersion": "1",
+      "sequence": "10",
+      "source": {
+        "eventType": "SUBMITTED",
+        "identity": "0x9999999999999999999999999999999999999999999999999999999999999999",
+        "kind": "EXECUTOR_RESULT",
+        "position": "2"
+      },
+      "stage": "TRANSPORT_ACCEPTANCE",
+      "subject": {
+        "authorizationId": "0x7777777777777777777777777777777777777777777777777777777777777777",
+        "covenantId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "decisionId": "0x5555555555555555555555555555555555555555555555555555555555555555",
+        "executionId": "0x9999999999999999999999999999999999999999999999999999999999999999",
+        "intentId": "0x3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    },
+    {
+      "causes": [
+        "0x4485ee40e64c6e8c78aae400baf4f029e9a8ea455e69472706c8cb34ecf229df"
+      ],
+      "claimScope": "LOCAL_ANVIL_TRANSACTION_SUBMISSION",
+      "details": { "mode": "LOCAL_ANVIL", "status": "PASS" },
+      "eventId": "0x70918c624e5fbadf4ace8f8d159a814997eb3eefa3a662e6a37f57ef74eac40b",
+      "eventType": "TRANSACTION_SUBMISSION_RECORDED",
+      "evidenceClass": "LOCAL_EVM_RECEIPT_STATE_EVIDENCE",
+      "outcome": "OBSERVED",
+      "schemaVersion": "1",
+      "sequence": "11",
+      "source": {
+        "eventType": "LOCAL_VAULT_EXECUTION_SUBMITTED",
+        "identity": "0x8a77f5b29aa2da0b6dedfd9d999bea3414b90338e754cda1c6ac7969cb2c70c9",
+        "kind": "LOCAL_CONTRACT_EVIDENCE",
+        "position": "3"
+      },
+      "stage": "TRANSACTION_SUBMISSION",
+      "subject": {}
+    },
+    {
+      "causes": [
+        "0x70918c624e5fbadf4ace8f8d159a814997eb3eefa3a662e6a37f57ef74eac40b"
+      ],
+      "claimScope": "LOCAL_ANVIL_EXECUTION_EVIDENCE",
+      "details": { "mode": "LOCAL_ANVIL", "status": "PASS" },
+      "eventId": "0x3543ce676bbd6107b0a3b408144dc472782049c754fb63f9b1bf46ca17bcfae4",
+      "eventType": "EXECUTION_EVIDENCE_VERIFIED",
+      "evidenceClass": "LOCAL_EVM_RECEIPT_STATE_EVIDENCE",
+      "outcome": "VERIFIED",
+      "schemaVersion": "1",
+      "sequence": "12",
+      "source": {
+        "eventType": "LOCAL_VAULT_EXECUTION_VERIFIED",
+        "identity": "0x3f4a62fccd1268d8733be5876a79afbadc3373b9db5fc10f0aa0768846a7ed27",
+        "kind": "LOCAL_CONTRACT_EVIDENCE",
+        "position": "4"
+      },
+      "stage": "EXECUTION_EVIDENCE",
+      "subject": {}
+    },
+    {
+      "causes": [
+        "0x3543ce676bbd6107b0a3b408144dc472782049c754fb63f9b1bf46ca17bcfae4"
+      ],
+      "claimScope": "LOCAL_ANVIL_SETTLEMENT_OBSERVATION",
+      "details": { "mode": "LOCAL_ANVIL", "status": "PASS" },
+      "eventId": "0x79876cf4fae259677d577b8a192f501ef3b3d88f8a68326ddca9f35e6a27c9c4",
+      "eventType": "SETTLEMENT_EVIDENCE_RECORDED",
+      "evidenceClass": "LOCAL_EVM_RECEIPT_STATE_EVIDENCE",
+      "outcome": "VERIFIED",
+      "schemaVersion": "1",
+      "sequence": "13",
+      "source": {
+        "eventType": "LOCAL_VAULT_EXECUTION_VERIFIED",
+        "identity": "0x3f4a62fccd1268d8733be5876a79afbadc3373b9db5fc10f0aa0768846a7ed27",
+        "kind": "LOCAL_CONTRACT_EVIDENCE",
+        "position": "4"
+      },
+      "stage": "SETTLEMENT_EVIDENCE",
+      "subject": {}
+    },
+    {
+      "causes": [
+        "0x3543ce676bbd6107b0a3b408144dc472782049c754fb63f9b1bf46ca17bcfae4"
+      ],
+      "claimScope": "LOCAL_ANVIL_REPLAY_REJECTION",
+      "details": { "mode": "LOCAL_ANVIL", "status": "PASS" },
+      "eventId": "0x4a8db905cd426560ff2eaf5c858958c128ad196509fd59c3d07e2cde5cdfc2d2",
+      "eventType": "REPLAY_REJECTED",
+      "evidenceClass": "LOCAL_EVM_RECEIPT_STATE_EVIDENCE",
+      "outcome": "REJECTED",
+      "schemaVersion": "1",
+      "sequence": "14",
+      "source": {
+        "eventType": "LOCAL_REPLAY_REJECTED",
+        "identity": "0x4eb9281c2cae5e4e60433cf3be17a80b1bc8247eaeb106bb0529f6223c3da4ea",
+        "kind": "LOCAL_CONTRACT_EVIDENCE",
+        "position": "5"
+      },
+      "stage": "SECURITY_CONTROL",
+      "subject": {}
+    },
+    {
+      "causes": [
+        "0x640453a1c6519b58aae312c9a5ac14f38068254ac0e7cdb12508bbd996de6876"
+      ],
+      "claimScope": "LOCAL_ANVIL_DIRECT_BYPASS_REJECTION",
+      "details": { "mode": "LOCAL_ANVIL", "status": "PASS" },
+      "eventId": "0x83dbebab8f52d894489749a07da048cea430b3e9bdea1e7d4697f895dc855214",
+      "eventType": "DIRECT_VAULT_BYPASS_REJECTED",
+      "evidenceClass": "LOCAL_EVM_RECEIPT_STATE_EVIDENCE",
+      "outcome": "REJECTED",
+      "schemaVersion": "1",
+      "sequence": "15",
+      "source": {
+        "eventType": "LOCAL_BYPASS_REJECTED",
+        "identity": "0xabd739f75f15054ed85a146cbfee65f66f8d52d042b04a9f1a61c378fa358855",
+        "kind": "LOCAL_CONTRACT_EVIDENCE",
+        "position": "6"
+      },
+      "stage": "SECURITY_CONTROL",
+      "subject": {}
+    },
+    {
+      "causes": [
+        "0xcdd6078da36c65c842b6e9cc03b8a62e3d4178609287d8ae0d0d6b94e7858b60",
+        "0xfc7eed2f3c1585f4a08f14b4da261b7a6cc94e10fb33a6e15c1c13b980a4c980"
+      ],
+      "claimScope": "FIXED_COMPROMISED_PROPOSER_REJECTION",
+      "details": {
+        "failedRuleId": "recipient_allowed",
+        "limitation": "FIXED_COMPROMISED_PROPOSER_SCENARIO_ONLY",
+        "scenarioId": "compromised-proposer-v1",
+        "sourceEventIds": [
+          "0xd70c047a8a3b346dd32dd5351033d5a544db7a2e31d771cb36783a5f4a5f3888",
+          "0x82e7431e5b022fd105d830c2914959ee0f3dc3b2419b41f6eaf0da63b4816d15",
+          "0xc48f6571fefef7a98d7c63b1a14085743f500e1d10e16e70df21398668e9a198"
+        ]
+      },
+      "eventId": "0x397b40018eadfd33e0e3f14d0a9236d94c18200573d11b4af2bcbc30077d7cdf",
+      "eventType": "INDIRECT_PROMPT_INJECTION_REJECTED",
+      "evidenceClass": "DERIVED_SECURITY_SCENARIO_EVIDENCE",
+      "outcome": "REJECTED",
+      "schemaVersion": "1",
+      "sequence": "16",
+      "source": {
+        "eventType": "DECISION_REJECTED",
+        "identity": "0x7e93463c0294998bf82270d755cac7875c5edd9e653689e5fc94257b8bef0908",
+        "kind": "DEMO_AUDIT",
+        "occurredAt": "10022",
+        "position": "22"
+      },
+      "stage": "SECURITY_CONTROL",
+      "subject": {
+        "covenantId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "decisionId": "0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "intentId": "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    {
+      "causes": [
+        "0x640453a1c6519b58aae312c9a5ac14f38068254ac0e7cdb12508bbd996de6876"
+      ],
+      "claimScope": "LOCAL_ANVIL_NON_ISSUER_REVOCATION_REJECTION",
+      "details": { "mode": "LOCAL_ANVIL", "status": "PASS" },
+      "eventId": "0x8dbd3036c37c916b7350ce408b70ee2bb242c008ebfd7cd5bea08ef112f456fd",
+      "eventType": "NON_ISSUER_REVOCATION_REJECTED",
+      "evidenceClass": "LOCAL_EVM_RECEIPT_STATE_EVIDENCE",
+      "outcome": "REJECTED",
+      "schemaVersion": "1",
+      "sequence": "17",
+      "source": {
+        "eventType": "LOCAL_NON_ISSUER_REVOCATION_REJECTED",
+        "identity": "0xfa9268cce92e032eaac8b3825f4f1d21abf1eabbc5f2466e61b596cef1d9ed7b",
+        "kind": "LOCAL_CONTRACT_EVIDENCE",
+        "position": "7"
+      },
+      "stage": "REVOCATION",
+      "subject": {}
+    },
+    {
+      "causes": [
+        "0x640453a1c6519b58aae312c9a5ac14f38068254ac0e7cdb12508bbd996de6876"
+      ],
+      "claimScope": "LOCAL_ANVIL_REVOCATION_EVIDENCE",
+      "details": { "mode": "LOCAL_ANVIL", "status": "PASS" },
+      "eventId": "0xba3848af2cf877f89eef9eb75fa5f680148c564172f81269c3f655af3ee28c57",
+      "eventType": "REVOCATION_VERIFIED",
+      "evidenceClass": "LOCAL_EVM_RECEIPT_STATE_EVIDENCE",
+      "outcome": "VERIFIED",
+      "schemaVersion": "1",
+      "sequence": "18",
+      "source": {
+        "eventType": "LOCAL_COVENANT_REVOCATION_VERIFIED",
+        "identity": "0x1507ffdbaf4d7f3a5c3fee5cc13894caf17ec7115e415ee4f7689399586a49fa",
+        "kind": "LOCAL_CONTRACT_EVIDENCE",
+        "position": "8"
+      },
+      "stage": "REVOCATION",
+      "subject": {}
+    },
+    {
+      "causes": [
+        "0xba3848af2cf877f89eef9eb75fa5f680148c564172f81269c3f655af3ee28c57"
+      ],
+      "claimScope": "LOCAL_ANVIL_POST_REVOCATION_REJECTION",
+      "details": { "mode": "LOCAL_ANVIL", "status": "PASS" },
+      "eventId": "0xe307b7cd6b8bb862f26851ffc50c3fa83d8f6f2280f3a390482e40f343fbcbb1",
+      "eventType": "POST_REVOCATION_EXECUTION_REJECTED",
+      "evidenceClass": "LOCAL_EVM_RECEIPT_STATE_EVIDENCE",
+      "outcome": "REJECTED",
+      "schemaVersion": "1",
+      "sequence": "19",
+      "source": {
+        "eventType": "LOCAL_POST_REVOCATION_EXECUTION_REJECTED",
+        "identity": "0x232353869cec0ac7df04dd2ca445bd14dd1124967e79e308fde84a6453a98c3d",
+        "kind": "LOCAL_CONTRACT_EVIDENCE",
+        "position": "9"
+      },
+      "stage": "REVOCATION",
+      "subject": {}
+    }
+  ],
+  "mode": "OFFLINE_AUDIT_TIMELINE",
+  "projectionId": "0x2d746e4eac75eab7cb35182a25afd8b669335d8bbdf175fd72fa1598ba8d0bc3",
+  "schemaVersion": "1"
+}

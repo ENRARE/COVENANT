@@ -1,5 +1,7 @@
 node_modules/
 lib/
+!apps/web/lib/
+!apps/web/lib/**
 .pnpm-store/
 .turbo/
 .next/

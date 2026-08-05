@@ -82,6 +82,17 @@ Each row states attack path, affected asset, MVP control, residual risk, deferre
 - **Production:** Real funds require key isolation, reconciliation, RPC redundancy, incident response, supply-chain hardening, and independent audit before launch.
 - **Protocol:** Generalized execution and multichain behavior are out of scope and must receive separate threat models.
 
+## COV-016 audit-console controls
+
+- **MVP:** Fixture tampering, schema drift, reordered sequence, changed deterministic identities, unknown properties, and promoted authority claims fail strict server-side parsing before any timeline is rendered.
+- **MVP:** The display adapter reconstructs an allowlist instead of forwarding the raw timeline or source bundle. Validation failures expose only fixed unavailable text and cannot leak parser paths, dependency messages, stacks, signatures, receipts, calldata, or credentials.
+- **MVP:** A compromised browser can still hide, reorder, or falsify what a viewer sees. This remains bounded because the browser has no signing, submission, execution, settlement, revocation, persistence, or authoritative state capability; independent evidence verification is deferred to Production.
+- **MVP:** Ephemeral filter controls alter only local visibility and reset on reload. They cannot mutate canonical evidence or produce a financial action.
+- **MVP:** Browser-test supply and egress drift are bounded by explicit local Chromium provisioning, a non-downloading executable preflight, fixed desktop and mobile projects, a fresh loopback-only production server, blocked service workers, and automatic pre-navigation rejection of non-origin requests and all WebSockets.
+- **MVP:** Next.js telemetry is disabled cross-platform in the browser-test, production-build, and production-server processes so verification does not create an undeclared remote dependency.
+- **MVP:** Ambient-server reuse and platform-dependent Playwright teardown are prevented by a repository runner that refuses an occupied fixed origin, directly owns its local Next.js child, bounds readiness and termination, and verifies that the origin is released after every result.
+- **Production:** CSP, authenticated access, signed builds, tamper-evident evidence distribution, independent verification, monitoring, and incident response remain required before operational use.
+
 ## COV-003 control realization
 
 - **MVP:** COV-003 realizes the deterministic contextual authority boundary as a pure application core. It has no payment wallet, Circle credential, executor function, transaction builder, broadcaster, or transport endpoint.
