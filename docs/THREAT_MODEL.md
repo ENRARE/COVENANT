@@ -403,3 +403,74 @@ access control, backup, privacy policy, and incident response remain deferred.
 
 **Protocol:** Generic ingestion, arbitrary schemas, policy composition, and
 arbitrary execution remain excluded.
+
+## COV-017 isolated Circle execution threat register
+
+**MVP:** COV-017 is documentation-only planning. The proposed result for every
+threat is exactly one of `Prevented`, `Bounded`, `Detected`, `Accepted`,
+`Deferred`, or `Blocked`. No Circle credential, wallet operation, transport,
+transaction, Arc RPC call, webhook, database, queue, or executor implementation
+exists in this scope.
+
+<!-- prettier-ignore -->
+| Threat | Scope | Attack path | Responsible control | Remaining risk | Result |
+| --- | --- | --- | --- | --- | --- |
+| Circle API-key theft | Production | An attacker obtains bearer authority for the Circle account. | Isolate a least-privilege key to the Circle process; fixed egress and operation; no client, log, fixture, or repository exposure; rotation and access audit. | Official sources do not prove one-wallet/one-operation key scope; compromise may enable every granted Circle capability. | Bounded |
+| Entity-secret theft | Production | An attacker obtains the 32-byte wallet-authorization secret. | HSM or secret-manager custody inside a narrow ciphertext capability; no application-object, file, log, fixture, or browser exposure; periodic rotation. | Secret plus API/account access may authorize wallet operations until rotation. | Bounded |
+| Recovery-file theft | Production | An attacker obtains reset material and attempts recovery takeover. | Separate recovery custodian and storage from runtime, entity secret, and API key; audited recovery ceremony; never mount in executor. | Circle recovery procedures and organizational access remain future operational dependencies. | Deferred |
+| Entity-secret ciphertext reuse | MVP | A retry or cache reuses request-specific ciphertext. | Generate immediately before one request; mark consumed; never persist, log, or retry it; fixture asserts uniqueness. | Provider ambiguity can still require reconciliation without another POST. | Prevented |
+| Compromised Circle wallet | MVP | Wallet control submits an unauthorized or conflicting transaction. | One fixed wallet; no generic wallet interface; CovenantVault verifies exact authorization and enforces policy onchain; independent Arc reconciliation. | Native-token loss, denial of service, or transactions to other assets/contracts remain possible if Circle account controls are bypassed. | Bounded |
+| Compromised Circle account | Production | An attacker changes wallet, keys, policies, or performs out-of-band operations. | Organizational custody, least privilege, access monitoring, fixed local wallet/target binding, and onchain CovenantVault controls. | Account compromise can deny service or exercise capabilities outside the fixed executor. | Bounded |
+| Compromised executor runtime | MVP | Runtime steals credentials or alters provider requests. | Isolated process, fixed config, exact calldata decode/re-encode, no proposer/signer capability, egress allowlist, and CovenantVault enforcement. | A fully compromised runtime can use its Circle capabilities and leak runtime secrets; the vault limits but does not eliminate damage. | Bounded |
+| Compromised agent runtime | MVP | Proposal generator attempts to execute or inject Circle fields. | Agent has no Circle credential, wallet, RPC, signer, HTTP transport, transaction, calldata, or execution capability; executor accepts only signed envelopes. | Agent can propose malicious payments or deny availability, but cannot execute them. | Prevented |
+| Caller-selected wallet, blockchain, contract, function, calldata, amount, or fee policy | MVP | A caller tries to redirect or mutate execution. | Accept none of these fields publicly; load fixed wallet/chain/vault/selector/fee policy; derive exact calldata and zero value from verified input. | A trusted-configuration or implementation defect could still bind a wrong constant. | Prevented |
+| Direct-transfer bypass of CovenantVault | MVP | Caller invokes Circle's transfer endpoint to move tokens directly. | No transfer operation or generic Circle client in the process; exact fixed contract-execution path; egress and request-shape tests. | A compromised Circle account outside Covenant can still use capabilities granted there. | Prevented |
+| Signer and Circle executor collusion | MVP | Signer and submitter combine authorization and execution capabilities. | Separate runtimes, credentials, interfaces, and audit identities; signer cannot call Circle and executor cannot sign; vault verifies exact authority. | Collusion of both trusted components can authorize and submit within hard vault limits. | Bounded |
+| Proposal generator and Circle executor collusion | MVP | Agent and submitter try to bypass authority. | Executor requires the complete verified signed chain and cannot sign; vault independently verifies authorization and policy-hard limits. | Availability attacks and attempts using already-valid authority remain possible. | Bounded |
+| Arbitrary HTTP capability or SSRF | MVP | Caller selects a URL or abuses a generic client. | No public HTTP seam; exact HTTPS origin/path; controlled DNS; reject IP literals and disallowed ranges; infrastructure egress allowlist. | Resolver, proxy, runtime, or infrastructure defects can still violate application controls. | Bounded |
+| Redirect abuse | MVP | Circle or an intermediary redirects credentials to another origin. | Disable redirects and fail every `3xx`; maximum redirects zero. | A transport dependency defect could still follow redirects. | Prevented |
+| DNS rebinding or private-network/metadata access | Production | Approved name resolves to loopback, private, link-local, IPv4-mapped, or cloud metadata. | Bind controlled resolution to connection; reject disallowed ranges and alternate encodings; hostname-validating TLS; network egress enforcement. | DNS and network infrastructure remain trusted operational dependencies. | Bounded |
+| Proxy injection | Production | Environment or caller routes traffic through an unapproved proxy. | Ignore proxy environment; accept no public proxy; fixed direct egress and reviewed infrastructure policy. | Host-level compromise can still redirect traffic. | Bounded |
+| TLS validation failure | MVP | Invalid certificate, hostname, protocol, or trust chain is accepted. | Mandatory platform TLS and hostname verification; no insecure mode or caller trust roots; fixed origin. | Trust-store or host compromise remains possible. | Bounded |
+| Response truncation or oversized body | MVP | Provider/intermediary sends partial or excessive bytes. | Complete bounded read, 64 KiB hard limit, strict JSON and schema reconstruction, fail closed. | Repeated failures can deny availability. | Bounded |
+| Decompression bomb | MVP | Compressed response expands beyond limits. | Request and accept only identity encoding; disable decompression; reject any content encoding. | Dependency or proxy nonconformance remains possible. | Bounded |
+| Duplicate JSON keys, malformed encoding, or unexpected content type | MVP | Parser differentials alter accepted values. | Duplicate-key scan before parse; strict UTF-8 without BOM; exact JSON media type; trailing-data rejection. | Parser defects can still exist. | Prevented |
+| Undocumented response fields or unknown states | MVP | Provider schema drift influences classification. | Strict unknown-field and enum rejection; field-by-field reconstruction; fixed error mapping. | Circle evolution can cause fail-closed outage until separately reviewed. | Detected |
+| Idempotency collision | MVP | Two operations receive the same lookup digest or Circle UUID. | Domain-separated SHA-256 operation key; random UUID-v4; atomic uniqueness constraints; block both on collision. | Cryptographic collision is negligible; storage corruption remains possible. | Detected |
+| Idempotency poisoning or first-writer conflict | MVP | Attacker stores a changed body under an existing identity. | Bind complete immutable prepared transaction and digests atomically; compare every reuse; no first-writer authority; quarantine conflicts. | Deliberate conflicts can deny service. | Detected |
+| Concurrent duplicate submissions | MVP | Identical callers race two POST requests. | Durable single-flight ownership, atomic attempt-start marker, stable UUID binding, one POST maximum, identical callers join. | Coordination failure must fail closed and may deny availability. | Prevented |
+| Unsafe automatic retries | MVP | Timeout, `429`, or `5xx` causes a duplicate POST. | One POST maximum; no retry merely because no response arrived; single-use ciphertext; durable ambiguity. | Provider operation can remain unresolved indefinitely. | Prevented |
+| Timeout before submission | MVP | Deadline expires before network I/O but state falsely becomes ambiguous. | Durable phase markers distinguish PREPARED from attempt started; bounded phase deadlines. | Crash exactly around the durable/network boundary requires conservative ambiguity. | Bounded |
+| Timeout after possible submission | MVP | Provider may have accepted but response is lost. | Enter `OUTCOME_UNKNOWN`, retain identity durably, never resubmit, reconcile only through authenticated known-ID evidence. | If no provider ID was accepted, safe automated resolution may be impossible. | Bounded |
+| Process restart during ambiguity | MVP | Volatile state loss permits another POST. | Block implementation until an atomic durable operation repository preserves attempt and ambiguity across restart. | Durable-store outage or corruption can deny service. | Blocked |
+| Status polling ambiguity or failure | MVP | Failed/stale GET is interpreted as transaction failure or permission to resubmit. | Read-only bounded polling; observation-unavailable state; known-ID query only; never authorize POST. | Provider can remain stale or unavailable. | Bounded |
+| Transaction-state reordering or stale status | MVP | `CONFIRMED` arrives late, Arc skips it, or an older state overwrites newer evidence. | Retain observations, validate known enum, tolerate omissions/order, never infer missing states or erase independent chain evidence. | Provider state alone cannot fully order chain reality. | Detected |
+| Webhook spoofing or replay | MVP | Forged or repeated webhook changes operation state. | No webhook endpoint or consumer in COV-017; future webhook work requires separate authenticity/replay review. | Polling availability remains limited. | Prevented |
+| Credential rotation during an in-flight request | MVP | Old secret becomes invalid while outcome is uncertain. | Quiesce new work, atomically rotate, consume no old ciphertext, retain started work as ambiguous, and prohibit resubmission. | In-flight provider state may remain unresolved. | Bounded |
+| Circle acceptance represented as Arc execution or settlement | MVP | A `201` or provider state is labeled payment success. | Closed evidence taxonomy and fixed claims; separate provider, Arc, settlement, and finality states; no COV-015 additions. | External consumers can ignore labels. | Prevented |
+| Transaction hash represented as successful execution | MVP | Hash observation is treated as successful vault call. | Require independent Arc receipt status, exact target/input, events, state, and token-delta evidence. | Arc evidence design remains a separate accepted issue. | Prevented |
+| Settlement represented as finality | MVP | One observed successful effect is treated as irreversible. | Separate `EXTERNAL_SETTLEMENT_OBSERVED` and `PAYMENT_FINALITY_ESTABLISHED`; block finality until chain policy is approved. | Payment-finality policy is unresolved. | Blocked |
+| Upstream errors leak secrets | Production | Circle or dependency messages expose headers, secrets, IDs, bodies, paths, or network details. | Fixed public codes, discard raw text/body/header, no stack/cause, structured redaction and leakage fixtures. | Unreviewed internal telemetry or host tooling can still capture sensitive material. | Bounded |
+| Offchain operational state becomes financial authority | MVP | Idempotency repository or Circle status approves spend, replay, revocation, or settlement. | Repository records attempts only; vault remains authoritative; no operation state can construct or authorize a new call. | Consumers may misuse non-authoritative records outside the reviewed boundary. | Prevented |
+| Circle becomes authoritative for Covenant policy | MVP | Wallet rules or provider status replace vault enforcement. | Circle submits only exact fixed calldata; authority and vault retain signed-policy and onchain enforcement; direct transfer prohibited. | Compromised custody can still attack capabilities outside the vault path. | Prevented |
+| Exact Arc settlement observation | MVP | Provider claims are accepted without independent receipt/effect checks. | Require a separately accepted Arc evidence schema and reconciliation issue before settlement claims. | COV-017 intentionally creates no such implementation. | Deferred |
+
+**MVP:** The fixed Circle operation can proceed only after every `Blocked` item
+relevant to submission is resolved in a separately accepted implementation
+issue. `Deferred` and Production controls cannot be silently claimed as present.
+
+**MVP:** CovenantVault remains authoritative for spend, payment count,
+revocation, authorization replay, token movement, and settlement enforcement.
+Circle, the idempotency repository, audit projection, browser, and database remain
+non-authoritative.
+
+**Production:** Real credentials, recovery, wallet funding, durable coordination,
+monitoring, reconciliation, retention, privacy controls, egress enforcement,
+incident response, and real-fund operations remain deferred.
+
+**V2:** Additional wallets, Circle products, agents, vendors, assets, chains,
+fee policies, or operations require a separate threat model.
+
+**Protocol:** Generic HTTP, arbitrary contract or wallet execution, generalized
+transaction construction, arbitrary calldata, and multichain execution remain
+excluded.

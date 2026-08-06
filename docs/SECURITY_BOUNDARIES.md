@@ -81,6 +81,80 @@
 
 **MVP:** COV-004 adds no Circle API or credential, live broadcasting, funded key, deployment, HTTP endpoint, queue, worker, webhook, Supabase integration, UI, agent behavior, arbitrary calldata, generic forwarding, additional chain, or additional Covenant.
 
+## COV-017 isolated Circle execution and evidence boundary
+
+**MVP:** COV-017 is planning only. The current executor remains unchanged: it
+verifies the existing signed chain, constructs and exactly rechecks only
+`CovenantVault.executePayment`, and uses a simulated transport. It owns no Circle
+credential, entity secret, recovery file, wallet capability, funded transaction
+key, live transport, RPC, poller, webhook, database, or queue.
+
+**MVP:** The invariant remains exact: **No component capable of generating
+payment requests shall possess authority to execute payments.** The agent stays
+proposal-only; the authority and authorization signer receive no Circle
+submission capability; and a future Circle executor can neither propose nor
+authorize. The browser and web server receive no mutation, credential, wallet,
+or transport capability.
+
+**MVP:** A future Circle boundary may hold only one server-side API key, an
+isolated entity-secret ciphertext capability, one fixed Developer-Controlled
+Wallets wallet UUID, fixed HTTPS access to `https://api.circle.com`, and narrowly
+bounded non-authoritative idempotency state. The recovery file is separately
+custodied and never mounted into the runtime. Credentials and wallet identifiers
+cannot reach callers, other services, repository files, fixtures, logs, or
+errors. Local development and CI use no real credentials.
+
+**MVP:** The immutable-field and fixed-contract boundaries bind one Arc chain,
+wallet, CovenantVault, exact `executePayment` selector, zero native value, and
+internally constructed calldata to the already-verified PaymentIntent and
+AuthorizationReceipt. Public callers cannot select wallet, chain, contract,
+function, ABI, calldata, amount, fee policy, URL, method, credential,
+idempotency identity, or evidence classification. Direct Circle transfer is
+forbidden because it would bypass CovenantVault.
+
+**MVP:** The network boundary uses exact HTTPS origin and path, zero redirects,
+controlled DNS and egress, mandatory TLS validation, bounded phase and total
+deadlines, a 64 KiB response limit, strict JSON/UTF-8/content-encoding rules, and
+fixed sanitized failures. It exposes no generic HTTP or arbitrary URL-fetch
+capability.
+
+**MVP:** The existing executor `executionId` remains the canonical operation
+identity and is bound internally to one random Circle UUID-v4. Identical
+concurrent work joins and conflicts fail closed. Operational state cannot
+authorize spend. Once submission may have started, timeout, cancellation,
+malformed response, or transport failure becomes durable ambiguity and never an
+automatic POST retry.
+
+**MVP:** Preparation, Circle attempt, Circle acceptance or rejection, ambiguous
+outcome, provider state, Circle transaction ID, Arc transaction hash, Arc
+execution, external settlement, and payment finality remain distinct evidence
+claims. Circle acceptance is not Arc execution; a transaction hash is not
+successful execution; settlement is not finality. No new COV-015 event exists
+without a separately accepted audit-schema issue.
+
+**MVP:** CovenantVault remains authoritative for spend, payment count,
+revocation, authorization replay, token movement, and settlement enforcement.
+Circle status, wallet status, the idempotency repository, audit projections,
+browser state, and databases remain non-authoritative. Logs use only fixed
+sanitized codes and omit credentials, provider bodies, signed envelopes,
+signatures, calldata, network details, stacks, and causes.
+
+**MVP:** COV-017 excludes source and schema changes, SDK installation, real
+credentials, wallet operations or funding, HTTP, RPC, broadcast, polling,
+webhooks, databases, queues, audit events, execution, and deployment. Future
+Circle implementation remains separately gated by Proposed ADR 0020.
+
+**Production:** Secret custody and recovery, rotation, durable coordination,
+egress enforcement, monitoring, reconciliation, retention, incident response,
+and real-fund operation remain deferred.
+
+**V2:** Additional wallets, Circle operations, assets, actors, chains, or fee
+policies require separately accepted scope.
+
+**Protocol:** Generic HTTP, arbitrary wallet or smart-contract execution,
+arbitrary calldata, generic transaction building, and multichain behavior remain
+excluded.
+
 ## COV-005 procurement agent application boundary
 
 **MVP:** The agent is a pure proposal-only application core. It accepts only a strict signed Invoice plus `gpu-h100-hour` and an exact expected USDC amount, and returns only the signed PaymentIntent plus a defensive copy of that verified raw Invoice.
