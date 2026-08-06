@@ -67,3 +67,26 @@ receipt, exact event emitters, balance movement, and vault state. That reader is
 not exported by the executor and makes no Arc confirmation or finality claim.
 
 **Protocol:** Generic forwarding, arbitrary calldata, batching, multicall, delegatecall, multiple chains, account abstraction, and upgradeability remain excluded.
+
+## COV-017 Circle planning boundary
+
+**MVP:** COV-017 is documentation and architecture planning only. This executor
+is unchanged and still uses its simulated transport. No Circle API key, entity
+secret, ciphertext, recovery file, wallet capability, SDK, HTTP transport,
+status poller, funded transaction key, live submission, or Arc RPC capability
+has been implemented.
+
+**MVP:** Proposed ADR 0020 recommends that any separately approved future Circle
+transport preserve this package's exact fixed `executePayment` construction,
+independent decode and byte-for-byte re-encoding, fixed Arc chain, trusted vault,
+and zero native value. Direct Circle transfer and caller-selected wallet, chain,
+target, ABI, calldata, amount, fee policy, URL, credential, idempotency identity,
+or evidence classification remain forbidden.
+
+**MVP:** The current execution identity, identical-request joining, conflict
+rejection, and ambiguity boundary must remain intact. Once a Circle submission
+may have occurred, absence of a response must never cause automatic
+resubmission. Circle API acceptance, provider state, Arc execution, external
+settlement, and payment finality remain separate claims. Implementation remains
+separately gated by ADR 0020's custody, durable idempotency, retry, Arc evidence,
+and finality blockers.
