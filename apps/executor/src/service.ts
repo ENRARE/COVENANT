@@ -19,6 +19,10 @@ import type { Clock } from "./ports/clock.js";
 import type { CovenantProvider } from "./ports/covenant-provider.js";
 import type { ExecutionRepository } from "./ports/execution-repository.js";
 import type { TransactionTransport } from "./ports/transaction-transport.js";
+import {
+  createVerifiedTransactionContext,
+  didVerifiedTransactionSubmissionAttemptStart,
+} from "./ports/verified-transaction-context.js";
 import { InMemoryExecutionRepository } from "./repositories/in-memory-execution-repository.js";
 import {
   parseClockValue,
@@ -276,6 +280,10 @@ export function createExecutorService(
     try {
       const raw = await dependencies.transport.simulate(
         preparation.transaction,
+        createVerifiedTransactionContext(
+          preparation.transaction,
+          preparation.public.executionId,
+        ),
       );
       simulationTransportResultSchema.parse(raw);
     } catch {
@@ -380,13 +388,27 @@ export function createExecutorService(
           let submitted: ReturnType<
             typeof submissionTransportResultSchema.parse
           >;
+          const transportContext = createVerifiedTransactionContext(
+            preparation.transaction,
+            preparation.public.executionId,
+          );
           try {
             const raw = await withTimeout(
-              dependencies.transport.submit(preparation.transaction),
+              dependencies.transport.submit(
+                preparation.transaction,
+                transportContext,
+              ),
               timeout,
             );
             submitted = submissionTransportResultSchema.parse(raw);
-          } catch {
+          } catch (error) {
+            if (
+              !didVerifiedTransactionSubmissionAttemptStart(transportContext) &&
+              error instanceof ExecutorError
+            ) {
+              localSubmissions.set(identity, { status: "RETRYABLE_REJECTED" });
+              throw sanitizedExecutorError(error);
+            }
             localSubmissions.set(identity, { status: "AMBIGUOUS" });
             throw new ExecutorError("EXECUTION_RESULT_AMBIGUOUS");
           }

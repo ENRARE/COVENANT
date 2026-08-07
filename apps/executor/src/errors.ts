@@ -15,6 +15,19 @@ export const EXECUTOR_ERROR_CODES = [
   "SIMULATION_FAILURE",
   "SUBMISSION_FAILURE",
   "EXECUTION_RESULT_AMBIGUOUS",
+  "CONFIGURATION_UNAVAILABLE",
+  "CREDENTIAL_UNAVAILABLE",
+  "EXECUTION_CONFLICT",
+  "REQUEST_INVALID",
+  "CIRCLE_AUTHENTICATION_FAILED",
+  "CIRCLE_REQUEST_REJECTED",
+  "CIRCLE_RATE_LIMITED",
+  "CIRCLE_TRANSPORT_FAILED",
+  "CIRCLE_RESPONSE_INVALID",
+  "CIRCLE_OUTCOME_UNKNOWN",
+  "CIRCLE_STATUS_UNKNOWN",
+  "EXECUTION_NOT_RETRYABLE",
+  "INTERNAL_UNAVAILABLE",
 ] as const;
 
 export type ExecutorErrorCode = (typeof EXECUTOR_ERROR_CODES)[number];
@@ -36,6 +49,19 @@ export const EXECUTOR_ERROR_MESSAGES: Record<ExecutorErrorCode, string> = {
   SIMULATION_FAILURE: "Authorized transaction simulation failed",
   SUBMISSION_FAILURE: "Transaction was rejected before submission",
   EXECUTION_RESULT_AMBIGUOUS: "Transaction submission result is ambiguous",
+  CONFIGURATION_UNAVAILABLE: "Circle executor configuration is unavailable",
+  CREDENTIAL_UNAVAILABLE: "Circle credential material is unavailable",
+  EXECUTION_CONFLICT: "Circle execution identity conflicts with stored state",
+  REQUEST_INVALID: "Circle execution request is invalid",
+  CIRCLE_AUTHENTICATION_FAILED: "Circle authentication failed",
+  CIRCLE_REQUEST_REJECTED: "Circle rejected the execution request",
+  CIRCLE_RATE_LIMITED: "Circle rate limited the execution request",
+  CIRCLE_TRANSPORT_FAILED: "Circle transport failed before submission",
+  CIRCLE_RESPONSE_INVALID: "Circle response is invalid",
+  CIRCLE_OUTCOME_UNKNOWN: "Circle submission outcome is unknown",
+  CIRCLE_STATUS_UNKNOWN: "Circle transaction status is unknown",
+  EXECUTION_NOT_RETRYABLE: "Circle execution cannot be retried",
+  INTERNAL_UNAVAILABLE: "Circle executor dependency is unavailable",
 };
 
 export class ExecutorError extends Error {
