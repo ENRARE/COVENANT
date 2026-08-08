@@ -69,6 +69,20 @@ const acceptedBodySchema = z
       .strict(),
   })
   .strict();
+const statusBodySchema = z
+  .object({
+    data: z
+      .object({
+        id: canonicalUuidV4Schema,
+        state: transactionStateSchema,
+        txHash: z
+          .string()
+          .regex(/^0x[0-9a-fA-F]{64}$/)
+          .optional(),
+      })
+      .strict(),
+  })
+  .strict();
 const executionFingerprintSchema = z
   .object({
     operationKey: bytes32Schema,
@@ -154,6 +168,10 @@ export function parseCircleUuidV4(value: unknown): string {
   return canonicalUuidV4Schema.parse(value);
 }
 
+export function parseCircleOperationKey(value: unknown): Hex {
+  return bytes32Schema.parse(value);
+}
+
 export function parseFixedCircleTransaction(value: unknown): {
   chainId: 5_042_002n;
   to: Address;
@@ -200,6 +218,22 @@ export function parseCircleHttpResponse(value: unknown) {
 
 export function parseCircleAcceptedBody(value: unknown) {
   return acceptedBodySchema.parse(value).data;
+}
+
+export function parseCircleStatusBody(value: unknown, expectedId: string) {
+  const parsed = statusBodySchema.parse(value).data;
+  if (parsed.id !== expectedId) throw new Error();
+  const hashRequired = ["SENT", "STUCK", "CONFIRMED", "COMPLETE"].includes(
+    parsed.state,
+  );
+  if (hashRequired !== (parsed.txHash !== undefined)) throw new Error();
+  return Object.freeze({
+    id: parsed.id,
+    state: parsed.state,
+    ...(parsed.txHash === undefined
+      ? {}
+      : { transactionHash: parsed.txHash.toLowerCase() as Hex }),
+  });
 }
 
 export function parseCircleOperationRecord(

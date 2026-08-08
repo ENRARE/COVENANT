@@ -166,8 +166,11 @@ export function createCircleContractExecutionTransport(
           transactionId: operation.providerTransactionId,
         });
       }
-      if (operation.state !== "PREPARED") {
-        throw new ExecutorError("EXECUTION_NOT_RETRYABLE");
+      if (
+        operation.state === "SUBMISSION_ATTEMPT_STARTED" ||
+        operation.state === "UNKNOWN"
+      ) {
+        return Object.freeze({ status: "AMBIGUOUS" });
       }
 
       let authenticationMaterial: string;
