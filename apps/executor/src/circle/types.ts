@@ -5,6 +5,8 @@ export const CIRCLE_CONTRACT_EXECUTION_PATH =
   "/v1/w3s/developer/transactions/contractExecution" as const;
 export const CIRCLE_CONTRACT_EXECUTION_URL =
   `${CIRCLE_ORIGIN}${CIRCLE_CONTRACT_EXECUTION_PATH}` as const;
+export const CIRCLE_TRANSACTION_STATUS_PATH_PREFIX =
+  "/v1/w3s/transactions/" as const;
 export const CIRCLE_MAX_RESPONSE_BYTES = 65_536;
 
 export const CIRCLE_TRANSACTION_STATES = [
@@ -46,10 +48,28 @@ export type CircleHttpExchange = {
   postContractExecution(request: CircleHttpRequest): Promise<unknown>;
 };
 
+export type CircleTransactionStatusHttpRequest = Readonly<{
+  method: "GET";
+  url: string;
+  headers: Readonly<{
+    accept: "application/json";
+    authorization: string;
+  }>;
+  maximumResponseBytes: typeof CIRCLE_MAX_RESPONSE_BYTES;
+  redirects: 0;
+  acceptContentEncoding: "identity";
+}>;
+
+export type CircleTransactionStatusHttpExchange = {
+  getTransaction(request: CircleTransactionStatusHttpRequest): Promise<unknown>;
+};
+
 export type CircleCredentialProvider = {
   getApiKey(): unknown;
   createEntitySecretCiphertext(): unknown;
 };
+
+export type CircleApiKeyProvider = Pick<CircleCredentialProvider, "getApiKey">;
 
 export type CircleExecutionFingerprint = Readonly<{
   operationKey: Hex;
@@ -79,6 +99,7 @@ export type CircleOperationRecord = CircleOperationRecordBase &
   );
 
 export type CircleOperationRepository = {
+  get(operationKey: Hex): Promise<unknown>;
   prepare(
     fingerprint: CircleExecutionFingerprint,
     idempotencyKey: string,
@@ -98,6 +119,25 @@ export type CircleOperationRepository = {
     expectedIdempotencyKey: string,
   ): Promise<unknown>;
 };
+
+export type CircleTransactionObservation = Readonly<{
+  status: "OBSERVED";
+  transactionId: string;
+  providerState: CircleTransactionState;
+  transactionHash?: Hex;
+}>;
+
+export type CircleTransactionStatusReader = {
+  observeKnownTransaction(
+    operationKey: unknown,
+  ): Promise<CircleTransactionObservation>;
+};
+
+export type CircleTransactionStatusReaderDependencies = Readonly<{
+  credentials: CircleApiKeyProvider;
+  http: CircleTransactionStatusHttpExchange;
+  operations: CircleOperationRepository;
+}>;
 
 export type CircleContractExecutionTransportConfig = Readonly<{
   walletId: string;

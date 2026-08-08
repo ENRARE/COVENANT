@@ -559,6 +559,7 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
     "pnpm.mjs",
   );
   const availableCandidatePorts = await availableAnvilCandidatePorts();
+  const pnpmStore = resolveRepositoryPnpmStore();
   try {
     mkdirSync(repository, { recursive: true });
     copyTrackedCheckout(repository);
@@ -586,7 +587,7 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
         "--frozen-lockfile",
         "--ignore-scripts",
         "--store-dir",
-        resolveRepositoryPnpmStore(),
+        pnpmStore,
         "--reporter=append-only",
       ],
       {
@@ -630,7 +631,12 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
       {
         cwd: checkout,
         encoding: "utf8",
-        env: { ...process.env, CI: "true", npm_execpath: hostileCli },
+        env: {
+          ...process.env,
+          CI: "true",
+          npm_execpath: hostileCli,
+          pnpm_config_store_dir: pnpmStore,
+        },
         maxBuffer: 32 * 1024 * 1024,
         shell: false,
         windowsHide: true,
@@ -655,6 +661,7 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
       {
         cwd: checkout,
         encoding: "utf8",
+        env: { ...process.env, CI: "true", pnpm_config_store_dir: pnpmStore },
         maxBuffer: 32 * 1024 * 1024,
         shell: false,
         windowsHide: true,
@@ -677,7 +684,12 @@ test("isolated documented command regenerates clean outputs and ignores hostile 
       {
         cwd: checkout,
         encoding: "utf8",
-        env: { ...process.env, CI: "true", npm_execpath: hostileCli },
+        env: {
+          ...process.env,
+          CI: "true",
+          npm_execpath: hostileCli,
+          pnpm_config_store_dir: pnpmStore,
+        },
         maxBuffer: 32 * 1024 * 1024,
         shell: false,
         windowsHide: true,

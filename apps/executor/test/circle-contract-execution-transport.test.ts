@@ -127,6 +127,7 @@ describe("Circle contract execution transport", () => {
       harness.request,
     );
 
+    expect(prepared.value).toBe(0n);
     expect(result).toMatchObject({
       status: "SUBMITTED",
       transactionId: TRANSACTION_ID,

@@ -13,6 +13,13 @@ export class InMemoryCircleOperationRepository implements CircleOperationReposit
   readonly #records = new Map<Hex, CircleOperationRecord>();
   readonly #uuids = new Map<string, Hex>();
 
+  get(operationKey: Hex): Promise<unknown> {
+    const value = this.#records.get(operationKey);
+    return Promise.resolve(
+      value === undefined ? undefined : parseCircleOperationRecord(value),
+    );
+  }
+
   prepare(
     fingerprint: CircleExecutionFingerprint,
     idempotencyKey: string,
