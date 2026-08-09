@@ -1,4 +1,7 @@
 export * from "./errors.js";
+export * from "./arc/evidence-reader.js";
+export * from "./arc/reconciliation.js";
+export * from "./arc/types.js";
 export * from "./circle/contract-execution-transport.js";
 export * from "./circle/durable-operation-repository.js";
 export * from "./circle/https-exchange.js";
