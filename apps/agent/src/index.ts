@@ -6,6 +6,7 @@ export {
   type DurableProposalReservationRepositoryOptions,
 } from "./durable-proposal-reservation-repository.js";
 export * from "./in-memory-proposal-reservation-repository.js";
+export * from "./signers/keystore-payment-intent-signer.js";
 export * from "./ports.js";
 export * from "./procurement-integration.js";
 export * from "./provider-quote-evidence.js";

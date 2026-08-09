@@ -18,11 +18,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@covenant/config": "workspace:*",
     "@covenant/spec": "workspace:*",
+    "viem": "^2.33.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "viem": "^2.33.3",
     "vitest": "^3.2.4"
   }
 }

@@ -8,6 +8,7 @@ export * from "./ports/repositories.js";
 export * from "./repositories/in-memory-authorization-repository.js";
 export * from "./repositories/in-memory-decision-repository.js";
 export * from "./repositories/in-memory-nonce-repository.js";
+export * from "./signers/keystore-receipt-signer.js";
 export { evidenceSnapshotSchema, type EvidenceSnapshot } from "./schemas.js";
 export * from "./service.js";
 export * from "./types.js";

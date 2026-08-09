@@ -1,5 +1,5 @@
 {
-  "name": "@covenant/config",
+  "name": "@covenant/vendor",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./isolated-keystore": {
-      "types": "./dist/isolated-keystore.d.ts",
-      "import": "./dist/isolated-keystore.js"
     }
   },
   "scripts": {
@@ -21,12 +17,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
-  "files": [
-    "*.json",
-    "*.mjs",
-    "dist"
-  ],
   "dependencies": {
+    "@covenant/config": "workspace:*",
+    "@covenant/spec": "workspace:*",
     "viem": "^2.33.3",
     "zod": "^3.25.76"
   },
