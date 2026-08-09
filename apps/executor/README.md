@@ -42,6 +42,23 @@ pnpm.cmd --filter @covenant/executor build
 pnpm.cmd verify:contract-abi
 ```
 
+## COV-019 Arc execution evidence
+
+**MVP:** COV-019 adds a capability-limited, read-only observer for one
+already-known authorized execution. Its injected source can read only the fixed
+Arc Testnet chain ID, known transaction receipt, receipt block, and known vault
+state. It exposes no generic RPC, URL, method selection, credential, signer,
+calldata construction, submission, retry, transaction broadcast, or contract
+write capability.
+
+**MVP:** Circle provider evidence and observed Arc Testnet execution evidence
+remain separate. Provider status alone never proves Arc execution. All external
+values enter as `unknown`, are strictly normalized, and produce only sanitized,
+deterministic conflict or availability results. Evidence remains
+non-authoritative for authorization, replay protection, spend accounting,
+revocation, payment count, or token movement; `CovenantVault` remains
+authoritative for those controls.
+
 ## Deferred scope
 
 **MVP:** COV-004 excludes Circle APIs and credentials, live Arc broadcasting, funded keys, deployment, HTTP endpoints, webhooks, queues, workers, Supabase, UI, agent behavior, and production key infrastructure.
