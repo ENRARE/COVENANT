@@ -7,7 +7,7 @@
     "build": "next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests --configLoader runner"
   },
   "dependencies": {
     "@covenant/audit": "workspace:*",

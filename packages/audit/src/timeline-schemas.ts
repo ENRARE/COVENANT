@@ -27,6 +27,54 @@ const lowercaseBytes32Schema = z
 const positiveDecimalSchema = z.string().regex(/^[1-9][0-9]*$/u);
 const canonicalDecimalSchema = z.string().regex(/^(0|[1-9][0-9]*)$/u);
 const occurredAtSchema = z.string().regex(/^[1-9][0-9]*$/u);
+const providerObservationStateSchema = z.enum([
+  "UNKNOWN",
+  "INITIATED",
+  "CLEARED",
+  "QUEUED",
+  "SENT",
+  "STUCK",
+  "CONFIRMED",
+  "COMPLETE",
+  "FAILED",
+  "DENIED",
+  "CANCELLED",
+]);
+const providerProgressionStateSchema = z.enum([
+  "PREPARED",
+  "SUBMISSION_ATTEMPT_STARTED",
+  ...providerObservationStateSchema.options,
+]);
+const arcConflictReasonSchema = z.enum([
+  "MALFORMED_ARC_EVIDENCE",
+  "MALFORMED_EXPECTATION",
+  "WRONG_CHAIN",
+  "MALFORMED_RECEIPT",
+  "TRANSACTION_HASH_MISMATCH",
+  "VAULT_TARGET_MISMATCH",
+  "MALFORMED_BLOCK",
+  "BLOCK_MISMATCH",
+  "REMOVED_LOG",
+  "REVERTED_RECEIPT_HAS_LOGS",
+  "MISSING_PAYMENT_EXECUTED",
+  "DUPLICATE_PAYMENT_EXECUTED",
+  "MALFORMED_PAYMENT_EXECUTED",
+  "WRONG_PAYMENT_EVENT_VAULT",
+  "WRONG_COVENANT_ID",
+  "WRONG_INTENT_ID",
+  "WRONG_AUTHORIZATION_ID",
+  "WRONG_RECIPIENT",
+  "WRONG_AMOUNT",
+  "MISSING_TOKEN_TRANSFER",
+  "DUPLICATE_TOKEN_TRANSFER",
+  "MALFORMED_TOKEN_TRANSFER",
+  "WRONG_TOKEN",
+  "WRONG_TRANSFER_SOURCE",
+  "WRONG_TRANSFER_RECIPIENT",
+  "WRONG_TRANSFER_AMOUNT",
+  "MALFORMED_VAULT_STATE",
+  "VAULT_STATE_CONFLICT",
+]);
 const canonicalAmountSchema = z.string().refine((value) => {
   try {
     return formatUsdc(parseUsdc(value)) === value;
@@ -59,6 +107,9 @@ export const SOURCE_EVENT_TYPES = Object.freeze([
   "LOCAL_COVENANT_REVOCATION_VERIFIED",
   "LOCAL_POST_REVOCATION_EXECUTION_REJECTED",
   "COV-010_DEPLOYMENT_MANIFEST",
+  "CIRCLE_PROVIDER_OBSERVATION",
+  "ARC_EXECUTION_OBSERVATION",
+  "EXECUTION_RECONCILIATION",
 ] as const);
 
 export const normalizedSubjectSchema = z
@@ -192,6 +243,113 @@ const eventDetailSchemas = {
       manifestDigest: lowercaseBytes32Schema,
     })
     .strict(),
+  CIRCLE_PROVIDER_OBSERVATION_RECORDED: z
+    .object({
+      providerStatus: z.enum(["UNKNOWN", "OBSERVED"]),
+      providerState: providerObservationStateSchema,
+      providerTransactionHash: lowercaseBytes32Schema.optional(),
+      progression: z.array(providerProgressionStateSchema).min(1).max(16),
+      submissionAttemptObserved: z.literal(true),
+      automaticRetry: z.literal(false),
+    })
+    .strict()
+    .superRefine((value, context) => {
+      const lastState = value.progression.at(-1);
+      if (
+        lastState !== value.providerState ||
+        (value.providerStatus === "UNKNOWN" &&
+          (value.providerState !== "UNKNOWN" ||
+            value.providerTransactionHash !== undefined)) ||
+        (value.providerStatus === "OBSERVED" &&
+          value.providerState === "UNKNOWN")
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Circle provider observation is internally inconsistent",
+        });
+      }
+    }),
+  ARC_EXECUTION_OBSERVATION_RECORDED: z.union([
+    z
+      .object({
+        status: z.literal("OBSERVED_SUCCESS"),
+        network: z.literal("ARC-TESTNET"),
+        chainId: z.literal("5042002"),
+        transactionHash: lowercaseBytes32Schema,
+        blockNumber: positiveDecimalSchema,
+        blockHash: lowercaseBytes32Schema,
+        receiptStatus: z.literal("SUCCESSFUL"),
+        vault: addressSchema,
+        covenantId: lowercaseBytes32Schema,
+        intentId: lowercaseBytes32Schema,
+        authorizationId: lowercaseBytes32Schema,
+        recipient: addressSchema,
+        amountBaseUnits: positiveDecimalSchema,
+        token: addressSchema,
+        transferSource: addressSchema,
+        transferRecipient: addressSchema,
+        transferAmountBaseUnits: positiveDecimalSchema,
+        totalSpent: canonicalDecimalSchema,
+        paymentCount: canonicalDecimalSchema,
+        revoked: z.boolean(),
+        vaultTokenBalance: canonicalDecimalSchema,
+      })
+      .strict()
+      .superRefine((value, context) => {
+        if (
+          value.transferSource !== value.vault ||
+          value.transferRecipient !== value.recipient ||
+          value.transferAmountBaseUnits !== value.amountBaseUnits
+        ) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Arc transfer does not match the observed execution",
+          });
+        }
+      }),
+    z
+      .object({
+        status: z.literal("OBSERVED_REVERTED"),
+        network: z.literal("ARC-TESTNET"),
+        chainId: z.literal("5042002"),
+        transactionHash: lowercaseBytes32Schema,
+        blockNumber: positiveDecimalSchema,
+        blockHash: lowercaseBytes32Schema,
+        receiptStatus: z.literal("REVERTED"),
+        vault: addressSchema,
+      })
+      .strict(),
+    z.object({ status: z.literal("NOT_OBSERVED") }).strict(),
+    z
+      .object({
+        status: z.literal("EVIDENCE_CONFLICT"),
+        reason: arcConflictReasonSchema,
+      })
+      .strict(),
+    z.object({ status: z.literal("OBSERVATION_UNAVAILABLE") }).strict(),
+  ]),
+  EXECUTION_RECONCILIATION_RECORDED: z
+    .object({
+      classification: z.enum([
+        "PROVIDER_ONLY",
+        "ARC_NOT_OBSERVED",
+        "ARC_EXECUTION_SUCCEEDED",
+        "ARC_EXECUTION_REVERTED",
+        "EVIDENCE_CONFLICT",
+        "OBSERVATION_UNAVAILABLE",
+      ]),
+      providerStatus: z.enum(["UNKNOWN", "OBSERVED"]),
+      arcStatus: z.enum([
+        "OBSERVED_SUCCESS",
+        "OBSERVED_REVERTED",
+        "NOT_OBSERVED",
+        "EVIDENCE_CONFLICT",
+        "OBSERVATION_UNAVAILABLE",
+      ]),
+      providerEvidenceEstablishesArcSuccess: z.literal(false),
+      automaticRetry: z.literal(false),
+    })
+    .strict(),
 } as const;
 
 type EventClassification = Readonly<{
@@ -316,6 +474,24 @@ const EVENT_CLASSIFICATIONS = deepFreeze({
     evidenceClass: "COMMITTED_ARC_DEPLOYMENT_EVIDENCE",
     claimScope: "ARC_DEPLOYMENT_TRANSACTION_ONLY",
   },
+  CIRCLE_PROVIDER_OBSERVATION_RECORDED: {
+    stage: "PROVIDER_OBSERVATION",
+    outcome: "OBSERVED",
+    evidenceClass: "CIRCLE_PROVIDER_OBSERVATION_EVIDENCE",
+    claimScope: "CIRCLE_PROVIDER_STATE_ONLY",
+  },
+  ARC_EXECUTION_OBSERVATION_RECORDED: {
+    stage: "EXECUTION_EVIDENCE",
+    outcome: "OBSERVED",
+    evidenceClass: "ARC_TESTNET_RECEIPT_LOG_STATE_EVIDENCE",
+    claimScope: "ARC_TESTNET_EXECUTION_OBSERVATION_ONLY",
+  },
+  EXECUTION_RECONCILIATION_RECORDED: {
+    stage: "EXECUTION_EVIDENCE",
+    outcome: "OBSERVED",
+    evidenceClass: "DERIVED_EXECUTION_RECONCILIATION_EVIDENCE",
+    claimScope: "CIRCLE_ARC_RECONCILIATION_ONLY",
+  },
 } satisfies Record<
   (typeof NORMALIZED_EVENT_TYPES)[number],
   EventClassification
@@ -431,10 +607,13 @@ export const normalizedAuditEventSchema = z
 
 export const claimBoundarySchema = z
   .object({
-    circleExecution: z.literal(false),
+    circleSubmissionAttemptObserved: z.literal(true),
+    circleProviderOutcomeKnown: z.literal(false),
+    arcExecutionObserved: z.literal(true),
     arcPaymentSettlement: z.literal(false),
     paymentFinality: z.literal(false),
     databaseFinancialAuthority: z.literal(false),
+    automaticResubmission: z.literal(false),
   })
   .strict();
 
@@ -491,6 +670,126 @@ export const auditTimelineSchema = z
       }
       priorEventIds.add(event.eventId);
     });
+
+    const providerEvents = timeline.events.filter(
+      (event) => event.eventType === "CIRCLE_PROVIDER_OBSERVATION_RECORDED",
+    );
+    const arcEvents = timeline.events.filter(
+      (event) => event.eventType === "ARC_EXECUTION_OBSERVATION_RECORDED",
+    );
+    const reconciliationEvents = timeline.events.filter(
+      (event) => event.eventType === "EXECUTION_RECONCILIATION_RECORDED",
+    );
+    if (
+      providerEvents.length + arcEvents.length + reconciliationEvents.length >
+      0
+    ) {
+      if (
+        providerEvents.length !== 1 ||
+        arcEvents.length !== 1 ||
+        reconciliationEvents.length !== 1
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["events"],
+          message: "Execution evidence set must be complete and unique",
+        });
+      } else {
+        const providerEvent = providerEvents[0];
+        const arcEvent = arcEvents[0];
+        const reconciliationEvent = reconciliationEvents[0];
+        if (
+          providerEvent === undefined ||
+          arcEvent === undefined ||
+          reconciliationEvent === undefined
+        ) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["events"],
+            message: "Execution evidence set is unavailable",
+          });
+          return;
+        }
+        const provider =
+          eventDetailSchemas.CIRCLE_PROVIDER_OBSERVATION_RECORDED.safeParse(
+            providerEvent.details,
+          );
+        const arc =
+          eventDetailSchemas.ARC_EXECUTION_OBSERVATION_RECORDED.safeParse(
+            arcEvent.details,
+          );
+        const reconciliation =
+          eventDetailSchemas.EXECUTION_RECONCILIATION_RECORDED.safeParse(
+            reconciliationEvent.details,
+          );
+        if (provider.success && arc.success && reconciliation.success) {
+          let expectedClassification:
+            | "PROVIDER_ONLY"
+            | "ARC_NOT_OBSERVED"
+            | "ARC_EXECUTION_SUCCEEDED"
+            | "ARC_EXECUTION_REVERTED"
+            | "EVIDENCE_CONFLICT"
+            | "OBSERVATION_UNAVAILABLE";
+          if (arc.data.status === "EVIDENCE_CONFLICT") {
+            expectedClassification = "EVIDENCE_CONFLICT";
+          } else if (arc.data.status === "OBSERVATION_UNAVAILABLE") {
+            expectedClassification = "OBSERVATION_UNAVAILABLE";
+          } else if (arc.data.status === "NOT_OBSERVED") {
+            expectedClassification =
+              provider.data.providerStatus === "OBSERVED"
+                ? "PROVIDER_ONLY"
+                : "ARC_NOT_OBSERVED";
+          } else {
+            const providerContradictsArc =
+              provider.data.providerStatus === "OBSERVED" &&
+              ((provider.data.providerTransactionHash !== undefined &&
+                provider.data.providerTransactionHash !==
+                  arc.data.transactionHash) ||
+                (arc.data.status === "OBSERVED_SUCCESS"
+                  ? ["FAILED", "DENIED", "CANCELLED"].includes(
+                      provider.data.providerState,
+                    )
+                  : ["SENT", "CONFIRMED", "COMPLETE"].includes(
+                      provider.data.providerState,
+                    )));
+            expectedClassification = providerContradictsArc
+              ? "EVIDENCE_CONFLICT"
+              : arc.data.status === "OBSERVED_SUCCESS"
+                ? "ARC_EXECUTION_SUCCEEDED"
+                : "ARC_EXECUTION_REVERTED";
+          }
+          const expectedCauses = [
+            providerEvent.eventId,
+            arcEvent.eventId,
+          ].sort();
+          const subjectsMatch =
+            canonicalDigest(providerEvent.subject as CanonicalJsonValue) ===
+              canonicalDigest(arcEvent.subject as CanonicalJsonValue) &&
+            canonicalDigest(providerEvent.subject as CanonicalJsonValue) ===
+              canonicalDigest(
+                reconciliationEvent.subject as CanonicalJsonValue,
+              );
+          if (
+            arcEvent.causes.length !== 0 ||
+            reconciliationEvent.causes.length !== 2 ||
+            reconciliationEvent.causes.some(
+              (cause, index) => cause !== expectedCauses[index],
+            ) ||
+            !subjectsMatch ||
+            reconciliation.data.classification !== expectedClassification ||
+            reconciliation.data.providerStatus !==
+              provider.data.providerStatus ||
+            reconciliation.data.arcStatus !== arc.data.status
+          ) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["events"],
+              message: "Execution reconciliation is internally inconsistent",
+            });
+          }
+        }
+      }
+    }
     const expectedProjectionId = canonicalDigest({
       schemaVersion: timeline.schemaVersion,
       mode: timeline.mode,

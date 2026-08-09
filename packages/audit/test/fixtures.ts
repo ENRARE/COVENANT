@@ -15,6 +15,8 @@ export const IDS = Object.freeze({
   authorizationDigest: id("8"),
   execution: id("9"),
   runtime: id("a"),
+  transaction: id("d"),
+  block: id("e"),
 });
 
 export const ADDRESSES = Object.freeze({
@@ -294,5 +296,87 @@ export function rejectedDemoSource() {
 }
 
 export function bundle(...sources: readonly unknown[]) {
-  return { schemaVersion: "1", sources };
+  return { schemaVersion: "2", sources };
+}
+
+type ReconciliationClassification =
+  | "PROVIDER_ONLY"
+  | "ARC_NOT_OBSERVED"
+  | "ARC_EXECUTION_SUCCEEDED"
+  | "ARC_EXECUTION_REVERTED"
+  | "EVIDENCE_CONFLICT"
+  | "OBSERVATION_UNAVAILABLE";
+
+export function arcExecutionSource(
+  classification: ReconciliationClassification = "ARC_EXECUTION_SUCCEEDED",
+) {
+  const provider =
+    classification === "PROVIDER_ONLY"
+      ? ({ status: "OBSERVED", providerState: "COMPLETE" } as const)
+      : ({ status: "UNKNOWN" } as const);
+  const common = {
+    chainId: 5_042_002 as const,
+    transactionHash: IDS.transaction,
+    blockNumber: "56117505",
+    blockHash: IDS.block,
+    vault: ADDRESSES.vault,
+  };
+  const arc =
+    classification === "ARC_EXECUTION_SUCCEEDED"
+      ? ({
+          status: "OBSERVED_SUCCESS",
+          ...common,
+          covenantId: IDS.covenant,
+          intentId: IDS.intent,
+          authorizationId: IDS.authorization,
+          recipient: ADDRESSES.recipient,
+          amount: "1250000",
+          token: ADDRESSES.token,
+          transfer: {
+            source: ADDRESSES.vault,
+            recipient: ADDRESSES.recipient,
+            amount: "1250000",
+          },
+          vaultState: {
+            totalSpent: "1250000",
+            paymentCount: "1",
+            revoked: false,
+            tokenBalance: "2750000",
+          },
+        } as const)
+      : classification === "ARC_EXECUTION_REVERTED"
+        ? ({ status: "OBSERVED_REVERTED", ...common } as const)
+        : classification === "EVIDENCE_CONFLICT"
+          ? ({
+              status: "EVIDENCE_CONFLICT",
+              reason: "WRONG_AMOUNT",
+            } as const)
+          : classification === "OBSERVATION_UNAVAILABLE"
+            ? ({ status: "OBSERVATION_UNAVAILABLE" } as const)
+            : ({ status: "NOT_OBSERVED" } as const);
+  return {
+    kind: "ARC_EXECUTION_EVIDENCE" as const,
+    expected: {
+      chainId: 5_042_002 as const,
+      transactionHash: IDS.transaction,
+      vault: ADDRESSES.vault,
+      covenantId: IDS.covenant,
+      intentId: IDS.intent,
+      authorizationId: IDS.authorization,
+      executionId: IDS.execution,
+      recipient: ADDRESSES.recipient,
+      amount: "1250000",
+      token: ADDRESSES.token,
+    },
+    providerProgression: [
+      "PREPARED",
+      "SUBMISSION_ATTEMPT_STARTED",
+      provider.status === "UNKNOWN" ? "UNKNOWN" : provider.providerState,
+    ],
+    submissionAttemptObserved: true as const,
+    automaticRetry: false as const,
+    provider,
+    arc,
+    reconciliation: { classification },
+  };
 }

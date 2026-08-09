@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Covenant scaffold",
+  title: "COVENANT — Bounded financial authority",
   description:
-    "COV-001 repository scaffold; no product interface is implemented.",
+    "Read-only evidence console for the frozen COVENANT Arc Testnet demonstration.",
 };
 
 export default function RootLayout({
