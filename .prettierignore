@@ -7,3 +7,4 @@ cache
 out
 broadcast
 pnpm-lock.yaml
+apps/web/data/audit-timeline.json

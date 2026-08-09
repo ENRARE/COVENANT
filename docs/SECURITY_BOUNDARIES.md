@@ -232,6 +232,57 @@ demonstration but is outside COV-006.
 
 **MVP:** The lockfile-pinned local Playwright CLI provisions Chromium only through the explicit `pnpm e2e:install-browser` command. Normal verification performs a non-mutating executable preflight and never installs a browser, uses an ambient browser, or requires internet access after provisioning.
 
+## COV-020 Arc execution audit-integration boundary
+
+**MVP:** Audit schema version `2` accepts exactly one additional source family,
+`ARC_EXECUTION_EVIDENCE`. The adapter reparses its input from `unknown`,
+reconstructs allowlisted facts, and has no dependency on an RPC client, Circle
+transport, signer, wallet, transaction builder, contract writer, database, or
+command runner.
+
+**MVP:** Circle provider observation, independent Arc execution observation,
+and their deterministic reconciliation are separate events, evidence classes,
+claim scopes, and causal identities. Provider evidence proves at most an
+observed submission attempt and its strict durable-state progression. It never
+proves Arc execution and never permits a retry or resubmission.
+
+**MVP:** Arc success preserves only sanitized normalized COV-019 facts after
+strict correlation of chain ID, transaction hash, CovenantVault target,
+covenant, intent and authorization identifiers, recipient, amount, token,
+`PaymentExecuted`, ERC-20 `Transfer`, receipt status, and required read-only
+vault state. Removed, duplicate, missing, malformed, mismatched, and conflicting
+evidence fail closed upstream or at audit reconciliation.
+
+**MVP:** The six reconciliation classifications are closed to `PROVIDER_ONLY`,
+`ARC_NOT_OBSERVED`, `ARC_EXECUTION_SUCCEEDED`, `ARC_EXECUTION_REVERTED`,
+`EVIDENCE_CONFLICT`, and `OBSERVATION_UNAVAILABLE`. The normalized timeline
+recomputes the classification and rejects incomplete, duplicate, causally
+unlinked, subject-mismatched, or semantically conflicting evidence. Circle
+`UNKNOWN` plus independent Arc success may establish observed Arc execution.
+
+**MVP:** The committed COV-018 historical fixture is static and sanitized. It
+is generated offline from repository-owned inputs and strictly parsed by the
+server. The browser performs no projection, live observation, persistence,
+mutation, submission, revocation, or financial action and resets native event
+disclosures on reload.
+
+**MVP:** Top-level claims distinguish a Circle submission attempt from unknown
+provider outcome and independently observed Arc execution. Arc payment
+settlement, payment finality, database financial authority, and automatic
+resubmission remain explicitly false. Observed execution is not promoted to
+settlement, confirmation finality, or irreversibility.
+
+**Production:** Live evidence ingestion, redundant RPC observation,
+reorganization and confirmation policy, tamper-evident distribution,
+authenticated console access, monitoring, retention, and incident response
+remain deferred.
+
+**V2:** Additional payments, fixtures, actors, providers, assets, organizations,
+or chains require separate approved source schemas and security review.
+
+**Protocol:** Generic RPC, arbitrary event ingestion, generic payment controls,
+arbitrary calls, and generalized reconciliation remain excluded.
+
 ## COV-008 local contract-evidence boundary
 
 **MVP:** `tests/contract-evidence` starts one controlled loopback-only Anvil

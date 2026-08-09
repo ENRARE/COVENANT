@@ -1,16 +1,17 @@
 import { expect, test as base } from "@playwright/test";
 
 const testOrigin = "http://127.0.0.1:3100";
+const projectionId =
+  "0xedf05d3ce6263095b0cd323396e558409eae16090d6b00b599454a22de8f2a05";
+const transactionHash =
+  "0x1429af87afb5865933cb4bc3870100c8c4d0cde8795efc54e07a9460f8acea55";
 
-type NetworkGuardFixtures = {
-  offlineNetworkGuard: undefined;
-};
+type NetworkGuardFixtures = { offlineNetworkGuard: undefined };
 
 const test = base.extend<NetworkGuardFixtures>({
   offlineNetworkGuard: [
     async ({ page }, use) => {
       const prohibitedAttempts: string[] = [];
-
       await page.route("**/*", async (route) => {
         const requestUrl = new URL(route.request().url());
         if (
@@ -20,11 +21,9 @@ const test = base.extend<NetworkGuardFixtures>({
           await route.continue();
           return;
         }
-
         prohibitedAttempts.push("non-loopback HTTP request");
         await route.abort("blockedbyclient");
       });
-
       await page.routeWebSocket("**/*", async (webSocket) => {
         prohibitedAttempts.push("WebSocket connection");
         await webSocket.close({
@@ -32,78 +31,130 @@ const test = base.extend<NetworkGuardFixtures>({
           reason: "WebSocket connections are prohibited in offline E2E tests",
         });
       });
-
       await use(undefined);
-
-      expect(
-        prohibitedAttempts,
-        `The E2E browser attempted traffic outside ${testOrigin}.`,
-      ).toEqual([]);
+      expect(prohibitedAttempts).toEqual([]);
     },
     { auto: true },
   ],
 });
 
-const projectionId =
-  "0x2d746e4eac75eab7cb35182a25afd8b669335d8bbdf175fd72fa1598ba8d0bc3";
-
-test("renders the frozen audit projection", async ({ page }) => {
+test("first screen communicates the bounded product", async ({ page }) => {
   await page.goto("/");
 
   await expect(
     page.getByRole("heading", {
-      name: "Authorization evidence, not payment authority.",
+      name: "Bounded financial authority for autonomous software",
     }),
   ).toBeVisible();
-  await expect(page.getByText(projectionId)).toBeVisible();
-  await expect(page.locator(".event-card")).toHaveCount(19);
-  await expect(page.locator(".event-card").first()).toHaveAttribute(
-    "data-event-type",
-    "ARC_DEPLOYMENT_EVIDENCE_VERIFIED",
-  );
-  await expect(page.locator(".event-card").last()).toHaveAttribute(
-    "data-event-type",
-    "POST_REVOCATION_EXECUTION_REJECTED",
-  );
   await expect(
-    page.getByText("LOCAL_ANVIL_SETTLEMENT_OBSERVATION", { exact: true }),
+    page.getByText(
+      "AI proposes. Covenant authorizes. Circle submits. Arc execution is independently verified.",
+    ),
   ).toBeVisible();
   await expect(
-    page.getByText("ARC_DEPLOYMENT_TRANSACTION_ONLY", { exact: true }).first(),
+    page.getByText(
+      "No component capable of generating payment requests shall possess authority to execute payments.",
+    ),
   ).toBeVisible();
+  await expect(page.getByText("Read-only / Schema v2")).toBeVisible();
   await expect(
-    page.getByText("FIXED_COMPROMISED_PROPOSER_REJECTION", { exact: true }),
-  ).toBeVisible();
-  await expect(page.locator(".boundary-item strong")).toHaveText([
-    "FALSE",
-    "FALSE",
-    "FALSE",
-    "FALSE",
-  ]);
-  await expect(page.getByRole("button")).toHaveCount(0);
+    page.locator("form, input, textarea, select, button"),
+  ).toHaveCount(0);
 });
 
-test("filters only the in-memory view and resets on reload", async ({
+test("supports the complete judge walkthrough", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.getByRole("heading", { name: "0.01 USDC" })).toBeVisible();
+  await expect(
+    page.getByText("Arc Testnet", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("UNKNOWN", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("ARC_EXECUTION_SUCCEEDED", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.locator(".role-card")).toHaveCount(6);
+  await expect(
+    page.getByText("SUBMISSION_ATTEMPT_STARTED", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("No automatic retry", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("RECEIPT SUCCESS", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Transaction observed", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTitle(transactionHash).first()).toBeVisible();
+  await expect(page.locator(".control-card")).toHaveCount(5);
+  await expect(
+    page.getByText("Fixed compromised proposer", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Valid revocation", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".timeline-event")).toHaveCount(21);
+  await expect(page.getByTitle(projectionId)).toBeVisible();
+  await expect(page.locator(".claim-row strong")).toHaveText([
+    "Yes",
+    "No",
+    "Yes",
+    "No",
+    "No",
+    "No",
+    "No",
+  ]);
+});
+
+test("timeline inspector is keyboard accessible and causally linked", async ({
   page,
 }) => {
-  await test.step("navigate to the console", async () => {
-    await page.goto("/");
-  });
-  await test.step("confirm initial timeline", async () => {
-    await expect(page.locator(".event-card")).toHaveCount(19);
-  });
-  await test.step("enter the filter", async () => {
-    await page.getByLabel("FILTER EVENTS").fill("rejected");
-  });
-  await test.step("confirm filtered events", async () => {
-    await expect(page.locator(".event-card")).toHaveCount(6);
-    await expect(page.getByText("6 of 19 events")).toBeVisible();
-  });
-  await test.step("reload the page", async () => {
-    await page.reload();
-  });
-  await test.step("confirm fixed initial state restored", async () => {
-    await expect(page.getByLabel("FILTER EVENTS")).toHaveValue("");
-    await expect(page.locator(".event-card")).toHaveCount(19);
-  });
+  await page.goto("/");
+  const arcEvent = page.locator(
+    '[data-event-type="ARC_EXECUTION_OBSERVATION_RECORDED"]',
+  );
+  const summary = arcEvent.locator("summary");
+
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(arcEvent).toHaveAttribute("open", "");
+  await expect(arcEvent.getByTitle(transactionHash)).toBeVisible();
+  await expect(
+    arcEvent.getByText("source identity", { exact: true }),
+  ).toBeVisible();
+
+  const reconciliation = page.locator(
+    '[data-event-type="EXECUTION_RECONCILIATION_RECORDED"]',
+  );
+  await reconciliation.locator("summary").click();
+  await expect(
+    reconciliation.getByText("causal parent 1", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    reconciliation.getByText("causal parent 2", { exact: true }),
+  ).toBeVisible();
+});
+
+test("keeps presentation ephemeral and responsive", async ({ page }) => {
+  await page.goto("/");
+  const firstEvent = page.locator(".timeline-event").first();
+  await firstEvent.locator("summary").click();
+  await expect(firstEvent).toHaveAttribute("open", "");
+  await page.reload();
+
+  await expect(page.locator(".timeline-event").first()).not.toHaveAttribute(
+    "open",
+    "",
+  );
+  await expect(page).toHaveURL(`${testOrigin}/`);
+  expect(
+    await page.evaluate(() => ({
+      local: localStorage.length,
+      session: sessionStorage.length,
+      fitsViewport: document.documentElement.scrollWidth <= window.innerWidth,
+    })),
+  ).toEqual({ local: 0, session: 0, fitsViewport: true });
 });

@@ -59,14 +59,17 @@ describe("COV-015 deterministic audit projector", () => {
 
     expect(auditTimelineSchema.parse(timeline)).toEqual(timeline);
     expect(timeline).toMatchObject({
-      schemaVersion: "1",
+      schemaVersion: "2",
       mode: "OFFLINE_AUDIT_TIMELINE",
       authoritative: false,
       claimBoundary: {
-        circleExecution: false,
+        circleSubmissionAttemptObserved: true,
+        circleProviderOutcomeKnown: false,
+        arcExecutionObserved: true,
         arcPaymentSettlement: false,
         paymentFinality: false,
         databaseFinancialAuthority: false,
+        automaticResubmission: false,
       },
     });
     expect(timeline.events.map(({ eventType }) => eventType)).toEqual([

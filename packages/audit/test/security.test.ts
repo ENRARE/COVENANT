@@ -275,7 +275,7 @@ describe("COV-015 strict and negative-capability boundaries", () => {
   it("keeps source and output schemas strict at every public boundary", () => {
     expect(
       auditSourceBundleSchema.safeParse({
-        schemaVersion: "1",
+        schemaVersion: "2",
         sources: [],
         extra: true,
       }).success,

@@ -93,6 +93,38 @@ Each row states attack path, affected asset, MVP control, residual risk, deferre
 - **MVP:** Ambient-server reuse and platform-dependent Playwright teardown are prevented by a repository runner that refuses an occupied fixed origin, directly owns its local Next.js child, bounds readiness and termination, and verifies that the origin is released after every result.
 - **Production:** CSP, authenticated access, signed builds, tamper-evident evidence distribution, independent verification, monitoring, and incident response remain required before operational use.
 
+## COV-020 Arc execution audit-integration controls
+
+**MVP:** COV-020 adds no payment or network authority. Every outcome below is
+exactly one of `Prevented`, `Bounded`, `Detected`, or `Accepted`.
+
+<!-- prettier-ignore -->
+| Threat | Scope | Attack path | Control | Residual risk | Outcome |
+| --- | --- | --- | --- | --- | --- |
+| Provider state promoted to Arc success | MVP | A Circle status or observed POST attempt is displayed as successful chain execution. | Provider and Arc observations have separate source events, evidence classes, and claim scopes; reconciliation fixes `providerEvidenceEstablishesArcSuccess: false`. | An external consumer can deliberately erase the labels. | Prevented |
+| Provider ambiguity triggers duplicate payment | MVP | Circle `UNKNOWN` causes retry or resubmission. | Source, normalized event, claim boundary, display model, and fixture all fix automatic retry/resubmission to false; the audit and browser own no POST capability. | The payment can remain operationally ambiguous until independent evidence is available. | Prevented |
+| Transaction hash promoted to execution | MVP | A matching hash is accepted without verifying the transaction effect. | COV-019 strictly correlates receipt status, target, identifiers, `PaymentExecuted`, ERC-20 `Transfer`, and required vault state before emitting observed success. | The static fixture inherits the reviewed COV-019 observation provenance. | Prevented |
+| Malformed or conflicting Arc evidence | MVP | Removed, duplicate, missing, malformed, or mismatched receipt, log, transfer, state, target, or identifier data enters the timeline. | COV-019 emits closed fail-closed results; audit-v2 reparses them, checks exact prepared links and subjects, and recomputes reconciliation semantics. | Deliberate conflicts can deny timeline availability. | Detected |
+| Provider and Arc observations conflated | MVP | One event or causal edge obscures which trust domain established a fact. | Three distinct normalized events retain exact source event types; Arc observation is independent and reconciliation references both observations. | A compromised browser can visually misrepresent the validated model. | Bounded |
+| Arc execution called settlement or finality | MVP | One successful observed execution is labeled settled, irreversible, or final. | Closed claim scopes and top-level booleans limit the claim to Arc Testnet execution observation; settlement and finality remain false. | Future readers can misuse evidence outside the reviewed UI. | Prevented |
+| Fixture tampering | MVP | A changed static file preserves plausible values and recomputes only its projection digest. | Strict event schemas, deterministic event identities, exact sequence and cause checks, semantic provider/Arc/reconciliation checks, and a byte-equality generator test fail tampering closed. | A compromised build can replace both code and fixture; signed distribution is Production scope. | Detected |
+| Browser gains financial authority | MVP | Presentation code adds a signer, wallet, Circle client, RPC, server action, persistence, or payment control. | Static server rendering, capability-source scans, no form controls, offline route guards, and reload-reset browser tests bound the surface. | A future dependency or deployment compromise can still alter presentation. | Bounded |
+| Historical evidence overgeneralized | MVP | The one COV-018 payment is presented as proof for other payments or continuing chain state. | Exact transaction and identifiers are visible, the fixture is singular and static, and all claims are observational and non-authoritative. | Testnet reorganizations or future state changes are not observed by the offline console. | Accepted |
+
+**MVP:** The fixed sequence remains: AI proposes; Covenant authorizes; Circle
+submits; Arc execution is independently verified. No component capable of
+generating payment requests possesses authority to execute payments.
+
+**Production:** Live acquisition, provider redundancy, reorganization policy,
+signed evidence distribution, monitoring, authenticated access, and incident
+response remain deferred.
+
+**V2:** Additional executions, providers, organizations, assets, actors, or
+chains require separate threat modeling.
+
+**Protocol:** Generic RPC, arbitrary event ingestion, arbitrary calls, and
+generalized payment execution remain excluded.
+
 ## COV-003 control realization
 
 - **MVP:** COV-003 realizes the deterministic contextual authority boundary as a pure application core. It has no payment wallet, Circle credential, executor function, transaction builder, broadcaster, or transport endpoint.

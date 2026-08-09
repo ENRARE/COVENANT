@@ -27,6 +27,7 @@ import {
   auditSourceBundleSchema,
   type AuditSourceBundle,
   type ArcDeploymentEvidenceSource,
+  type ArcExecutionEvidenceSource,
   type DemoAuditSource,
   type ExecutorResultSource,
   type LocalContractEvidenceSource,
@@ -55,14 +56,35 @@ type SignedFlowLink = Readonly<{
   subject: EventSubject;
 }>;
 
+type ExecutionLink = Readonly<{
+  preparationEventId: string;
+  subject: EventSubject;
+}>;
+
 type ProjectionContext = {
   events: Map<string, EventDraft>;
   decisions: Map<string, "APPROVED" | "REJECTED">;
   executionTransactions: Map<string, string>;
+  executionLinks: Map<string, ExecutionLink>;
   signedFlows: Map<string, SignedFlowLink>;
   demoSourceEvents: Map<string, string>;
   demoSourcePositions: Map<string, string>;
 };
+
+function recordExecutionLink(
+  context: ProjectionContext,
+  executionId: string,
+  link: ExecutionLink,
+): void {
+  const existing = context.executionLinks.get(executionId);
+  if (
+    existing !== undefined &&
+    canonicalJson(asCanonical(existing)) !== canonicalJson(asCanonical(link))
+  ) {
+    auditFailure("AUDIT_SOURCE_CONFLICT");
+  }
+  context.executionLinks.set(executionId, existing ?? link);
+}
 
 function asCanonical(value: unknown): CanonicalJsonValue {
   return value as CanonicalJsonValue;
@@ -557,24 +579,29 @@ function projectDemoSources(
       authorizationEvent.eventId,
     );
     if (authorizationId === undefined) auditFailure("AUDIT_CAUSALITY_FAILURE");
-    normalizedPreparations.set(
-      event.eventId,
-      addEvent(
-        context,
-        createEvent({
-          eventType: "EXECUTOR_REQUEST_PREPARED",
-          source: demoSource(event),
-          subject: {
-            intentId: event.intentId,
-            authorizationId: event.authorizationId,
-            executionId: event.executionId,
-          },
-          causes: [authorizationId],
-          details: {},
-          track: "PAYMENT_FLOW",
-        }),
-      ),
+    const subject: EventSubject = {
+      covenantId: authorizationEvent.covenantId,
+      intentId: event.intentId,
+      decisionId: authorizationEvent.decisionId,
+      authorizationId: event.authorizationId,
+      executionId: event.executionId,
+    };
+    const preparationId = addEvent(
+      context,
+      createEvent({
+        eventType: "EXECUTOR_REQUEST_PREPARED",
+        source: demoSource(event),
+        subject,
+        causes: [authorizationId],
+        details: {},
+        track: "PAYMENT_FLOW",
+      }),
     );
+    normalizedPreparations.set(event.eventId, preparationId);
+    recordExecutionLink(context, event.executionId, {
+      preparationEventId: preparationId,
+      subject,
+    });
   }
 
   for (const event of simulations.values()) {
@@ -884,6 +911,10 @@ function projectExecutorResult(
       track: "PAYMENT_FLOW",
     }),
   );
+  recordExecutionLink(context, execution.executionId, {
+    preparationEventId: preparationId,
+    subject,
+  });
 
   if (source.result.status === "PREPARED") return;
   if (source.result.status === "SIMULATED") {
@@ -1093,6 +1124,164 @@ function projectArcEvidence(
   );
 }
 
+function arcObservationDetails(
+  arc: ArcExecutionEvidenceSource["arc"],
+): CanonicalJsonValue {
+  if (arc.status === "OBSERVED_SUCCESS") {
+    return {
+      status: arc.status,
+      network: "ARC-TESTNET",
+      chainId: String(arc.chainId),
+      transactionHash: arc.transactionHash,
+      blockNumber: arc.blockNumber,
+      blockHash: arc.blockHash,
+      receiptStatus: "SUCCESSFUL",
+      vault: arc.vault,
+      covenantId: arc.covenantId,
+      intentId: arc.intentId,
+      authorizationId: arc.authorizationId,
+      recipient: arc.recipient,
+      amountBaseUnits: arc.amount,
+      token: arc.token,
+      transferSource: arc.transfer.source,
+      transferRecipient: arc.transfer.recipient,
+      transferAmountBaseUnits: arc.transfer.amount,
+      totalSpent: arc.vaultState.totalSpent,
+      paymentCount: arc.vaultState.paymentCount,
+      revoked: arc.vaultState.revoked,
+      vaultTokenBalance: arc.vaultState.tokenBalance,
+    };
+  }
+  if (arc.status === "OBSERVED_REVERTED") {
+    return {
+      status: arc.status,
+      network: "ARC-TESTNET",
+      chainId: String(arc.chainId),
+      transactionHash: arc.transactionHash,
+      blockNumber: arc.blockNumber,
+      blockHash: arc.blockHash,
+      receiptStatus: "REVERTED",
+      vault: arc.vault,
+    };
+  }
+  if (arc.status === "EVIDENCE_CONFLICT") {
+    return { status: arc.status, reason: arc.reason };
+  }
+  return { status: arc.status };
+}
+
+function projectArcExecutionEvidence(
+  context: ProjectionContext,
+  source: ArcExecutionEvidenceSource,
+): void {
+  const expected = source.expected;
+  const link = context.executionLinks.get(expected.executionId);
+  if (link === undefined) auditFailure("AUDIT_SOURCE_INCOMPLETE");
+  if (
+    link.subject.covenantId !== expected.covenantId ||
+    link.subject.intentId !== expected.intentId ||
+    link.subject.authorizationId !== expected.authorizationId ||
+    link.subject.executionId !== expected.executionId
+  ) {
+    auditFailure("AUDIT_SOURCE_CONFLICT");
+  }
+
+  const subject: EventSubject = {
+    covenantId: expected.covenantId,
+    intentId: expected.intentId,
+    authorizationId: expected.authorizationId,
+    executionId: expected.executionId,
+  };
+  const providerIdentity = canonicalDigest({
+    executionId: expected.executionId,
+    progression: source.providerProgression,
+    submissionAttemptObserved: source.submissionAttemptObserved,
+    automaticRetry: source.automaticRetry,
+    provider: asCanonical(source.provider),
+  });
+  const providerState =
+    source.provider.status === "UNKNOWN"
+      ? "UNKNOWN"
+      : source.provider.providerState;
+  const providerEventId = addEvent(
+    context,
+    createEvent({
+      eventType: "CIRCLE_PROVIDER_OBSERVATION_RECORDED",
+      source: {
+        kind: "ARC_EXECUTION_EVIDENCE",
+        eventType: "CIRCLE_PROVIDER_OBSERVATION",
+        identity: providerIdentity,
+        position: "1",
+      },
+      subject,
+      causes: [link.preparationEventId],
+      details: {
+        providerStatus: source.provider.status,
+        providerState,
+        ...(source.provider.status === "OBSERVED" &&
+        source.provider.transactionHash !== undefined
+          ? { providerTransactionHash: source.provider.transactionHash }
+          : {}),
+        progression: source.providerProgression,
+        submissionAttemptObserved: source.submissionAttemptObserved,
+        automaticRetry: source.automaticRetry,
+      },
+      track: "PAYMENT_FLOW",
+    }),
+  );
+
+  const arcIdentity = canonicalDigest({
+    executionId: expected.executionId,
+    expected: asCanonical(expected),
+    arc: asCanonical(source.arc),
+  });
+  const arcEventId = addEvent(
+    context,
+    createEvent({
+      eventType: "ARC_EXECUTION_OBSERVATION_RECORDED",
+      source: {
+        kind: "ARC_EXECUTION_EVIDENCE",
+        eventType: "ARC_EXECUTION_OBSERVATION",
+        identity: arcIdentity,
+        position: "2",
+      },
+      subject,
+      causes: [],
+      details: arcObservationDetails(source.arc),
+      track: "PAYMENT_FLOW",
+    }),
+  );
+
+  const reconciliationIdentity = canonicalDigest({
+    executionId: expected.executionId,
+    providerIdentity,
+    arcIdentity,
+    classification: source.reconciliation.classification,
+  });
+  addEvent(
+    context,
+    createEvent({
+      eventType: "EXECUTION_RECONCILIATION_RECORDED",
+      source: {
+        kind: "ARC_EXECUTION_EVIDENCE",
+        eventType: "EXECUTION_RECONCILIATION",
+        identity: reconciliationIdentity,
+        position: "3",
+      },
+      subject,
+      causes: [providerEventId, arcEventId],
+      details: {
+        classification: source.reconciliation.classification,
+        providerStatus: source.provider.status,
+        arcStatus: source.arc.status,
+        providerEvidenceEstablishesArcSuccess: false,
+        automaticRetry: source.automaticRetry,
+      },
+      track: "PAYMENT_FLOW",
+    }),
+  );
+}
+
 function compareDrafts(left: EventDraft, right: EventDraft): number {
   const tupleLeft = [
     TRACK_RANK[left.track],
@@ -1189,6 +1378,7 @@ export function projectAuditTimeline(input: unknown): AuditTimeline {
     events: new Map(),
     decisions: new Map(),
     executionTransactions: new Map(),
+    executionLinks: new Map(),
     signedFlows: new Map(),
     demoSourceEvents: new Map(),
     demoSourcePositions: new Map(),
@@ -1205,11 +1395,16 @@ export function projectAuditTimeline(input: unknown): AuditTimeline {
   for (const source of bundle.sources) {
     if (source.kind === "EXECUTOR_RESULT")
       projectExecutorResult(context, source);
+  }
+  for (const source of bundle.sources) {
     if (source.kind === "LOCAL_CONTRACT_EVIDENCE") {
       projectLocalEvidence(context, source);
     }
     if (source.kind === "ARC_DEPLOYMENT_EVIDENCE") {
       projectArcEvidence(context, source);
+    }
+    if (source.kind === "ARC_EXECUTION_EVIDENCE") {
+      projectArcExecutionEvidence(context, source);
     }
   }
 
@@ -1229,10 +1424,13 @@ export function projectAuditTimeline(input: unknown): AuditTimeline {
     details: event.details,
   }));
   const claimBoundary = {
-    circleExecution: false,
+    circleSubmissionAttemptObserved: true,
+    circleProviderOutcomeKnown: false,
+    arcExecutionObserved: true,
     arcPaymentSettlement: false,
     paymentFinality: false,
     databaseFinancialAuthority: false,
+    automaticResubmission: false,
   } as const;
   const projectionId = canonicalDigest({
     schemaVersion: AUDIT_SCHEMA_VERSION,

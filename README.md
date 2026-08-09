@@ -1,6 +1,6 @@
 # Covenant
 
-**MVP:** Covenant is programmable financial authority infrastructure for autonomous software. AI proposes, Covenant authorizes, Circle executes, and Arc settles.
+**MVP:** Covenant is programmable financial authority infrastructure for autonomous software. AI proposes. Covenant authorizes. Circle submits. Arc execution is independently verified.
 
 > No component capable of generating payment requests shall possess authority to execute payments.
 
@@ -10,7 +10,7 @@ COV-001 contains repository scaffolding, frozen schemas, exact money conversion,
 
 - **MVP:** `apps/demo` â€” private server-only local simulated demo runtime.
 
-- **MVP:** `apps/web` â€” compile-only Next.js demonstration-console scaffold.
+- **MVP:** `apps/web` â€” read-only Next.js audit and execution-evidence console.
 - **MVP:** `apps/agent` â€” untrusted procurement-agent scaffold.
 - **MVP:** `apps/authority` â€” deterministic authority-service scaffold.
 - **MVP:** `apps/executor` â€” submission-only executor scaffold.
@@ -117,11 +117,12 @@ persistence, funding, payment execution, or settlement. See ADR 0013.
 
 ## Offline audit timeline
 
-**MVP:** COV-015 adds a deterministic non-authoritative projector over strict
-already validated demo, signed-flow, executor, local-Anvil, and committed Arc
-deployment evidence. It emits one canonical sanitized JSON timeline and makes
-no Circle execution, external Arc payment settlement, reconciliation, or
-payment-finality claim.
+**MVP:** COV-020 advances the deterministic non-authoritative audit projector
+to schema version `2`. Its closed inputs include validated demonstration,
+signed-flow, executor, local-Anvil, committed Arc deployment, separate Circle
+provider observation, and independently verified Arc execution evidence. It
+emits one canonical sanitized JSON timeline and makes no Arc payment-settlement
+or payment-finality claim.
 
 **MVP:** Demo-derived timeline entries are observational journal evidence, not
 cryptographically verified signed artifacts or independently verified policy
@@ -137,6 +138,12 @@ pnpm audit:project < audit-source-bundle.json
 **MVP:** The command accepts no path or network configuration and writes no
 file or database. Redirected output remains observational and reconstructable.
 `CovenantVault` remains authoritative for financial state.
+
+**MVP:** The committed COV-020 console fixture records Circle durable state as
+`UNKNOWN` and independently observed Arc execution as
+`ARC_EXECUTION_SUCCEEDED`. Provider status alone never establishes Arc success,
+and the observation performs no retry, resubmission, transaction, or contract
+write.
 
 **MVP:** The COV-006 authority-to-executor handoff enumerates exactly
 `signedPaymentIntent`, `ruleResults`, `decisionReceipt`, and
