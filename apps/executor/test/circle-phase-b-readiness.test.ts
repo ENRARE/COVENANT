@@ -20,7 +20,7 @@ import {
 } from "../src/index.js";
 import { createTestHarness } from "./fixtures.js";
 
-const WALLET_ID = "11111111-1111-4111-8111-111111111111";
+const WALLET_ID = "11111111-1111-5111-8111-111111111111";
 const IDEMPOTENCY_KEY = "22222222-2222-4222-8222-222222222222";
 const SECOND_UUID = "44444444-4444-4444-8444-444444444444";
 const TRANSACTION_ID = "33333333-3333-4333-8333-333333333333";
@@ -32,6 +32,11 @@ const encoder = new TextEncoder();
 const temporaryDirectories = new Set<string>();
 const repositories = new Set<DurableCircleOperationRepository>();
 const bytes32Schema = z.string().regex(/^0x[0-9a-f]{64}$/);
+const uuidSchema = z
+  .string()
+  .regex(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
 const uuidV4Schema = z
   .string()
   .regex(
@@ -50,7 +55,7 @@ const journalOperationKeySchema = z
             operationKey: bytes32Schema,
             executionId: bytes32Schema,
             transactionDigest: bytes32Schema,
-            walletId: uuidV4Schema,
+            walletId: uuidSchema,
             contractAddress: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
             feeLevel: z.enum(["LOW", "MEDIUM", "HIGH"]),
           })
