@@ -24,8 +24,9 @@ function expectedOperationKey(executionId: `0x${string}`): `0x${string}` {
   return `0x${digest}`;
 }
 const textDecoder = new TextDecoder();
-const WALLET_ID = "11111111-1111-4111-8111-111111111111";
+const WALLET_ID = "11111111-1111-5111-8111-111111111111";
 const IDEMPOTENCY_KEY = "22222222-2222-4222-8222-222222222222";
+const NON_V4_IDEMPOTENCY_KEY = "55555555-5555-5555-8555-555555555555";
 const TRANSACTION_ID = "33333333-3333-4333-8333-333333333333";
 const RESTART_UUID = "44444444-4444-4444-8444-444444444444";
 const auth = "test";
@@ -167,6 +168,17 @@ describe("Circle contract execution transport", () => {
     expect(body).not.toHaveProperty("walletAddress");
   });
 
+  it("accepts a canonical non-v4 wallet UUID but rejects a non-v4 idempotency key", async () => {
+    const harness = await createCircleHarness({ uuid: NON_V4_IDEMPOTENCY_KEY });
+
+    await expectExecutorCode(
+      harness.service.executeAuthorizedPayment(harness.request),
+      "INTERNAL_UNAVAILABLE",
+    );
+    expect(harness.post).not.toHaveBeenCalled();
+    expect(harness.getApiKey).not.toHaveBeenCalled();
+    expect(harness.createEntitySecretCiphertext).not.toHaveBeenCalled();
+  });
   it.each([
     "INITIATED",
     "CLEARED",

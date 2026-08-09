@@ -17,6 +17,11 @@ import {
 } from "./types.js";
 import { parseStrictJsonBytes } from "./strict-json.js";
 
+const canonicalUuidSchema = z
+  .string()
+  .regex(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
 const canonicalUuidV4Schema = z
   .string()
   .regex(
@@ -45,7 +50,7 @@ const fixedTransactionRequestSchema = z
 
 const configSchema = z
   .object({
-    walletId: canonicalUuidV4Schema,
+    walletId: canonicalUuidSchema,
     contractAddress: z.string(),
     feeLevel: feeLevelSchema,
   })
@@ -88,7 +93,7 @@ const executionFingerprintSchema = z
     operationKey: bytes32Schema,
     executionId: bytes32Schema,
     transactionDigest: bytes32Schema,
-    walletId: canonicalUuidV4Schema,
+    walletId: canonicalUuidSchema,
     contractAddress: z
       .string()
       .refine((value) => isAddress(value, { strict: true })),
