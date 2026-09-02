@@ -4,7 +4,9 @@ These instructions apply to the entire repository. More specific `AGENTS.md` fil
 
 ## Mission and thesis
 
-**MVP:** Covenant is programmable financial authority infrastructure for autonomous software. AI should never receive unrestricted financial authority.
+**MVP:** Covenant proved programmable financial authority infrastructure for autonomous software. AI should never receive unrestricted financial authority.
+
+**V2:** Covenant Platform v1 is the approved API-first evolution: reusable developer infrastructure for multiple projects and Covenant instances on Arc using USDC, while preserving the MVP authority boundaries.
 
 **MVP:** The execution model is: AI proposes; Covenant authorizes; Circle executes; Arc settles.
 
@@ -13,7 +15,7 @@ These instructions apply to the entire repository. More specific `AGENTS.md` fil
 ## Scope labels
 
 - **MVP:** Frozen four-week demonstration scope and controls required to make it honest.
-- **V2:** Candidate capabilities after the MVP; not approved for current implementation.
+- **V2:** The bounded Platform v1/API/SDK direction approved by ADR 0022. Only the explicitly accepted COV may be implemented; later V2 work is not implicit.
 - **Production:** Operational hardening required before real funds or users; not approved for MVP implementation.
 - **Protocol:** Long-horizon, generalized protocol capabilities; not approved for MVP implementation.
 
@@ -25,10 +27,12 @@ Every capability in project documentation must carry exactly one of these labels
 
 **MVP:** COV-001 covers repository scaffolding, frozen schemas, money helpers, typed-data construction and vectors, trust boundaries, and the threat model.
 
+**MVP:** COV-001 through COV-020 are the frozen completed historical proof. `docs/MVP_CANON.md` remains intact; V2 direction is governed separately by `docs/V2_PLATFORM_CANON.md` and ADR 0022.
+
 ## Explicit exclusions
 
 - **MVP excluded from COV-001:** CovenantVault logic, Solidity receipt verification, Circle wallets, Arc deployment, Supabase migrations, service endpoints, authorization signing, executor behavior, vendor behavior, agent behavior, prompt-injection implementation, dashboards, landing pages, production infrastructure, and a generic policy language.
-- **V2:** Additional vendors, agents, assets, policies, or chains require a separately approved scope.
+- **V2:** Platform v1 may support multiple developer projects and Covenant instances only through the approved COV-021 through COV-027 sequence. Additional assets, chains, generic policies, or arbitrary execution remain excluded.
 - **Production:** Real funds, production credentials, high availability, key-management infrastructure, monitoring, incident response, and compliance operations are deferred.
 - **Protocol:** Arbitrary smart-contract execution, generalized policy markets, and multichain protocol behavior are excluded.
 
@@ -40,7 +44,8 @@ Every capability in project documentation must carry exactly one of these labels
 - **MVP:** `apps/executor` is the future submission-only Circle settlement service.
 - **MVP:** `packages/contracts` is the future immutable Arc `CovenantVault`; COV-001 is Foundry-only.
 - **MVP:** `packages/spec` owns frozen schemas, validation, money helpers, EIP-712 definitions, and vectors.
-- **MVP:** `packages/sdk` is scaffolding only.
+- **MVP:** `packages/sdk` remains the existing scaffold and has no runtime SDK behavior.
+- **V2:** `packages/sdk` is the approved future typed client over the public Covenant API; it must not become an independent execution architecture.
 - **MVP:** `packages/config` owns shared build, TypeScript, lint, and formatting configuration.
 - **MVP:** `supabase` may later hold non-authoritative application and audit projections only.
 
@@ -52,6 +57,8 @@ Every capability in project documentation must carry exactly one of these labels
 - **MVP:** The executor submits signed fields unchanged and never chooses them.
 - **MVP:** Circle owns wallet execution credentials.
 - **MVP:** The Arc contract enforces hard limits and owns authoritative spend and replay state.
+- **V2:** The public API and SDK do not become financial authority. API authentication grants project access only; authorization and execution still cross the existing separated boundaries.
+- **V2:** Arc and six-decimal USDC remain the only Platform v1 network and settlement asset. Offchain platform data remains non-authoritative for spend and replay.
 
 ## Money representation
 
@@ -90,7 +97,9 @@ Every capability in project documentation must carry exactly one of these labels
 
 ## Definition of done
 
-**MVP:** The requested scope is complete only when required files exist, strict types compile, exported schemas and helpers are tested, documentation is scope-labeled, CI needs no secrets, formatting/lint/typecheck/tests/build/verification pass, the final diff is reviewed, no product implementation is present, and failures or residual risks are reported.
+**MVP:** The frozen proof's requested scope is complete only when required files exist, strict types compile, exported schemas and helpers are tested, documentation is scope-labeled, CI needs no secrets, formatting/lint/typecheck/tests/build/verification pass, the final diff is reviewed, and failures or residual risks are reported. COV-001's historical no-product-implementation restriction applies to COV-001, not to separately accepted later work.
+
+**V2:** A Platform v1 COV is complete only within its explicitly accepted scope. COV-021 is documentation/governance only; it must not implement COV-022 or later runtime behavior. Every V2 change must preserve signer separation, exact authorized fields, onchain financial/replay authority, explicit schema versioning, and the required repository verification gates.
 
 ## Stop conditions
 
@@ -108,6 +117,8 @@ Stop and report before making any change that would:
 - **V2:** Add another chain.
 - **Protocol:** Add another policy system.
 - **MVP:** Expand the MVP.
+- **V2:** Make the SDK or API a second authorization or execution path.
+- **V2:** Reinterpret an existing signed version-1 schema instead of explicitly versioning an incompatible structure.
 
 ## Completion report format
 

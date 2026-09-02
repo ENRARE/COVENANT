@@ -1,10 +1,12 @@
 # Covenant
 
-**MVP:** Covenant is programmable financial authority infrastructure for autonomous software. AI proposes. Covenant authorizes. Circle submits. Arc execution is independently verified.
+**MVP:** COV-001 through COV-020 proved programmable financial authority infrastructure for autonomous software. AI proposes. Covenant authorizes. Circle submits. Arc execution is independently verified.
 
 > No component capable of generating payment requests shall possess authority to execute payments.
 
-COV-001 contains repository scaffolding, frozen schemas, exact money conversion, typed-data vectors, trust boundaries, and a threat model. It contains no contract logic, Circle integration, payment execution, policy service, agent behavior, or product interface.
+**MVP:** The completed proof remains frozen historical evidence under `docs/MVP_CANON.md`.
+
+**V2:** COV-021 approves an API-first Covenant Platform v1 for multiple developer projects and Covenant instances on Arc using six-decimal USDC. The future `@covenant/sdk` is a typed client over the public API, not a second execution architecture. COV-021 is documentation only and implements neither API nor SDK runtime behavior.
 
 ## Workspace
 
@@ -19,6 +21,8 @@ COV-001 contains repository scaffolding, frozen schemas, exact money conversion,
 - **MVP:** `packages/contracts` â€” Foundry-only immutable-vault scaffold.
 - **MVP:** `packages/sdk` â€” empty SDK scaffold.
 - **MVP:** `packages/config` â€” shared strict TypeScript configuration and the trusted Arc Testnet operational profile.
+
+**V2:** The existing `packages/sdk` scaffold is the approved future typed client over the Covenant API; it remains runtime-empty in COV-021.
 
 ## Local validation
 
@@ -153,10 +157,11 @@ vault execution, Arc settlement, or finality claim.
 
 **MVP:** Security-critical JSON is strictly parsed before hashing. The four signed flows use detached `{ payload, signature }` envelopes, DecisionReceipt commits to the canonical rule collection, and only Arc Testnet chain ID `5042002` is accepted. Trusted verification anchors signer roles and domains to `CovenantSpec`, and complete authorization requires exact linkage through an approved all-PASS decision.
 
-See [MVP canon](docs/MVP_CANON.md), [security boundaries](docs/SECURITY_BOUNDARIES.md), and [threat model](docs/THREAT_MODEL.md) before changing architecture.
+See [MVP canon](docs/MVP_CANON.md), [V2 Platform canon](docs/V2_PLATFORM_CANON.md), [security boundaries](docs/SECURITY_BOUNDARIES.md), and [threat model](docs/THREAT_MODEL.md) before changing architecture.
 
-## Future scope
+## Platform direction and future scope
 
-- **V2:** Multiple actors, assets, and reviewed policy modules are deferred.
-- **Production:** Real credentials, real funds, key-management infrastructure, monitoring, resilience, and compliance are deferred.
-- **Protocol:** Generalized execution, policy composition, and multichain behavior are deferred.
+- **V2:** ADR 0022 approves the narrow Platform v1/API/SDK direction and the COV-021 through COV-027 sequence. Each implementation COV still requires its own reviewed scope.
+- **V2:** Platform v1 remains Arc-only and USDC-only; API authentication never replaces financial authorization, and offchain platform state never replaces authoritative onchain spend/replay state.
+- **Production:** Real credentials, real funds, key-management infrastructure, high availability, monitoring, incident response, external audits, resilience, and compliance remain deferred.
+- **Protocol:** Generic policy interpretation, arbitrary smart-contract execution, permissionless extension, and broad multichain behavior remain deferred.

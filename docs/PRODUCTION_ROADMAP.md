@@ -1,19 +1,29 @@
 # Production roadmap
 
-This document labels direction; it does not authorize implementation.
+**V2:** This document records the approved short Platform v1 sequence. It does
+not authorize implementation beyond the currently accepted COV.
 
 ## MVP
 
-- **MVP:** Complete the frozen single-vendor Arc Testnet demonstration after COV-001.
-- **MVP:** Implement immutable vault enforcement, deterministic authority evaluation, isolated authorization, Circle submission, and an honest audit timeline in separate tasks.
-- **MVP:** Demonstrate one successful payment, one rejected indirect prompt-injection payment, one failed direct bypass, and one revocation.
+- **MVP:** COV-001 through COV-020 are the frozen completed proof: one bounded
+  Arc Testnet/USDC procurement flow with immutable vault enforcement,
+  deterministic authority evaluation, isolated authorization, Circle-backed
+  submission, independent Arc observation, rejection/bypass/revocation
+  evidence, and an honest audit timeline.
 
 ## V2
 
-- **V2:** Add multiple approved vendors and procurement agents while retaining signer separation.
-- **V2:** Add narrowly enumerated policy modules and additional assets only through explicit schema and contract review.
-- **V2:** Add another chain only after replay, finality, address, decimal, and deployment semantics are separately specified.
-- **V2:** Add organization administration and richer audit queries without moving authoritative spend state offchain.
+- **V2 — COV-021:** Platform architecture and public contract.
+- **V2 — COV-022:** Generalized Covenant core.
+- **V2 — COV-023:** Production-style execution runtime and persistence.
+- **V2 — COV-024:** Developer REST API.
+- **V2 — COV-025:** `@covenant/sdk` as a typed API client.
+- **V2 — COV-026:** Dogfood the existing Covenant app and add bounded reference integrations.
+- **V2 — COV-027:** Security, reliability, and Platform v1 release.
+
+**V2:** Platform v1 is limited to multiple developer projects and Covenant
+instances on Arc using USDC. Each later COV needs separate acceptance and must
+preserve signer separation and onchain authoritative spend/replay state.
 
 ## Production
 
@@ -27,3 +37,5 @@ This document labels direction; it does not authorize implementation.
 - **Protocol:** Explore standardized portable financial-authority receipts and interoperable Covenant discovery.
 - **Protocol:** Explore generalized policy composition only after a formally specified safe execution model exists.
 - **Protocol:** Explore multichain settlement without weakening per-chain and per-contract domain separation.
+- **Protocol:** Generic policy languages, arbitrary smart-contract execution,
+  and broad multichain behavior are not part of Platform v1.

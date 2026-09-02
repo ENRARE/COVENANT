@@ -6,7 +6,16 @@
 
 ## V2 direction
 
-**V2:** Extend bounded authority to more agents, vendors, and narrowly reviewed policy modules while preserving proposal, authorization, execution, and settlement separation.
+**V2:** ADR 0022 approves Covenant Platform v1 as API-first developer
+infrastructure for multiple projects and Covenant instances on Arc using USDC.
+The future `@covenant/sdk` is a typed API client. Existing proposal, authority,
+isolated-signer, executor, Circle, CovenantVault, Arc-evidence, and audit
+boundaries remain separated.
+
+**V2:** COV-021 through COV-027 are the concise approved sequence, but each COV
+requires its own reviewed implementation scope. Platform v1 does not authorize
+additional chains or assets, generic policy interpretation, or arbitrary
+execution.
 
 ## Production posture
 
