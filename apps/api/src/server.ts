@@ -598,7 +598,9 @@ export function createHttpServer(api: CovenantApi): Server {
         response.statusCode = result.status;
         for (const [key, value] of Object.entries(result.headers))
           response.setHeader(key, value);
-        response.end(result.status === 204 ? undefined : JSON.stringify(result.body));
+        response.end(
+          result.status === 204 ? undefined : JSON.stringify(result.body),
+        );
       } catch (error) {
         const mapped = mapError(error);
         response.statusCode = mapped.status;
