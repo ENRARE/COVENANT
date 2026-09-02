@@ -20,6 +20,11 @@ The package may parse and associate existing strict version-1 signed Decision
 and Authorization receipts, but it does not reinterpret, sign, or verify those
 receipts. Existing V1 schemas in `@covenant/spec` remain unchanged.
 
+Existing V1 executor provider observations and Arc receipt observations can be
+associated through the execution-evidence boundary. Base-unit Arc amounts are
+converted exactly to canonical USDC strings, transfer consistency is retained,
+and provider observations never establish Arc success by themselves.
+
 **V2:** HTTP/API, database, durable idempotency, webhooks, SDK runtime behavior,
 production credentials, and contract changes are deferred to later approved
 COVs. This package is not a second authorization or execution path.

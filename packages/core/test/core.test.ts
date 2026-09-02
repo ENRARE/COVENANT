@@ -185,6 +185,51 @@ describe("@covenant/core COV-022 resource and lifecycle", () => {
     expect(executed.executionStatus.arc).toBe("SUCCEEDED");
   });
 
+  it("associates the existing executor provider/Arc observation vocabulary", () => {
+    const executing = executingCovenant();
+    const observed = applyExecutionEvidence(
+      executing,
+      {
+        covenantId: executing.id,
+        executionId: executing.executionStatus.executionId,
+        provider: {
+          status: "OBSERVED",
+          providerState: "COMPLETE",
+          transactionHash: id(50),
+        },
+        arc: {
+          status: "OBSERVED_SUCCESS",
+          chainId: 5042002,
+          transactionHash: id(51),
+          blockNumber: "120",
+          blockHash: id(52),
+          vault: payer,
+          covenantId: executing.id,
+          intentId: id(2),
+          authorizationId: id(6),
+          recipient: beneficiary,
+          amount: "1250000",
+          token: PLATFORM_V1_ASSET.address,
+          transfer: {
+            source: payer,
+            recipient: beneficiary,
+            amount: "1250000",
+          },
+          vaultState: {
+            totalSpent: "1250000",
+            paymentCount: "1",
+            revoked: false,
+            tokenBalance: "0",
+          },
+        },
+      },
+      "121",
+    );
+    expect(observed.status).toBe("EXECUTED");
+    expect(observed.executionStatus.provider).toBe("ACCEPTED");
+    expect(observed.executionStatus.transactionId).toBe(id(50));
+  });
+
   it("keeps rejected, cancelled, expired, failed, and terminal states explicit", () => {
     const awaiting = requestAuthorization(createCovenant(input()), "101");
     const rejected = applyAuthorizationEvidence(

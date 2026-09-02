@@ -1,4 +1,5 @@
 import {
+  formatUsdc,
   signedAuthorizationReceiptSchema,
   signedDecisionReceiptSchema,
   UINT256_MAX_DECIMAL,
@@ -108,6 +109,118 @@ function parseEvidence<T>(
   } catch (error) {
     covenantFailure(code, undefined, error);
   }
+}
+
+/**
+ * Adapt the already-parsed V1 executor observation vocabulary at this boundary.
+ * The adapter only normalizes transport names and base-unit amounts; it never
+ * broadens the V2 schema or treats provider evidence as Arc execution.
+ */
+function normalizeLegacyExecutionEvidence(input: unknown): unknown {
+  if (input === null || typeof input !== "object") return input;
+  const candidate = { ...(input as Record<string, unknown>) };
+  const provider = candidate.provider;
+  if (provider !== null && typeof provider === "object") {
+    const providerRecord = provider as Record<string, unknown>;
+    if (providerRecord.status === "UNKNOWN") {
+      candidate.provider = "UNKNOWN";
+    } else if (
+      providerRecord.status === "OBSERVED" &&
+      providerRecord.providerState !== undefined
+    ) {
+      candidate.provider = {
+        status: "OBSERVED",
+        providerState: providerRecord.providerState,
+        ...((providerRecord.transactionId ?? providerRecord.transactionHash)
+          ? {
+              transactionId:
+                providerRecord.transactionId ?? providerRecord.transactionHash,
+            }
+          : {}),
+      };
+    }
+  }
+
+  const arc = candidate.arc;
+  if (arc !== null && typeof arc === "object") {
+    const arcRecord = arc as Record<string, unknown>;
+    if (
+      arcRecord.status === "NOT_OBSERVED" ||
+      arcRecord.status === "OBSERVATION_UNAVAILABLE"
+    ) {
+      candidate.arc = arcRecord.status;
+    } else if (arcRecord.status === "OBSERVED_REVERTED") {
+      candidate.arc = {
+        status: arcRecord.status,
+        chainId: arcRecord.chainId,
+        transactionHash: arcRecord.transactionHash,
+        ...(arcRecord.covenantId === undefined
+          ? {}
+          : { covenantId: arcRecord.covenantId }),
+        ...(arcRecord.vault === undefined ? {} : { vault: arcRecord.vault }),
+      };
+    } else if (
+      arcRecord.status === "OBSERVED_SUCCESS" &&
+      (arcRecord.transfer !== undefined ||
+        arcRecord.vaultState !== undefined ||
+        arcRecord.amountBaseUnits !== undefined)
+    ) {
+      const amountBaseUnits =
+        typeof arcRecord.amountBaseUnits === "string"
+          ? arcRecord.amountBaseUnits
+          : arcRecord.amount;
+      if (
+        typeof amountBaseUnits !== "string" ||
+        !/^\d+$/u.test(amountBaseUnits)
+      ) {
+        return input;
+      }
+      let amount: string;
+      try {
+        amount = formatUsdc(BigInt(amountBaseUnits));
+      } catch {
+        return input;
+      }
+      const transfer = arcRecord.transfer;
+      if (
+        transfer !== undefined &&
+        transfer !== null &&
+        typeof transfer === "object"
+      ) {
+        const transferRecord = transfer as Record<string, unknown>;
+        if (
+          transferRecord.source !== arcRecord.vault ||
+          transferRecord.recipient !== arcRecord.recipient ||
+          transferRecord.amount !== amountBaseUnits
+        ) {
+          return input;
+        }
+      }
+      candidate.arc = {
+        status: arcRecord.status,
+        chainId: arcRecord.chainId,
+        transactionHash: arcRecord.transactionHash,
+        covenantId: arcRecord.covenantId,
+        recipient: arcRecord.recipient,
+        amount,
+        token: arcRecord.token,
+        ...(arcRecord.vault === undefined ? {} : { vault: arcRecord.vault }),
+        ...(arcRecord.intentId === undefined
+          ? {}
+          : { intentId: arcRecord.intentId }),
+        ...(arcRecord.authorizationId === undefined
+          ? {}
+          : { authorizationId: arcRecord.authorizationId }),
+        ...(arcRecord.blockNumber === undefined
+          ? {}
+          : { blockNumber: arcRecord.blockNumber }),
+        ...(arcRecord.blockHash === undefined
+          ? {}
+          : { blockHash: arcRecord.blockHash }),
+      };
+    }
+  }
+  return candidate;
 }
 
 function updateCovenant(
@@ -564,7 +677,7 @@ export function applyExecutionEvidence(
   const at = parseEvaluationArgument(evaluationTime);
   const evidence = parseEvidence(
     executionEvidenceSchema,
-    rawEvidence,
+    normalizeLegacyExecutionEvidence(rawEvidence),
     "UNSUPPORTED_EVIDENCE",
   );
   if (covenant.status !== "EXECUTING") {

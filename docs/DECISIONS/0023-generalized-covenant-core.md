@@ -48,6 +48,11 @@ associated as evidence and are parsed by their unchanged `@covenant/spec`
 schemas. Core does not change V1 fields, typed-data domains, hashes, signer
 roles, or signature verification semantics.
 
+The execution boundary also accepts the existing normalized executor provider
+and Arc-observation vocabulary. It converts legacy base-unit amount fields to
+canonical USDC strings and checks legacy transfer consistency before applying
+the V2 evidence rules. Provider observations remain distinct from Arc success.
+
 ## Alternatives considered
 
 1. **Put these rules in the future API.** Rejected: lifecycle and ownership
