@@ -138,6 +138,27 @@ wallet execution, contract changes, arbitrary policy evaluation, additional
 assets, or additional chains. Those boundaries remain deferred to separately
 accepted COVs.
 
+### COV-023 implemented runtime boundary
+
+**V2:** COV-023 implements a private durable execution runtime in
+`packages/runtime`. It stores project-isolated Covenant projections,
+execution-operation identity and state, worker leases, retry/reconciliation
+metadata, sanitized provider/Arc evidence, and transactional outbox records.
+The PostgreSQL-compatible shape is in `supabase/migrations`; an offline
+`node:sqlite` adapter provides self-contained tests. These projections never
+replace CovenantVault's authoritative spend, replay, revocation, or payment
+state.
+
+**V2:** The runtime commits `SUBMISSION_STARTED` before invoking a narrow
+adapter for the existing executor. Timeout, exception, unknown dispatch, and
+crash-after-boundary outcomes are `AMBIGUOUS` and are never automatically
+resubmitted. Only an explicit no-submission provider rejection is retryable.
+Provider acceptance and independent Arc observation remain separate; only
+matching Arc success evidence can produce `EXECUTED` through `@covenant/core`.
+Leases use compare-and-set versions, stale writes fail, and the outbox is
+storage only. COV-023 adds no HTTP/API/authentication/webhooks/SDK runtime,
+credentials, wallet, arbitrary calldata, assets, or chains.
+
 ## Lifecycle and evidence semantics
 
 **V2:** Platform lifecycle state summarizes orchestration; the resource must
