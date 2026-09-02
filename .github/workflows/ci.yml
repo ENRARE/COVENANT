@@ -33,6 +33,8 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1
+        with:
+          version: v1.7.1
 
       - name: Install pinned Solidity dependencies
         run: pnpm install:contracts:deps
