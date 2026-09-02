@@ -716,6 +716,9 @@ export function applyExecutionEvidence(
     ) {
       covenantFailure("UNSUPPORTED_EVIDENCE");
     }
+    if (evidence.knownTerminalFailure !== undefined) {
+      covenantFailure("EVIDENCE_CONFLICT");
+    }
     validateArcSuccess(covenant, evidence.arc);
     if (provider.status === "REJECTED") {
       covenantFailure("EVIDENCE_CONFLICT");

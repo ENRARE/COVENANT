@@ -356,6 +356,29 @@ describe("@covenant/core COV-022 resource and lifecycle", () => {
         ),
       "EVIDENCE_MISMATCH",
     );
+    expectCode(
+      () =>
+        applyExecutionEvidence(
+          executing,
+          {
+            covenantId: executing.id,
+            executionId: executing.executionStatus.executionId,
+            provider: "ACCEPTED",
+            knownTerminalFailure: "conflicting terminal failure",
+            arc: {
+              status: "OBSERVED_SUCCESS",
+              chainId: ARC_TESTNET_CHAIN_ID_STRING,
+              transactionHash: id(11),
+              covenantId: executing.id,
+              recipient: beneficiary,
+              amount: "1.25",
+              token: PLATFORM_V1_ASSET.address,
+            },
+          },
+          "111",
+        ),
+      "EVIDENCE_CONFLICT",
+    );
   });
 
   it("associates existing strict V1 signed receipts without changing their meaning", () => {
