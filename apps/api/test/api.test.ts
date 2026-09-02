@@ -64,6 +64,19 @@ describe("COV-024 developer API", () => {
     expect(
       (denied.body as { error: { requestId: string } }).error.requestId,
     ).toBe(denied.headers["x-request-id"]);
+    const authenticated = await api.handle({
+      method: "GET",
+      path: "/v1/covenants",
+      headers: { "x-api-key": project.apiKey },
+    });
+    expect(authenticated.status).toBe(200);
+  });
+
+  it("fails closed when webhook encryption is not configured", () => {
+    const { runtime } = setup();
+    expect(() => new CovenantApi({ runtime })).toThrow(
+      "WEBHOOK_MASTER_KEY_REQUIRED",
+    );
   });
 
   it("rejects a revoked API key without disclosing key state", async () => {

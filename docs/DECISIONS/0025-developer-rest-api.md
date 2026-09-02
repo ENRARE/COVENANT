@@ -31,8 +31,15 @@ Webhook events are integration projections of the COV-023 transactional
 outbox. Delivery IDs remain stable across retries. Payloads are signed with
 HMAC-SHA256 over `timestamp.deliveryId.rawBody`; signatures include a five
 minute replay window. Endpoint secrets are returned only at creation and are
-encrypted at rest with an injected 32-byte master key. Delivery retries are
-bounded and cannot alter financial execution.
+encrypted at rest with an injected stable 32-byte master key. Startup fails
+closed when that key is absent or invalid; no random production fallback is
+allowed. Delivery retries are bounded and cannot alter financial execution.
+
+The first project and API key are created only through the non-HTTP
+`CovenantApi.provisionProject(name)` bootstrap method. It is an internal or
+administrative provisioning control, not an anonymous public route. It
+generates both records, returns the plaintext key once, and persists only its
+digest; all later key management requires project authentication.
 
 `apps/api/openapi.json` is the machine-readable public contract. The API does
 not add SDK runtime behavior; SDK helpers remain deferred to COV-025.

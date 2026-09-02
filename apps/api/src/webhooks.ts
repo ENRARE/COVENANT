@@ -124,7 +124,9 @@ export class WebhookService {
     }>,
   ) {
     this.#runtime = options.runtime;
-    this.#master = keyBytes(options.webhookMasterKey ?? randomBytes(32));
+    if (options.webhookMasterKey === undefined)
+      throw new Error("WEBHOOK_MASTER_KEY_REQUIRED");
+    this.#master = keyBytes(options.webhookMasterKey);
     this.#send =
       options.sender ??
       (async ({ url, body, headers }) => {
