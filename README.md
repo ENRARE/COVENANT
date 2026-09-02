@@ -22,7 +22,7 @@
 - **MVP:** `packages/sdk` â€” empty SDK scaffold.
 - **MVP:** `packages/config` â€” shared strict TypeScript configuration and the trusted Arc Testnet operational profile.
 
-**V2:** `packages/core` is the pure version-2 Covenant resource, project ownership, lifecycle, and separate authorization/execution evidence boundary.
+**V2:** `packages/core` is the pure version-2 Covenant resource, project ownership, lifecycle, and separate authorization/execution evidence boundary. `packages/runtime` is the durable, non-authoritative worker runtime: it persists operational projections, leases, idempotency, reconciliation metadata, and transactional outbox records while delegating financial execution to the existing executor and CovenantVault path.
 
 **V2:** The existing `packages/sdk` scaffold is the approved future typed client over the Covenant API; it remains runtime-empty. `@covenant/core` is the shared domain boundary and is not an API, persistence, signer, Circle, wallet, or execution path.
 
@@ -163,7 +163,7 @@ See [MVP canon](docs/MVP_CANON.md), [V2 Platform canon](docs/V2_PLATFORM_CANON.m
 
 ## Platform direction and future scope
 
-- **V2:** ADR 0022 approves the narrow Platform v1/API/SDK direction and the COV-021 through COV-027 sequence. ADR 0023 records the COV-022 generalized core boundary. Each later implementation COV still requires its own reviewed scope.
+- **V2:** ADR 0022 approves the narrow Platform v1/API/SDK direction and the COV-021 through COV-027 sequence. ADR 0023 records the COV-022 generalized core boundary; ADR 0024 records the COV-023 durable runtime and persistence boundary. Each later implementation COV still requires its own reviewed scope.
 - **V2:** Platform v1 remains Arc-only and USDC-only; API authentication never replaces financial authorization, and offchain platform state never replaces authoritative onchain spend/replay state.
 - **Production:** Real credentials, real funds, key-management infrastructure, high availability, monitoring, incident response, external audits, resilience, and compliance remain deferred.
 - **Protocol:** Generic policy interpretation, arbitrary smart-contract execution, permissionless extension, and broad multichain behavior remain deferred.
