@@ -25,6 +25,10 @@ not authorize implementation beyond the currently accepted COV.
 instances on Arc using USDC. Each later COV needs separate acceptance and must
 preserve signer separation and onchain authoritative spend/replay state.
 
+**V2:** COV-022 is complete in `@covenant/core` as a pure/offline generalized
+Covenant domain boundary. COV-023 is the next separately accepted implementation
+scope; no runtime or persistence work is implied here.
+
 ## Production
 
 - **Production:** Use hardware-backed, access-controlled signing and wallet credentials with rotation and break-glass procedures.

@@ -115,6 +115,29 @@ Existing signed version-1 schemas remain unchanged and retain their historical
 meaning. Any incompatible public or signed representation must be introduced
 under an explicit version rather than reinterpreting version `1`.
 
+### COV-022 implemented core boundary
+
+**V2:** COV-022 implements the pure `@covenant/core` package for this resource.
+The package is offline and deterministic: it parses strict `version: "2"`
+resources, canonicalizes six-decimal USDC amounts, enforces immutable project
+ownership, applies the frozen lifecycle table, and keeps authorization,
+provider, and Arc evidence separate. Operations return new immutable values and
+take explicit evaluation timestamps; they do not read clocks, persist state,
+call a network, sign, hold credentials, submit transactions, or retry.
+
+**V2:** Existing version-1 signed DecisionReceipt and AuthorizationReceipt
+envelopes remain unchanged. Core may associate those strict receipts with
+version-2 authorization evidence, but it does not reinterpret, sign, or replace
+the V1 cryptographic verification path. Circle/provider acceptance remains
+transport evidence, and only matching independent Arc success evidence can
+produce `EXECUTED`.
+
+**V2:** COV-022 deliberately does not add HTTP, API authentication, databases,
+durable idempotency, webhooks, SDK runtime behavior, production credentials,
+wallet execution, contract changes, arbitrary policy evaluation, additional
+assets, or additional chains. Those boundaries remain deferred to separately
+accepted COVs.
+
 ## Lifecycle and evidence semantics
 
 **V2:** Platform lifecycle state summarizes orchestration; the resource must
@@ -211,8 +234,8 @@ execution, generic calldata, or an alternative direct-to-Arc execution path.
 
 ## Deferred boundaries
 
-- **V2:** COV-022 through COV-027 require their own reviewed scope and are not
-  implemented or implicitly authorized by COV-021.
+- **V2:** COV-023 through COV-027 require their own reviewed scope and are not
+  implemented or implicitly authorized by COV-022.
 - **Production:** Real funds, production credentials, hardware-backed custody,
   high availability, monitoring, incident response, compliance, disaster
   recovery, external audits, and production operational claims remain deferred
