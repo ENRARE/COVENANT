@@ -6,7 +6,7 @@
 
 **MVP:** The completed proof remains frozen historical evidence under `docs/MVP_CANON.md`.
 
-**V2:** COV-021 approves an API-first Covenant Platform v1 for multiple developer projects and Covenant instances on Arc using six-decimal USDC. The future `@covenant/sdk` is a typed client over the public API, not a second execution architecture. COV-021 is documentation only and implements neither API nor SDK runtime behavior.
+**V2:** COV-021 approves an API-first Covenant Platform v1 for multiple developer projects and Covenant instances on Arc using six-decimal USDC. COV-022 now provides the pure, offline generalized Covenant domain core; it does not implement the API or SDK runtime. The future `@covenant/sdk` is a typed client over the public API, not a second execution architecture.
 
 ## Workspace
 
@@ -22,7 +22,9 @@
 - **MVP:** `packages/sdk` â€” empty SDK scaffold.
 - **MVP:** `packages/config` â€” shared strict TypeScript configuration and the trusted Arc Testnet operational profile.
 
-**V2:** The existing `packages/sdk` scaffold is the approved future typed client over the Covenant API; it remains runtime-empty in COV-021.
+**V2:** `packages/core` is the pure version-2 Covenant resource, project ownership, lifecycle, and separate authorization/execution evidence boundary.
+
+**V2:** The existing `packages/sdk` scaffold is the approved future typed client over the Covenant API; it remains runtime-empty. `@covenant/core` is the shared domain boundary and is not an API, persistence, signer, Circle, wallet, or execution path.
 
 ## Local validation
 
@@ -161,7 +163,7 @@ See [MVP canon](docs/MVP_CANON.md), [V2 Platform canon](docs/V2_PLATFORM_CANON.m
 
 ## Platform direction and future scope
 
-- **V2:** ADR 0022 approves the narrow Platform v1/API/SDK direction and the COV-021 through COV-027 sequence. Each implementation COV still requires its own reviewed scope.
+- **V2:** ADR 0022 approves the narrow Platform v1/API/SDK direction and the COV-021 through COV-027 sequence. ADR 0023 records the COV-022 generalized core boundary. Each later implementation COV still requires its own reviewed scope.
 - **V2:** Platform v1 remains Arc-only and USDC-only; API authentication never replaces financial authorization, and offchain platform state never replaces authoritative onchain spend/replay state.
 - **Production:** Real credentials, real funds, key-management infrastructure, high availability, monitoring, incident response, external audits, resilience, and compliance remain deferred.
 - **Protocol:** Generic policy interpretation, arbitrary smart-contract execution, permissionless extension, and broad multichain behavior remain deferred.
