@@ -1,0 +1,14 @@
+{
+  "extends": "../../packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "outDir": "dist",
+    "paths": {
+      "@covenant/config": ["packages/config/src/index.ts"],
+      "@covenant/core": ["packages/core/src/index.ts"],
+      "@covenant/runtime": ["packages/runtime/src/index.ts"]
+    },
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+}

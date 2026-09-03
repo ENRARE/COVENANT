@@ -57,6 +57,72 @@ export type OperationPatch = Readonly<{
   submissionBoundary?: boolean;
 }>;
 
+/** Public-platform persistence records. These tables live in the same
+ * durable store as Covenants, execution operations, and the transactional
+ * outbox; the API must not create a second database authority. */
+export type DeveloperProjectRecord = Readonly<{
+  projectId: string;
+  name: string;
+  createdAt: number;
+}>;
+
+export type ApiKeyRecord = Readonly<{
+  keyId: string;
+  projectId: string;
+  prefix: string;
+  digest: string;
+  createdAt: number;
+  revokedAt: number | null;
+}>;
+
+export type HttpIdempotencyRecord = Readonly<{
+  projectId: string;
+  route: string;
+  keyDigest: string;
+  requestFingerprint: string;
+  responseStatus: number | null;
+  responseJson: string | null;
+  resourceReference: string | null;
+  createdAt: number;
+  updatedAt: number;
+}>;
+
+export type WebhookEndpointRecord = Readonly<{
+  endpointId: string;
+  projectId: string;
+  url: string;
+  secretCiphertext: string;
+  createdAt: number;
+  revokedAt: number | null;
+}>;
+
+export type WebhookDeliveryRecord = Readonly<{
+  deliveryId: string;
+  endpointId: string;
+  projectId: string;
+  eventId: string;
+  eventType: string;
+  payloadJson: string;
+  status: "PENDING" | "RETRYING" | "DELIVERED" | "FAILED";
+  attemptCount: number;
+  nextAttemptAt: number;
+  lastAttemptAt: number | null;
+  deliveredAt: number | null;
+  lastError: string | null;
+  createdAt: number;
+  updatedAt: number;
+}>;
+
+export type CreateWebhookDeliveryInput = Readonly<{
+  deliveryId: string;
+  endpointId: string;
+  projectId: string;
+  eventId: string;
+  eventType: string;
+  payloadJson: string;
+  at: number;
+}>;
+
 type SqlRow = Record<string, unknown>;
 
 function parseJson(value: unknown): unknown {
@@ -260,6 +326,85 @@ function rowToOutbox(row: SqlRow): RuntimeOutboxRecord {
   });
 }
 
+function rowToProject(row: SqlRow): DeveloperProjectRecord {
+  return Object.freeze({
+    projectId: textValue(row.project_id),
+    name: textValue(row.name),
+    createdAt: numberValue(row.created_at),
+  });
+}
+
+function rowToApiKey(row: SqlRow): ApiKeyRecord {
+  return Object.freeze({
+    keyId: textValue(row.key_id),
+    projectId: textValue(row.project_id),
+    prefix: textValue(row.public_prefix),
+    digest: textValue(row.digest),
+    createdAt: numberValue(row.created_at),
+    revokedAt: nullableNumber(row.revoked_at),
+  });
+}
+
+function rowToIdempotency(row: SqlRow): HttpIdempotencyRecord {
+  return Object.freeze({
+    projectId: textValue(row.project_id),
+    route: textValue(row.route),
+    keyDigest: textValue(row.key_digest),
+    requestFingerprint: textValue(row.request_fingerprint),
+    responseStatus:
+      row.response_status === null ? null : numberValue(row.response_status),
+    responseJson:
+      row.response_json === null ? null : textValue(row.response_json),
+    resourceReference:
+      row.resource_reference === null
+        ? null
+        : textValue(row.resource_reference),
+    createdAt: numberValue(row.created_at),
+    updatedAt: numberValue(row.updated_at),
+  });
+}
+
+function rowToWebhookEndpoint(row: SqlRow): WebhookEndpointRecord {
+  return Object.freeze({
+    endpointId: textValue(row.endpoint_id),
+    projectId: textValue(row.project_id),
+    url: textValue(row.url),
+    secretCiphertext: textValue(row.secret_ciphertext),
+    createdAt: numberValue(row.created_at),
+    revokedAt: nullableNumber(row.revoked_at),
+  });
+}
+
+function rowToWebhookDelivery(row: SqlRow): WebhookDeliveryRecord {
+  const status = textValue(row.status);
+  if (
+    !(["PENDING", "RETRYING", "DELIVERED", "FAILED"] as const).includes(
+      status as never,
+    )
+  ) {
+    runtimeFailure(
+      "RUNTIME_PERSISTENCE_FAILURE",
+      "Stored webhook status is invalid",
+    );
+  }
+  return Object.freeze({
+    deliveryId: textValue(row.delivery_id),
+    endpointId: textValue(row.endpoint_id),
+    projectId: textValue(row.project_id),
+    eventId: textValue(row.event_id),
+    eventType: textValue(row.event_type),
+    payloadJson: textValue(row.payload_json),
+    status: status as WebhookDeliveryRecord["status"],
+    attemptCount: numberValue(row.attempt_count),
+    nextAttemptAt: numberValue(row.next_attempt_at),
+    lastAttemptAt: nullableNumber(row.last_attempt_at),
+    deliveredAt: nullableNumber(row.delivered_at),
+    lastError: nullableText(row.last_error),
+    createdAt: numberValue(row.created_at),
+    updatedAt: numberValue(row.updated_at),
+  });
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS covenants (
   project_id TEXT NOT NULL,
@@ -316,6 +461,66 @@ CREATE TABLE IF NOT EXISTS runtime_outbox (
   FOREIGN KEY (operation_key) REFERENCES execution_operations(operation_key),
   FOREIGN KEY (project_id, covenant_id, operation_key)
     REFERENCES execution_operations(project_id, covenant_id, operation_key)
+);
+CREATE TABLE IF NOT EXISTS developer_projects (
+  project_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS api_keys (
+  key_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  public_prefix TEXT NOT NULL UNIQUE,
+  digest TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  revoked_at INTEGER,
+  FOREIGN KEY (project_id) REFERENCES developer_projects(project_id)
+);
+CREATE INDEX IF NOT EXISTS api_keys_project_idx ON api_keys(project_id, created_at);
+CREATE TABLE IF NOT EXISTS webhook_endpoints (
+  endpoint_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  secret_ciphertext TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  revoked_at INTEGER,
+  FOREIGN KEY (project_id) REFERENCES developer_projects(project_id)
+);
+CREATE INDEX IF NOT EXISTS webhook_endpoints_project_idx
+  ON webhook_endpoints(project_id, created_at);
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+  delivery_id TEXT PRIMARY KEY,
+  endpoint_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('PENDING','RETRYING','DELIVERED','FAILED')),
+  attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+  next_attempt_at INTEGER NOT NULL,
+  last_attempt_at INTEGER,
+  delivered_at INTEGER,
+  last_error TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(endpoint_id, event_id),
+  FOREIGN KEY (endpoint_id) REFERENCES webhook_endpoints(endpoint_id),
+  FOREIGN KEY (project_id) REFERENCES developer_projects(project_id)
+);
+CREATE INDEX IF NOT EXISTS webhook_deliveries_due_idx
+  ON webhook_deliveries(status, next_attempt_at, created_at);
+CREATE TABLE IF NOT EXISTS http_idempotency (
+  project_id TEXT NOT NULL,
+  route TEXT NOT NULL,
+  key_digest TEXT NOT NULL,
+  request_fingerprint TEXT NOT NULL,
+  response_status INTEGER,
+  response_json TEXT,
+  resource_reference TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(project_id, route, key_digest),
+  FOREIGN KEY (project_id) REFERENCES developer_projects(project_id)
 );
 `;
 
@@ -932,5 +1137,429 @@ export class DurableRuntimeStore {
       .prepare("SELECT * FROM runtime_outbox WHERE id=?")
       .get(id) as SqlRow | undefined;
     return row === undefined ? undefined : rowToOutbox(row);
+  }
+
+  ensureDeveloperProject(
+    projectIdInput: string,
+    nameInput: string,
+    at: number,
+  ): DeveloperProjectRecord {
+    const projectId = validateId(projectIdInput, "projectId");
+    const name = nameInput.trim().slice(0, 128);
+    if (name.length === 0)
+      runtimeFailure("RUNTIME_INVALID_STATE", "Project name is required");
+    const timestamp = validateAt(at);
+    return this.#transaction(() => {
+      this.#db
+        .prepare(
+          "INSERT OR IGNORE INTO developer_projects(project_id,name,created_at) VALUES (?,?,?)",
+        )
+        .run(projectId, name, timestamp);
+      const row = this.#db
+        .prepare("SELECT * FROM developer_projects WHERE project_id=?")
+        .get(projectId) as SqlRow | undefined;
+      if (row === undefined) runtimeFailure("RUNTIME_PERSISTENCE_FAILURE");
+      return rowToProject(row);
+    });
+  }
+
+  getDeveloperProject(
+    projectIdInput: string,
+  ): DeveloperProjectRecord | undefined {
+    const row = this.#db
+      .prepare("SELECT * FROM developer_projects WHERE project_id=?")
+      .get(validateId(projectIdInput, "projectId")) as SqlRow | undefined;
+    return row === undefined ? undefined : rowToProject(row);
+  }
+
+  saveApiKey(
+    input: Readonly<{
+      keyId: string;
+      projectId: string;
+      prefix: string;
+      digest: string;
+      at: number;
+    }>,
+  ): ApiKeyRecord {
+    const keyId = input.keyId.trim();
+    const prefix = input.prefix.trim();
+    const digest = input.digest.trim();
+    if (
+      !/^[A-Za-z0-9._:-]{1,128}$/u.test(keyId) ||
+      !/^cov_test_[A-Za-z0-9_-]{8,}$/u.test(prefix)
+    ) {
+      runtimeFailure("RUNTIME_INVALID_STATE", "API key identity is invalid");
+    }
+    if (!/^[0-9a-f]{64}$/u.test(digest))
+      runtimeFailure("RUNTIME_INVALID_STATE", "API key digest is invalid");
+    const projectId = validateId(input.projectId, "projectId");
+    const at = validateAt(input.at);
+    return this.#transaction(() => {
+      this.#db
+        .prepare(
+          "INSERT INTO api_keys(key_id,project_id,public_prefix,digest,created_at) VALUES (?,?,?,?,?)",
+        )
+        .run(keyId, projectId, prefix, digest, at);
+      const row = this.#db
+        .prepare("SELECT * FROM api_keys WHERE key_id=?")
+        .get(keyId) as SqlRow | undefined;
+      if (row === undefined) runtimeFailure("RUNTIME_PERSISTENCE_FAILURE");
+      return rowToApiKey(row);
+    });
+  }
+
+  findApiKeyCandidates(prefixInput: string): ApiKeyRecord[] {
+    const prefix = prefixInput.trim();
+    return (
+      this.#db
+        .prepare("SELECT * FROM api_keys WHERE public_prefix=?")
+        .all(prefix) as SqlRow[]
+    ).map(rowToApiKey);
+  }
+
+  listApiKeys(projectIdInput: string): ApiKeyRecord[] {
+    const projectId = validateId(projectIdInput, "projectId");
+    return (
+      this.#db
+        .prepare(
+          "SELECT * FROM api_keys WHERE project_id=? ORDER BY created_at,key_id",
+        )
+        .all(projectId) as SqlRow[]
+    ).map(rowToApiKey);
+  }
+
+  revokeApiKey(
+    projectIdInput: string,
+    keyId: string,
+    at: number,
+  ): ApiKeyRecord | undefined {
+    const projectId = validateId(projectIdInput, "projectId");
+    const timestamp = validateAt(at);
+    this.#db
+      .prepare(
+        "UPDATE api_keys SET revoked_at=? WHERE project_id=? AND key_id=? AND revoked_at IS NULL",
+      )
+      .run(timestamp, projectId, keyId);
+    const row = this.#db
+      .prepare("SELECT * FROM api_keys WHERE project_id=? AND key_id=?")
+      .get(projectId, keyId) as SqlRow | undefined;
+    return row === undefined ? undefined : rowToApiKey(row);
+  }
+
+  replaceCovenantProjection(
+    projectIdInput: string,
+    resourceInput: unknown,
+    at: number,
+  ): RuntimeCovenant {
+    const projectId = validateId(projectIdInput, "projectId");
+    const resource = parseCovenantResource(resourceInput);
+    assertProjectOwnership(resource, projectId);
+    const covenantId = validateId(resource.id, "covenantId");
+    const timestamp = validateAt(at);
+    return this.#transaction(() => {
+      const row = this.#db
+        .prepare("SELECT * FROM covenants WHERE project_id=? AND covenant_id=?")
+        .get(projectId, covenantId) as SqlRow | undefined;
+      if (row === undefined)
+        runtimeFailure(
+          "RUNTIME_NOT_FOUND",
+          "Covenant projection was not found",
+        );
+      const previous = rowToCovenant(row);
+      if (BigInt(resource.updatedAt) < BigInt(previous.resource.updatedAt)) {
+        runtimeFailure(
+          "RUNTIME_CONFLICT",
+          "Covenant projection cannot move backwards",
+        );
+      }
+      this.#db
+        .prepare(
+          "UPDATE covenants SET resource_json=?,updated_at=? WHERE project_id=? AND covenant_id=?",
+        )
+        .run(JSON.stringify(resource), timestamp, projectId, covenantId);
+      const next = this.#db
+        .prepare("SELECT * FROM covenants WHERE project_id=? AND covenant_id=?")
+        .get(projectId, covenantId) as SqlRow | undefined;
+      if (next === undefined) runtimeFailure("RUNTIME_PERSISTENCE_FAILURE");
+      return rowToCovenant(next);
+    });
+  }
+
+  listCovenants(
+    projectIdInput: string,
+    options: Readonly<{ limit?: number; after?: string }> = {},
+  ): Readonly<{ items: RuntimeCovenant[]; nextAfter: string | null }> {
+    const projectId = validateId(projectIdInput, "projectId");
+    const limit = options.limit ?? 20;
+    if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 100)
+      runtimeFailure(
+        "RUNTIME_PERSISTENCE_FAILURE",
+        "Covenant limit is invalid",
+      );
+    const after =
+      options.after === undefined ? null : validateId(options.after, "cursor");
+    const rows =
+      after === null
+        ? (this.#db
+            .prepare(
+              "SELECT * FROM covenants WHERE project_id=? ORDER BY created_at,covenant_id LIMIT ?",
+            )
+            .all(projectId, limit + 1) as SqlRow[])
+        : (this.#db
+            .prepare(
+              "SELECT * FROM covenants WHERE project_id=? AND (created_at,covenant_id) > (SELECT created_at,covenant_id FROM covenants WHERE project_id=? AND covenant_id=?) ORDER BY created_at,covenant_id LIMIT ?",
+            )
+            .all(projectId, projectId, after, limit + 1) as SqlRow[]);
+    const hasMore = rows.length > limit;
+    const items = rows.slice(0, limit).map(rowToCovenant);
+    return {
+      items,
+      nextAfter: hasMore ? (items.at(-1)?.covenantId ?? null) : null,
+    };
+  }
+
+  getOperationByExecution(
+    projectIdInput: string,
+    executionIdInput: string,
+  ): RuntimeOperation | undefined {
+    const projectId = validateId(projectIdInput, "projectId");
+    const executionId = validateId(executionIdInput, "executionId");
+    const row = this.#db
+      .prepare(
+        "SELECT * FROM execution_operations WHERE project_id=? AND execution_id=?",
+      )
+      .get(projectId, executionId) as SqlRow | undefined;
+    return row === undefined ? undefined : rowToOperation(row);
+  }
+
+  getHttpIdempotency(
+    projectIdInput: string,
+    route: string,
+    keyDigest: string,
+  ): HttpIdempotencyRecord | undefined {
+    const projectId = validateId(projectIdInput, "projectId");
+    const row = this.#db
+      .prepare(
+        "SELECT * FROM http_idempotency WHERE project_id=? AND route=? AND key_digest=?",
+      )
+      .get(projectId, route, keyDigest) as SqlRow | undefined;
+    return row === undefined ? undefined : rowToIdempotency(row);
+  }
+
+  saveHttpIdempotency(
+    input: Readonly<{
+      projectId: string;
+      route: string;
+      keyDigest: string;
+      requestFingerprint: string;
+      responseStatus?: number | null;
+      responseJson?: string | null;
+      resourceReference?: string | null;
+      at: number;
+    }>,
+  ): HttpIdempotencyRecord {
+    const projectId = validateId(input.projectId, "projectId");
+    const at = validateAt(input.at);
+    this.#db
+      .prepare(
+        "INSERT INTO http_idempotency(project_id,route,key_digest,request_fingerprint,response_status,response_json,resource_reference,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,route,key_digest) DO UPDATE SET response_status=excluded.response_status,response_json=excluded.response_json,resource_reference=excluded.resource_reference,updated_at=excluded.updated_at",
+      )
+      .run(
+        projectId,
+        input.route,
+        input.keyDigest,
+        input.requestFingerprint,
+        input.responseStatus ?? null,
+        input.responseJson ?? null,
+        input.resourceReference ?? null,
+        at,
+        at,
+      );
+    const row = this.#db
+      .prepare(
+        "SELECT * FROM http_idempotency WHERE project_id=? AND route=? AND key_digest=?",
+      )
+      .get(projectId, input.route, input.keyDigest) as SqlRow | undefined;
+    if (row === undefined) runtimeFailure("RUNTIME_PERSISTENCE_FAILURE");
+    return rowToIdempotency(row);
+  }
+
+  deleteHttpIdempotency(
+    projectIdInput: string,
+    route: string,
+    keyDigest: string,
+  ): void {
+    const projectId = validateId(projectIdInput, "projectId");
+    this.#db
+      .prepare(
+        "DELETE FROM http_idempotency WHERE project_id=? AND route=? AND key_digest=? AND response_status IS NULL",
+      )
+      .run(projectId, route, keyDigest);
+  }
+
+  createWebhookEndpoint(
+    input: Readonly<{
+      endpointId: string;
+      projectId: string;
+      url: string;
+      secretCiphertext: string;
+      at: number;
+    }>,
+  ): WebhookEndpointRecord {
+    const projectId = validateId(input.projectId, "projectId");
+    const at = validateAt(input.at);
+    this.#db
+      .prepare(
+        "INSERT INTO webhook_endpoints(endpoint_id,project_id,url,secret_ciphertext,created_at) VALUES (?,?,?,?,?)",
+      )
+      .run(input.endpointId, projectId, input.url, input.secretCiphertext, at);
+    const row = this.#db
+      .prepare("SELECT * FROM webhook_endpoints WHERE endpoint_id=?")
+      .get(input.endpointId) as SqlRow | undefined;
+    if (row === undefined) runtimeFailure("RUNTIME_PERSISTENCE_FAILURE");
+    return rowToWebhookEndpoint(row);
+  }
+
+  getWebhookEndpoint(
+    projectIdInput: string,
+    endpointId: string,
+  ): WebhookEndpointRecord | undefined {
+    const projectId = validateId(projectIdInput, "projectId");
+    const row = this.#db
+      .prepare(
+        "SELECT * FROM webhook_endpoints WHERE project_id=? AND endpoint_id=?",
+      )
+      .get(projectId, endpointId) as SqlRow | undefined;
+    return row === undefined ? undefined : rowToWebhookEndpoint(row);
+  }
+
+  listWebhookEndpoints(projectIdInput: string): WebhookEndpointRecord[] {
+    const projectId = validateId(projectIdInput, "projectId");
+    return (
+      this.#db
+        .prepare(
+          "SELECT * FROM webhook_endpoints WHERE project_id=? AND revoked_at IS NULL ORDER BY created_at,endpoint_id",
+        )
+        .all(projectId) as SqlRow[]
+    ).map(rowToWebhookEndpoint);
+  }
+
+  revokeWebhookEndpoint(
+    projectIdInput: string,
+    endpointId: string,
+    at: number,
+  ): WebhookEndpointRecord | undefined {
+    const projectId = validateId(projectIdInput, "projectId");
+    const timestamp = validateAt(at);
+    this.#db
+      .prepare(
+        "UPDATE webhook_endpoints SET revoked_at=? WHERE project_id=? AND endpoint_id=? AND revoked_at IS NULL",
+      )
+      .run(timestamp, projectId, endpointId);
+    return this.getWebhookEndpoint(projectId, endpointId);
+  }
+
+  createWebhookDelivery(
+    input: CreateWebhookDeliveryInput,
+  ): WebhookDeliveryRecord {
+    const projectId = validateId(input.projectId, "projectId");
+    const at = validateAt(input.at);
+    this.#db
+      .prepare(
+        "INSERT OR IGNORE INTO webhook_deliveries(delivery_id,endpoint_id,project_id,event_id,event_type,payload_json,status,attempt_count,next_attempt_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+      )
+      .run(
+        input.deliveryId,
+        input.endpointId,
+        projectId,
+        input.eventId,
+        input.eventType,
+        input.payloadJson,
+        "PENDING",
+        0,
+        at,
+        at,
+        at,
+      );
+    const row = (this.#db
+      .prepare("SELECT * FROM webhook_deliveries WHERE delivery_id=?")
+      .get(input.deliveryId) ??
+      this.#db
+        .prepare(
+          "SELECT * FROM webhook_deliveries WHERE endpoint_id=? AND event_id=?",
+        )
+        .get(input.endpointId, input.eventId)) as SqlRow | undefined;
+    if (row === undefined) runtimeFailure("RUNTIME_PERSISTENCE_FAILURE");
+    return rowToWebhookDelivery(row);
+  }
+
+  listWebhookDeliveries(
+    options: Readonly<{
+      projectId?: string;
+      dueAt?: number;
+      limit?: number;
+    }> = {},
+  ): WebhookDeliveryRecord[] {
+    const limit = options.limit ?? 100;
+    if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 1000)
+      runtimeFailure(
+        "RUNTIME_PERSISTENCE_FAILURE",
+        "Delivery limit is invalid",
+      );
+    const rows =
+      options.projectId === undefined
+        ? (this.#db
+            .prepare(
+              "SELECT * FROM webhook_deliveries WHERE (? IS NULL OR next_attempt_at <= ?) AND status IN ('PENDING','RETRYING') ORDER BY created_at,delivery_id LIMIT ?",
+            )
+            .all(
+              options.dueAt ?? null,
+              options.dueAt ?? null,
+              limit,
+            ) as SqlRow[])
+        : (this.#db
+            .prepare(
+              "SELECT * FROM webhook_deliveries WHERE project_id=? AND (? IS NULL OR next_attempt_at <= ?) AND status IN ('PENDING','RETRYING') ORDER BY created_at,delivery_id LIMIT ?",
+            )
+            .all(
+              validateId(options.projectId, "projectId"),
+              options.dueAt ?? null,
+              options.dueAt ?? null,
+              limit,
+            ) as SqlRow[]);
+    return rows.map(rowToWebhookDelivery);
+  }
+
+  updateWebhookDelivery(
+    input: Readonly<{
+      deliveryId: string;
+      status: WebhookDeliveryRecord["status"];
+      attemptCount: number;
+      nextAttemptAt: number;
+      lastAttemptAt: number;
+      deliveredAt?: number | null;
+      lastError?: string | null;
+      at: number;
+    }>,
+  ): WebhookDeliveryRecord | undefined {
+    const at = validateAt(input.at);
+    this.#db
+      .prepare(
+        "UPDATE webhook_deliveries SET status=?,attempt_count=?,next_attempt_at=?,last_attempt_at=?,delivered_at=?,last_error=?,updated_at=? WHERE delivery_id=?",
+      )
+      .run(
+        input.status,
+        input.attemptCount,
+        input.nextAttemptAt,
+        input.lastAttemptAt,
+        input.deliveredAt ?? null,
+        input.lastError ?? null,
+        at,
+        input.deliveryId,
+      );
+    const row = this.#db
+      .prepare("SELECT * FROM webhook_deliveries WHERE delivery_id=?")
+      .get(input.deliveryId) as SqlRow | undefined;
+    return row === undefined ? undefined : rowToWebhookDelivery(row);
   }
 }

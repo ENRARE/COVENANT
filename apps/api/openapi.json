@@ -1,0 +1,345 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Covenant Developer API",
+    "version": "1.0.0",
+    "description": "V2 Platform v1 developer API. API authentication is project access, not financial authorization."
+  },
+  "servers": [{ "url": "https://api.invalid" }],
+  "security": [{ "ApiKey": [] }],
+  "paths": {
+    "/health": {
+      "get": {
+        "security": [],
+        "responses": { "200": { "$ref": "#/components/responses/Health" } }
+      }
+    },
+    "/v1/covenants": {
+      "post": {
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateCovenantRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/Covenant" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "get": {
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/After" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/CovenantList" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/covenants/{id}": {
+      "get": {
+        "parameters": [{ "$ref": "#/components/parameters/CovenantId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Covenant" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/covenants/{id}/authorize": {
+      "post": {
+        "parameters": [
+          { "$ref": "#/components/parameters/CovenantId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "responses": {
+          "202": { "$ref": "#/components/responses/Covenant" },
+          "409": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/covenants/{id}/execute": {
+      "post": {
+        "parameters": [
+          { "$ref": "#/components/parameters/CovenantId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "responses": {
+          "202": { "$ref": "#/components/responses/ExecutionAccepted" },
+          "409": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/covenants/{id}/cancel": {
+      "post": {
+        "parameters": [
+          { "$ref": "#/components/parameters/CovenantId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Covenant" },
+          "409": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/covenants/{id}/audit": {
+      "get": {
+        "parameters": [{ "$ref": "#/components/parameters/CovenantId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Audit" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/executions/{id}": {
+      "get": {
+        "parameters": [{ "$ref": "#/components/parameters/ExecutionId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/Execution" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/webhook-endpoints": {
+      "post": {
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookEndpointRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "$ref": "#/components/responses/WebhookCreated" },
+          "400": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "get": {
+        "responses": { "200": { "$ref": "#/components/responses/WebhookList" } }
+      }
+    },
+    "/v1/webhook-endpoints/{id}": {
+      "delete": {
+        "parameters": [
+          { "$ref": "#/components/parameters/WebhookId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "responses": {
+          "204": { "description": "Endpoint revoked" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/v1/api-keys": {
+      "get": {
+        "responses": { "200": { "$ref": "#/components/responses/ApiKeyList" } }
+      },
+      "post": {
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "responses": {
+          "201": { "$ref": "#/components/responses/ApiKeyCreated" }
+        }
+      }
+    },
+    "/v1/api-keys/{id}": {
+      "delete": {
+        "parameters": [
+          { "$ref": "#/components/parameters/ApiKeyId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "responses": { "204": { "description": "API key revoked" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKey": { "type": "apiKey", "in": "header", "name": "X-API-Key" }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "schema": { "type": "string", "maxLength": 256 }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "After": {
+        "name": "after",
+        "in": "query",
+        "schema": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" }
+      },
+      "CovenantId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "$ref": "#/components/schemas/Bytes32" }
+      },
+      "ExecutionId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "$ref": "#/components/schemas/Bytes32" }
+      },
+      "WebhookId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" }
+      },
+      "ApiKeyId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" }
+      }
+    },
+    "schemas": {
+      "Bytes32": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" },
+      "CreateCovenantRequest": {
+        "type": "object",
+        "required": ["payer", "beneficiary", "amount", "expiresAt"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Bytes32" },
+          "payer": { "type": "string" },
+          "beneficiary": { "type": "string" },
+          "amount": { "type": "string" },
+          "conditions": { "type": "object" },
+          "policy": { "type": "object" },
+          "createdAt": { "type": "string" },
+          "expiresAt": { "type": "string" },
+          "auditReference": { "type": "string" }
+        }
+      },
+      "Covenant": {
+        "type": "object",
+        "required": ["id", "projectId", "status", "amount", "asset", "network"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Bytes32" },
+          "projectId": { "$ref": "#/components/schemas/Bytes32" },
+          "status": { "type": "string" },
+          "amount": { "type": "string" },
+          "asset": { "type": "object" },
+          "network": { "type": "object" }
+        }
+      },
+      "Execution": {
+        "type": "object",
+        "required": [
+          "id",
+          "covenantId",
+          "status",
+          "attemptCount",
+          "provider",
+          "arc"
+        ],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/Bytes32" },
+          "covenantId": { "$ref": "#/components/schemas/Bytes32" },
+          "status": { "type": "string" },
+          "attemptCount": { "type": "integer" },
+          "provider": { "type": "object" },
+          "arc": { "type": "object" }
+        }
+      },
+      "WebhookEndpointRequest": {
+        "type": "object",
+        "required": ["url"],
+        "additionalProperties": false,
+        "properties": { "url": { "type": "string", "format": "uri" } }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["type", "code", "message", "requestId"],
+            "properties": {
+              "type": { "type": "string" },
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "requestId": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "Health": {
+        "description": "Healthy",
+        "content": { "application/json": { "schema": { "type": "object" } } }
+      },
+      "Covenant": {
+        "description": "Covenant resource",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Covenant" }
+          }
+        }
+      },
+      "CovenantList": {
+        "description": "Project-scoped Covenant page",
+        "content": { "application/json": { "schema": { "type": "object" } } }
+      },
+      "ExecutionAccepted": {
+        "description": "Durable execution operation",
+        "content": { "application/json": { "schema": { "type": "object" } } }
+      },
+      "Execution": {
+        "description": "Execution operation",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Execution" }
+          }
+        }
+      },
+      "Audit": {
+        "description": "Non-authoritative audit projection",
+        "content": { "application/json": { "schema": { "type": "object" } } }
+      },
+      "WebhookCreated": {
+        "description": "Endpoint and one-time secret",
+        "content": { "application/json": { "schema": { "type": "object" } } }
+      },
+      "WebhookList": {
+        "description": "Webhook endpoints",
+        "content": { "application/json": { "schema": { "type": "object" } } }
+      },
+      "ApiKeyCreated": {
+        "description": "API key plaintext is returned once",
+        "content": { "application/json": { "schema": { "type": "object" } } }
+      },
+      "ApiKeyList": {
+        "description": "Sanitized API key list",
+        "content": { "application/json": { "schema": { "type": "object" } } }
+      },
+      "Error": {
+        "description": "Stable API error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      }
+    }
+  }
+}
