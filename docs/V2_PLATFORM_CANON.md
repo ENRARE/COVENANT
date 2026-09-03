@@ -228,19 +228,21 @@ none of these.
 new financial intent; and `cancel` cannot pretend to stop an ambiguous or
 already submitted chain operation.
 
-## Future TypeScript SDK contract
+## TypeScript SDK contract
 
-**V2:** `@covenant/sdk` will be the typed TypeScript client for the REST API.
-It may eventually expose `covenants.create`, `covenants.retrieve`,
+**V2:** `@covenant/sdk` is the typed, server-side TypeScript client for the
+COV-024 REST API. It exposes `covenants.create`, `covenants.retrieve`,
 `covenants.list`, `covenants.authorize`, `covenants.execute`,
-`covenants.cancel`, `covenants.audit`, `executions.retrieve`, and
-`webhooks.verify`.
+`covenants.cancel`, `covenants.audit`, `executions.retrieve`, API-key and
+webhook endpoint management, and `webhooks.verify`.
 
-**V2:** The SDK will own request construction, response typing, stable error
-mapping, request-ID propagation, idempotency-key support, and webhook
-verification ergonomics once those contracts are separately implemented. It
-will not own policy evaluation, authorization keys, Circle credentials, wallet
-execution, generic calldata, or an alternative direct-to-Arc execution path.
+**V2:** The SDK owns request construction, response typing, stable error
+mapping, request-ID propagation, idempotency-key support, bounded safe retries,
+timeouts, and webhook verification ergonomics. It does not own policy
+evaluation, authorization keys, Circle credentials, wallet execution, generic
+calldata, or an alternative direct-to-Arc execution path. It is intended for
+trusted server-side environments; API keys must not be exposed to browsers or
+mobile clients.
 
 ## Approved implementation sequence
 
@@ -248,7 +250,7 @@ execution, generic calldata, or an alternative direct-to-Arc execution path.
 2. **V2 — COV-022:** Generalized Covenant core.
 3. **V2 — COV-023:** Production-style execution runtime and persistence.
 4. **V2 — COV-024:** Developer REST API.
-5. **V2 — COV-025:** `@covenant/sdk`.
+5. **V2 — COV-025:** `@covenant/sdk` typed server-side API client.
 6. **V2 — COV-026:** Dogfood the existing Covenant app and add bounded
    reference integrations.
 7. **V2 — COV-027:** Security, reliability, and Platform v1 release.

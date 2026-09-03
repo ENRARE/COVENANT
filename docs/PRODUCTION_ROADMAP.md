@@ -17,7 +17,7 @@ not authorize implementation beyond the currently accepted COV.
 - **V2 — COV-022:** Generalized Covenant core.
 - **V2 — COV-023:** Production-style execution runtime and persistence.
 - **V2 — COV-024:** Developer REST API.
-- **V2 — COV-025:** `@covenant/sdk` as a typed API client.
+- **V2 — COV-025:** `@covenant/sdk` as the typed server-side API client (implemented; publication remains deferred to COV-027).
 - **V2 — COV-026:** Dogfood the existing Covenant app and add bounded reference integrations.
 - **V2 — COV-027:** Security, reliability, and Platform v1 release.
 
