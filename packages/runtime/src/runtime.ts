@@ -34,7 +34,13 @@ function positiveAt(value: string): string {
 }
 
 function sanitizedReason(error: unknown): string {
-  if (error instanceof Error) return error.message.slice(0, 256);
+  if (error instanceof Error)
+    return error.message
+      .replace(
+        /(cov_test_[A-Za-z0-9_-]+|whsec_[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._~+/=-]+|-----BEGIN [^-]+-----)/giu,
+        "[REDACTED]",
+      )
+      .slice(0, 256);
   return "Runtime operation failed";
 }
 

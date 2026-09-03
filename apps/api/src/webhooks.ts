@@ -11,6 +11,7 @@ import type {
   WebhookDeliveryRecord,
 } from "@covenant/runtime";
 import { canonicalJson } from "./canonical-json.js";
+import { redactSensitiveText } from "./redaction.js";
 
 const REPLAY_WINDOW_SECONDS = 300;
 const MAX_ATTEMPTS = 5;
@@ -279,7 +280,7 @@ export class WebhookService {
         const status = attempt >= MAX_ATTEMPTS ? "FAILED" : "RETRYING";
         const reason =
           error instanceof Error
-            ? error.message.slice(0, 160)
+            ? redactSensitiveText(error.message).slice(0, 160)
             : "delivery failed";
         const next = this.#runtime.store.updateWebhookDelivery({
           deliveryId: delivery.deliveryId,

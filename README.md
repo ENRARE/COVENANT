@@ -6,7 +6,7 @@
 
 **MVP:** The completed proof remains frozen historical evidence under `docs/MVP_CANON.md`.
 
-**V2:** COV-021 approves an API-first Covenant Platform v1 for multiple developer projects and Covenant instances on Arc using six-decimal USDC. COV-022 provides the pure, offline generalized Covenant domain core, COV-024 provides the authenticated developer REST API, and COV-025 provides `@covenant/sdk` as its typed server-side client. The SDK is not a second execution architecture.
+**V2:** COV-021 approves an API-first Covenant Platform v1 for multiple developer projects and Covenant instances on Arc using six-decimal USDC. COV-022 provides the pure, offline generalized Covenant domain core, COV-023 the durable runtime, COV-024 the authenticated developer REST API, COV-025 `@covenant/sdk`, COV-026 authorization completion and dogfood references, and COV-027 the internal developer-release hardening gate. The SDK is not a second execution architecture.
 
 ## Workspace
 
@@ -165,5 +165,7 @@ See [MVP canon](docs/MVP_CANON.md), [V2 Platform canon](docs/V2_PLATFORM_CANON.m
 
 - **V2:** ADR 0022 approves the narrow Platform v1/API/SDK direction and the COV-021 through COV-027 sequence. ADRs 0023–0025 record the generalized core, durable runtime/API, and REST boundaries; ADR 0026 records the API-only TypeScript SDK. COV-026 and COV-027 remain separately scoped.
 - **V2:** Platform v1 remains Arc-only and USDC-only; API authentication never replaces financial authorization, and offchain platform state never replaces authoritative onchain spend/replay state.
+  **V2:** The current classification is **Covenant Platform v1 Developer Release — Arc Testnet**. See the [developer quickstart](docs/PLATFORM_V1_DEVELOPER_QUICKSTART.md), [deployment guide](docs/PLATFORM_V1_DEPLOYMENT.md), [release limitations](docs/PLATFORM_V1_COMPATIBILITY.md), and [release checklist](docs/PLATFORM_V1_RELEASE_CHECKLIST.md). No production, GA, mainnet, custody, compliance, or external-audit claim is made.
+
 - **Production:** Real credentials, real funds, key-management infrastructure, high availability, monitoring, incident response, external audits, resilience, and compliance remain deferred.
 - **Protocol:** Generic policy interpretation, arbitrary smart-contract execution, permissionless extension, and broad multichain behavior remain deferred.

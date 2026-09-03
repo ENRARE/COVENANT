@@ -4,3 +4,7 @@ export * from "./errors.js";
 export * from "./schemas.js";
 export * from "./server.js";
 export * from "./webhooks.js";
+export * from "./configuration.js";
+export * from "./rate-limit.js";
+export * from "./redaction.js";
+export * from "./main.js";

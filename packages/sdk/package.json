@@ -1,6 +1,20 @@
 {
   "name": "@covenant/sdk",
   "version": "0.1.0",
+  "description": "Server-side TypeScript client for the Covenant Platform v1 developer API.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ENRARE/COVENANT.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/ENRARE/COVENANT#readme",
+  "keywords": [
+    "covenant",
+    "payments",
+    "arc",
+    "usdc",
+    "sdk"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,6 +31,9 @@
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",

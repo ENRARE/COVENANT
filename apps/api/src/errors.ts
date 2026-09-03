@@ -2,6 +2,7 @@ import { CovenantDomainError } from "@covenant/core";
 import { RuntimeError } from "@covenant/runtime";
 import { CovenantVerificationError } from "@covenant/spec";
 import { ZodError } from "zod";
+import { redactSensitiveText } from "./redaction.js";
 
 export type ApiErrorType =
   | "invalid_request"
@@ -9,6 +10,7 @@ export type ApiErrorType =
   | "not_found"
   | "conflict"
   | "invalid_state"
+  | "rate_limited"
   | "server_error";
 
 export class ApiError extends Error {
@@ -17,6 +19,7 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly status: number,
+    readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = "ApiError";
@@ -30,6 +33,17 @@ export function apiError(
   status: number,
 ): never {
   throw new ApiError(type, code, message, status);
+}
+
+export function rateLimitError(retryAfterMs: number): never {
+  const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+  throw new ApiError(
+    "rate_limited",
+    "RATE_LIMITED",
+    `Request rate limit exceeded. Retry after ${String(seconds)} seconds.`,
+    429,
+    retryAfterMs,
+  );
 }
 
 const CORE_MESSAGES: Record<string, string> = {
@@ -49,7 +63,16 @@ const CORE_MESSAGES: Record<string, string> = {
 };
 
 export function mapError(error: unknown): ApiError {
-  if (error instanceof ApiError) return error;
+  if (error instanceof ApiError) {
+    if (error.message === redactSensitiveText(error.message)) return error;
+    return new ApiError(
+      error.type,
+      error.code,
+      redactSensitiveText(error.message),
+      error.status,
+      error.retryAfterMs,
+    );
+  }
   if (error instanceof ZodError)
     return new ApiError(
       "invalid_request",

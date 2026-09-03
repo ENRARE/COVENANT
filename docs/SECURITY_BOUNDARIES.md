@@ -611,3 +611,26 @@ products, policies, or chains require a separately reviewed closed adapter.
 
 **Protocol:** Generic event ingestion, arbitrary schemas, generalized policy,
 arbitrary calls, and generalized execution remain excluded.
+
+## COV-027 developer-release controls
+
+**V2:** The API boundary now validates deployment mode, database location,
+webhook encryption key, resolver/adapter modules, Arc Testnet constants, and
+bounded HTTP limits before startup. Test mode uses only deterministic injected
+fakes; it is never selected by a deployment module implicitly.
+
+**V2:** API keys identify a project and are stored only as digests. A key cannot
+produce authorization evidence, sign a receipt, call Circle, or mutate
+onchain state. Evidence is verified against deployment-owned V1 context before
+the core transition. Rate limits and idempotency coordinate requests only;
+they are not financial controls.
+
+**V2:** Request bodies, headers, errors, webhook delivery failures, and runtime
+failure reasons are bounded and redacted. CORS is deny-by-default, JSON
+mutations require an explicit JSON content type, and health/readiness responses
+contain no credentials or dependency details. Provider acceptance remains
+separate from Arc execution; ambiguity is durable and never silently retried.
+
+**Production:** Distributed rate limiting, HA, managed secret custody, backup
+automation, external security audit, formal SLOs, compliance, production
+credentials, and mainnet remain deferred.

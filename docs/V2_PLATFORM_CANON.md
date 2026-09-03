@@ -2,9 +2,10 @@
 
 ## Status and relationship to the MVP
 
-**V2:** COV-021 approves this bounded Platform v1 architecture and public
-contract as the first post-hackathon evolution of Covenant. It documents future
-runtime work; it does not implement the platform API or SDK.
+**V2:** COV-021 approved this bounded Platform v1 architecture and public
+contract as the first post-hackathon evolution of Covenant. COV-021 was
+documentation-only; COV-022 through COV-027 now provide the reviewed core,
+runtime, API, SDK, dogfood, and developer-release implementation boundaries.
 
 **MVP:** COV-001 through COV-020 remain a frozen completed historical proof.
 `docs/MVP_CANON.md` remains its governing record and is not superseded or
@@ -204,7 +205,7 @@ complete transition table and concurrency rules before exposing mutations.
 
 ## Conceptual REST API v1
 
-**V2:** The intended initial resource-oriented surface is:
+**V2:** The implemented initial resource-oriented surface is:
 
 | Operation                          | Scope | Architectural mapping                                                                                                                        |
 | ---------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -217,11 +218,24 @@ complete transition table and concurrency rules before exposing mutations.
 | `GET /v1/covenants/:id/audit`      | V2    | Return the deterministic non-authoritative audit view/reference for that resource.                                                           |
 | `GET /v1/executions/:id`           | V2    | Retrieve transport and Arc-observation facts without collapsing them into settlement/finality.                                               |
 
-**V2:** Later API implementation must include strict versioned input/output
-schemas, API authentication, project isolation, durable idempotency for every
-mutation, stable sanitized errors, request IDs, bounded pagination, and
-authenticated/replay-resistant webhook or event delivery. COV-021 implements
-none of these.
+**V2:** The API implementation includes strict versioned input/output schemas,
+API authentication, project isolation, durable idempotency, stable sanitized
+errors, request IDs, bounded pagination, replay-resistant webhook delivery,
+validated deployment configuration, bounded rate limits, and safe HTTP
+defaults. These controls remain developer-release scope, not a production SLA.
+
+### COV-027 developer-release status
+
+**V2:** COV-027 hardens the complete Platform v1 graph for an Arc Testnet
+developer release. The API has an explicit configuration boundary and Node
+entrypoint, bounded request and rate-limit controls, readiness and graceful
+shutdown behavior, and redacted operational errors. Runtime ambiguity and
+webhook retry semantics remain fail-closed and durable. `@covenant/sdk` 0.1.0
+is packable and independently consumable, with an OpenAPI/SDK drift gate.
+
+**V2:** The release claim is strictly **Covenant Platform v1 Developer Release
+— Arc Testnet**. It does not claim production, GA, mainnet, real funds,
+hardware-backed custody, an external security audit, HA/SLO, or compliance.
 
 **V2:** Every mutating action must map to a reviewed domain capability.
 `authorize` cannot bypass the authority and signer; `execute` cannot construct

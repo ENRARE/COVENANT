@@ -550,6 +550,16 @@ export class DurableRuntimeStore {
     this.#db.close();
   }
 
+  /** Lightweight readiness probe that never returns database internals. */
+  checkReady(): boolean {
+    try {
+      this.#db.prepare("SELECT 1 AS ok").get();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   #transaction<T>(work: () => T): T {
     this.#db.exec("BEGIN IMMEDIATE");
     try {
