@@ -6,7 +6,7 @@
 
 **MVP:** The completed proof remains frozen historical evidence under `docs/MVP_CANON.md`.
 
-**V2:** COV-021 approves an API-first Covenant Platform v1 for multiple developer projects and Covenant instances on Arc using six-decimal USDC. COV-022 now provides the pure, offline generalized Covenant domain core; it does not implement the API or SDK runtime. The future `@covenant/sdk` is a typed client over the public API, not a second execution architecture.
+**V2:** COV-021 approves an API-first Covenant Platform v1 for multiple developer projects and Covenant instances on Arc using six-decimal USDC. COV-022 provides the pure, offline generalized Covenant domain core, COV-024 provides the authenticated developer REST API, and COV-025 provides `@covenant/sdk` as its typed server-side client. The SDK is not a second execution architecture.
 
 ## Workspace
 
@@ -19,12 +19,12 @@
 - **MVP:** `packages/spec` â€” strict signed and operational schemas, USDC helpers, typed data, fixtures, and tests.
 - **MVP:** `packages/audit` â€” pure offline deterministic non-authoritative audit projection.
 - **MVP:** `packages/contracts` â€” Foundry-only immutable-vault scaffold.
-- **MVP:** `packages/sdk` â€” empty SDK scaffold.
+- **V2:** `packages/sdk` â€” typed server-side client over the COV-024 REST API; no signing or execution authority.
 - **MVP:** `packages/config` â€” shared strict TypeScript configuration and the trusted Arc Testnet operational profile.
 
 **V2:** `packages/core` is the pure version-2 Covenant resource, project ownership, lifecycle, and separate authorization/execution evidence boundary. `packages/runtime` is the durable, non-authoritative worker runtime: it persists operational projections, leases, idempotency, reconciliation metadata, and transactional outbox records while delegating financial execution to the existing executor and CovenantVault path.
 
-**V2:** The existing `packages/sdk` scaffold is the approved future typed client over the Covenant API; it remains runtime-empty. `@covenant/core` is the shared domain boundary and is not an API, persistence, signer, Circle, wallet, or execution path.
+**V2:** `packages/sdk` is the typed server-side client over the COV-024 Covenant API. It owns request construction, response typing, bounded transport behavior, typed errors, idempotency headers, and webhook verification only. `@covenant/core` remains the shared domain boundary and is not an API, persistence, signer, Circle, wallet, or execution path.
 
 ## Local validation
 
@@ -163,7 +163,7 @@ See [MVP canon](docs/MVP_CANON.md), [V2 Platform canon](docs/V2_PLATFORM_CANON.m
 
 ## Platform direction and future scope
 
-- **V2:** ADR 0022 approves the narrow Platform v1/API/SDK direction and the COV-021 through COV-027 sequence. ADR 0023 records the COV-022 generalized core boundary; ADR 0024 records the COV-023 durable runtime and persistence boundary. Each later implementation COV still requires its own reviewed scope.
+- **V2:** ADR 0022 approves the narrow Platform v1/API/SDK direction and the COV-021 through COV-027 sequence. ADRs 0023–0025 record the generalized core, durable runtime/API, and REST boundaries; ADR 0026 records the API-only TypeScript SDK. COV-026 and COV-027 remain separately scoped.
 - **V2:** Platform v1 remains Arc-only and USDC-only; API authentication never replaces financial authorization, and offchain platform state never replaces authoritative onchain spend/replay state.
 - **Production:** Real credentials, real funds, key-management infrastructure, high availability, monitoring, incident response, external audits, resilience, and compliance remain deferred.
 - **Protocol:** Generic policy interpretation, arbitrary smart-contract execution, permissionless extension, and broad multichain behavior remain deferred.

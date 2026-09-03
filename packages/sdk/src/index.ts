@@ -1,1 +1,38 @@
-export const scaffoldStatus = "MVP scaffold: SDK not implemented" as const;
+export { Covenant } from "./client.js";
+export { verifyWebhook } from "./webhooks.js";
+export {
+  CovenantApiError,
+  CovenantAuthenticationError,
+  CovenantConflictError,
+  CovenantConfigurationError,
+  CovenantError,
+  CovenantRateLimitError,
+  CovenantTimeoutError,
+  CovenantTransportError,
+  CovenantValidationError,
+  CovenantWebhookSignatureError,
+} from "./errors.js";
+export type {
+  ApiKeyCreated,
+  ApiKeyResource,
+  AuditEvent,
+  AuditResource,
+  Bytes32,
+  CovenantAsset,
+  CovenantConditions,
+  CovenantListParams,
+  CovenantNetwork,
+  CovenantOptions,
+  CovenantPage,
+  CovenantResource,
+  CreateCovenantInput,
+  ExecutionAccepted,
+  ExecutionResource,
+  FetchLike,
+  ProviderExecutionState,
+  RequestOptions,
+  WebhookEndpointCreated,
+  WebhookEndpointResource,
+  WebhookEvent,
+  WebhookVerifyInput,
+} from "./types.js";
