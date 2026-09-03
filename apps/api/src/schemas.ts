@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { PLATFORM_V1_ASSET, PLATFORM_V1_NETWORK } from "@covenant/core";
+import {
+  authorizationEvidenceSubmissionSchema,
+  PLATFORM_V1_ASSET,
+  PLATFORM_V1_NETWORK,
+} from "@covenant/core";
 
 const bytes32 = z
   .string()
@@ -49,6 +53,7 @@ export const createCovenantRequestSchema = z
   });
 
 export const emptyMutationSchema = z.object({}).strict();
+export { authorizationEvidenceSubmissionSchema };
 export const webhookEndpointRequestSchema = z
   .object({ url: z.string().url() })
   .strict();

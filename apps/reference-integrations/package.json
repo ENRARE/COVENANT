@@ -1,5 +1,5 @@
 {
-  "name": "@covenant/api",
+  "name": "@covenant/reference-integrations",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,9 +11,6 @@
       "import": "./dist/index.js"
     }
   },
-  "engines": {
-    "node": ">=22.5.0"
-  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
@@ -21,13 +18,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@covenant/config": "workspace:*",
-    "@covenant/core": "workspace:*",
-    "@covenant/spec": "workspace:*",
-    "@covenant/runtime": "workspace:*",
-    "zod": "^3.25.76"
+    "@covenant/sdk": "workspace:*"
   },
   "devDependencies": {
+    "@covenant/api": "workspace:*",
+    "@covenant/core": "workspace:*",
+    "@covenant/runtime": "workspace:*",
+    "@covenant/spec": "workspace:*",
+    "viem": "^2.33.3",
     "vitest": "^3.2.4"
   }
 }

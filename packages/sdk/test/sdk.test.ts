@@ -19,6 +19,25 @@ import type { FetchLike } from "../src/types.js";
 const TEST_PROJECT_KEY = `cov_test_${"a".repeat(16)}`;
 const COVENANT_ID = `0x${"11".repeat(32)}` as const;
 const POLICY_HASH = `0x${"ab".repeat(32)}` as const;
+const AUTHORIZATION_EVIDENCE = {
+  evidence: {
+    covenantId: COVENANT_ID,
+    policyVersion: "1",
+    decisionId: `0x${"22".repeat(32)}`,
+    intentId: `0x${"33".repeat(32)}`,
+    intentHash: `0x${"44".repeat(32)}`,
+    decision: "APPROVED" as const,
+    authorizationId: `0x${"55".repeat(32)}`,
+    validUntil: "1700000100",
+    signedDecisionReceipt: { payload: {}, signature: `0x${"aa".repeat(65)}` },
+    signedAuthorizationReceipt: {
+      payload: {},
+      signature: `0x${"bb".repeat(65)}`,
+    },
+  },
+  signedPaymentIntent: { payload: {}, signature: `0x${"cc".repeat(65)}` },
+  ruleResults: [],
+} as const;
 
 type Call = Readonly<{ url: string; init: RequestInit }>;
 
@@ -166,6 +185,16 @@ describe("COV-025 TypeScript SDK", () => {
     await client.covenants.retrieve(COVENANT_ID);
     await client.covenants.list({ limit: 2, after: COVENANT_ID });
     await client.covenants.authorize(COVENANT_ID, { idempotencyKey: "auth-1" });
+    await client.covenants.submitAuthorizationEvidence(
+      COVENANT_ID,
+      AUTHORIZATION_EVIDENCE,
+      { idempotencyKey: "evidence-1" },
+    );
+    await expect(
+      client.covenants.submitAuthorizationEvidence(COVENANT_ID, {
+        evidence: { decision: "APPROVED" },
+      } as never),
+    ).rejects.toBeInstanceOf(CovenantValidationError);
     await client.covenants.execute(COVENANT_ID, { idempotencyKey: "exec-1" });
     await client.covenants.cancel(COVENANT_ID, { idempotencyKey: "cancel-1" });
     await client.covenants.audit(COVENANT_ID);
@@ -175,6 +204,7 @@ describe("COV-025 TypeScript SDK", () => {
       `GET https://api.example.test/v1/covenants/${COVENANT_ID}`,
       `GET https://api.example.test/v1/covenants?limit=2&after=${COVENANT_ID}`,
       `POST https://api.example.test/v1/covenants/${COVENANT_ID}/authorize`,
+      `POST https://api.example.test/v1/covenants/${COVENANT_ID}/authorization-evidence`,
       `POST https://api.example.test/v1/covenants/${COVENANT_ID}/execute`,
       `POST https://api.example.test/v1/covenants/${COVENANT_ID}/cancel`,
       `GET https://api.example.test/v1/covenants/${COVENANT_ID}/audit`,

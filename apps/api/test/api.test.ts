@@ -4,8 +4,12 @@ import {
   DurableExecutionRuntime,
   DurableRuntimeStore,
 } from "@covenant/runtime";
-import { CovenantApi } from "../src/server.js";
+import { CovenantApi, type CovenantApiOptions } from "../src/server.js";
 import { signWebhook, verifyWebhookSignature } from "../src/webhooks.js";
+import {
+  createEvidence,
+  tamperSignature,
+} from "./authorization-evidence-fixtures.js";
 
 const payer = "0x1111111111111111111111111111111111111111";
 const beneficiary = "0x2222222222222222222222222222222222222222";
@@ -17,6 +21,8 @@ function setup(
     body: string;
     headers: Record<string, string>;
   }) => Promise<{ status: number }>,
+  authorizationContextResolver?: CovenantApiOptions["authorizationContextResolver"],
+  clock: { value: number } = { value: 1_700_000_000_000 },
 ) {
   const store = new DurableRuntimeStore();
   const runtime = new DurableExecutionRuntime({
@@ -33,12 +39,15 @@ function setup(
   });
   const api = new CovenantApi({
     runtime,
-    now: () => 1_700_000_000_000,
+    now: () => clock.value,
     webhookMasterKey: new Uint8Array(32).fill(7),
     webhookSender: sender,
+    ...(authorizationContextResolver === undefined
+      ? {}
+      : { authorizationContextResolver }),
   });
   const project = api.provisionProject("test");
-  return { store, runtime, api, project };
+  return { store, runtime, api, project, clock };
 }
 
 function createBody() {
@@ -208,6 +217,213 @@ describe("COV-024 developer API", () => {
     expect(runtime.store.listOutbox()).toHaveLength(0);
   });
 
+  it("completes authorization only from verified external evidence", async () => {
+    const contexts = new Map<string, { covenantSpec: unknown }>();
+    const { api, project, runtime } = setup(undefined, (_projectId, covenant) =>
+      contexts.get(covenant.id),
+    );
+    const created = await api.handle({
+      method: "POST",
+      path: "/v1/covenants",
+      headers: { "x-api-key": project.apiKey },
+      body: createBody(),
+    });
+    const covenantId = (created.body as { id: string }).id;
+    const requested = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorize`,
+      headers: { "x-api-key": project.apiKey },
+      body: {},
+    });
+    expect((requested.body as { status: string }).status).toBe(
+      "AWAITING_AUTHORIZATION",
+    );
+    const evidence = await createEvidence(requested.body as never);
+    contexts.set(covenantId, evidence.context);
+
+    const fabricated = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: tamperSignature(evidence.submission),
+    });
+    expect(fabricated.status).toBe(400);
+    expect((fabricated.body as { error: { code: string } }).error.code).toBe(
+      "INVALID_AUTHORIZATION_SIGNATURE",
+    );
+    expect(runtime.store.listOutbox()).toHaveLength(0);
+
+    const wrongCovenant = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: {
+        ...evidence.submission,
+        evidence: {
+          ...evidence.submission.evidence,
+          covenantId: `0x${"ef".repeat(32)}`,
+        },
+      },
+    });
+    expect((wrongCovenant.body as { error: { code: string } }).error.code).toBe(
+      "EVIDENCE_MISMATCH",
+    );
+    const wrongHash = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: {
+        ...evidence.submission,
+        evidence: {
+          ...evidence.submission.evidence,
+          intentHash: `0x${"ff".repeat(32)}`,
+        },
+      },
+    });
+    expect((wrongHash.body as { error: { code: string } }).error.code).toBe(
+      "EVIDENCE_MISMATCH",
+    );
+    const wrongPolicy = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: {
+        ...evidence.submission,
+        evidence: {
+          ...evidence.submission.evidence,
+          policyVersion: "other-policy",
+        },
+      },
+    });
+    expect((wrongPolicy.body as { error: { code: string } }).error.code).toBe(
+      "EVIDENCE_MISMATCH",
+    );
+    const malformed = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: {
+        ...evidence.submission,
+        evidence: {
+          ...evidence.submission.evidence,
+          signedDecisionReceipt: { signature: "not-a-signature", payload: {} },
+        },
+      },
+    });
+    expect(malformed.status).toBe(400);
+
+    const originalSpec = evidence.context.covenantSpec as Record<
+      string,
+      unknown
+    >;
+    evidence.context.covenantSpec = {
+      ...originalSpec,
+      authorizationSigner: "0x3333333333333333333333333333333333333333",
+    };
+    const wrongSigner = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: evidence.submission,
+    });
+    expect((wrongSigner.body as { error: { code: string } }).error.code).toBe(
+      "AUTHORIZATION_AUTHENTICITY_FAILED",
+    );
+    evidence.context.covenantSpec = originalSpec;
+
+    const accepted = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: {
+        "x-api-key": project.apiKey,
+        "idempotency-key": "evidence-1",
+      },
+      body: evidence.submission,
+    });
+    expect(accepted.status).toBe(200);
+    expect((accepted.body as { status: string }).status).toBe("AUTHORIZED");
+    const replay = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: {
+        "x-api-key": project.apiKey,
+        "idempotency-key": "evidence-1",
+      },
+      body: evidence.submission,
+    });
+    expect(replay.body).toEqual(accepted.body);
+    const conflict = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: {
+        "x-api-key": project.apiKey,
+        "idempotency-key": "evidence-1",
+      },
+      body: {
+        ...evidence.submission,
+        evidence: {
+          ...evidence.submission.evidence,
+          intentHash: `0x${"ff".repeat(32)}`,
+        },
+      },
+    });
+    expect(conflict.status).toBe(409);
+    expect((conflict.body as { error: { code: string } }).error.code).toBe(
+      "IDEMPOTENCY_CONFLICT",
+    );
+
+    const other = api.provisionProject("other");
+    const isolated = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": other.apiKey },
+      body: evidence.submission,
+    });
+    expect(isolated.status).toBe(404);
+  });
+
+  it("accepts a cryptographically verified rejection and publishes its webhook", async () => {
+    const contexts = new Map<string, { covenantSpec: unknown }>();
+    const { api, project, runtime } = setup(undefined, (_projectId, covenant) =>
+      contexts.get(covenant.id),
+    );
+    const endpoint = await api.handle({
+      method: "POST",
+      path: "/v1/webhook-endpoints",
+      headers: { "x-api-key": project.apiKey },
+      body: { url: "https://receiver.invalid/hook" },
+    });
+    expect(endpoint.status).toBe(201);
+    const created = await api.handle({
+      method: "POST",
+      path: "/v1/covenants",
+      headers: { "x-api-key": project.apiKey },
+      body: createBody(),
+    });
+    const covenantId = (created.body as { id: string }).id;
+    await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorize`,
+      headers: { "x-api-key": project.apiKey },
+      body: {},
+    });
+    const evidence = await createEvidence(created.body as never, "REJECTED");
+    contexts.set(covenantId, evidence.context);
+    const rejected = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: evidence.submission,
+    });
+    expect(rejected.status).toBe(200);
+    expect((rejected.body as { status: string }).status).toBe("REJECTED");
+    expect(
+      runtime.store
+        .listWebhookDeliveries({ projectId: project.projectId })
+        .some((delivery) => delivery.eventType === "covenant.rejected"),
+    ).toBe(true);
+  });
+
   it("signs webhook payloads deterministically and retries fake deliveries", async () => {
     let calls = 0;
     const sender = ({
@@ -263,6 +479,69 @@ describe("COV-024 developer API", () => {
     expect(calls).toBe(2);
   });
 
+  it("fails closed when no deployment-owned authority verifier is configured", async () => {
+    const { api, project } = setup();
+    const created = await api.handle({
+      method: "POST",
+      path: "/v1/covenants",
+      headers: { "x-api-key": project.apiKey },
+      body: createBody(),
+    });
+    const covenantId = (created.body as { id: string }).id;
+    await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorize`,
+      headers: { "x-api-key": project.apiKey },
+      body: {},
+    });
+    const response = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: {},
+    });
+    expect(response.status).toBe(503);
+    expect((response.body as { error: { code: string } }).error.code).toBe(
+      "AUTHORIZATION_VERIFIER_UNAVAILABLE",
+    );
+  });
+
+  it("rejects otherwise valid evidence after its authorization expiry", async () => {
+    const contexts = new Map<string, { covenantSpec: unknown }>();
+    const clock = { value: 1_700_000_000_000 };
+    const { api, project } = setup(
+      undefined,
+      (_projectId, covenant) => contexts.get(covenant.id),
+      clock,
+    );
+    const created = await api.handle({
+      method: "POST",
+      path: "/v1/covenants",
+      headers: { "x-api-key": project.apiKey },
+      body: createBody(),
+    });
+    const covenantId = (created.body as { id: string }).id;
+    await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorize`,
+      headers: { "x-api-key": project.apiKey },
+      body: {},
+    });
+    const evidence = await createEvidence(created.body as never);
+    contexts.set(covenantId, evidence.context);
+    clock.value = 1_700_000_060_000;
+    const response = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: evidence.submission,
+    });
+    expect(response.status).toBe(409);
+    expect((response.body as { error: { code: string } }).error.code).toBe(
+      "AUTHORIZATION_EXPIRED",
+    );
+  });
+
   it("publishes OpenAPI coverage for every implemented route", () => {
     const spec = JSON.parse(
       readFileSync(new URL("../openapi.json", import.meta.url), "utf8"),
@@ -272,6 +551,7 @@ describe("COV-024 developer API", () => {
       "/v1/covenants",
       "/v1/covenants/{id}",
       "/v1/covenants/{id}/authorize",
+      "/v1/covenants/{id}/authorization-evidence",
       "/v1/covenants/{id}/execute",
       "/v1/covenants/{id}/cancel",
       "/v1/covenants/{id}/audit",

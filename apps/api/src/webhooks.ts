@@ -208,7 +208,9 @@ export class WebhookService {
           executionId: event.payload.executionId,
           operationKey: event.operationKey,
           state: event.payload.state,
-          providerStatus: event.payload.providerState,
+          ...(event.payload.providerState === undefined
+            ? {}
+            : { providerStatus: event.payload.providerState }),
         },
         eventId,
       );

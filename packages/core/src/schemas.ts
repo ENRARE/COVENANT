@@ -298,6 +298,27 @@ export const authorizationEvidenceSchema = z
     }
   });
 
+/**
+ * Transport bundle for externally produced authority evidence. The V2
+ * lifecycle evidence remains the existing AuthorizationEvidence shape; the
+ * signed PaymentIntent and canonical rule observations are carried alongside
+ * it so a verifier can replay the unchanged V1 authorization chain.
+ */
+export const authorizationEvidenceSubmissionSchema = z
+  .object({
+    evidence: authorizationEvidenceSchema,
+    signedPaymentIntent: z
+      .unknown()
+      .refine(
+        (value) => value !== undefined,
+        "signedPaymentIntent is required",
+      ),
+    ruleResults: z
+      .unknown()
+      .refine((value) => value !== undefined, "ruleResults are required"),
+  })
+  .strict();
+
 const providerStateObjectSchema = z
   .object({
     status: z.enum(PROVIDER_STATES),
@@ -388,6 +409,9 @@ export type ExecutionStatus = z.infer<typeof executionStatusSchema>;
 export type PlatformCovenant = z.infer<typeof platformCovenantSchema>;
 export type CreateCovenantInput = z.infer<typeof createCovenantInputSchema>;
 export type AuthorizationEvidence = z.infer<typeof authorizationEvidenceSchema>;
+export type AuthorizationEvidenceSubmission = z.infer<
+  typeof authorizationEvidenceSubmissionSchema
+>;
 export type ExecutionEvidence = z.infer<typeof executionEvidenceSchema>;
 
 export const covenantResourceSchema = platformCovenantSchema;

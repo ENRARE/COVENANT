@@ -1,5 +1,6 @@
 export const SDK_ROUTES = Object.freeze({
   covenants: "/v1/covenants",
+  authorizationEvidence: "authorization-evidence",
   executions: "/v1/executions",
   webhookEndpoints: "/v1/webhook-endpoints",
   apiKeys: "/v1/api-keys",
@@ -10,6 +11,7 @@ export const SDK_ROUTE_CONTRACT = Object.freeze([
   { method: "post", path: "/v1/covenants" },
   { method: "get", path: "/v1/covenants/{id}" },
   { method: "post", path: "/v1/covenants/{id}/authorize" },
+  { method: "post", path: "/v1/covenants/{id}/authorization-evidence" },
   { method: "post", path: "/v1/covenants/{id}/execute" },
   { method: "post", path: "/v1/covenants/{id}/cancel" },
   { method: "get", path: "/v1/covenants/{id}/audit" },

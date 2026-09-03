@@ -3,6 +3,7 @@ import type {
   Bytes32,
   CovenantConditions,
   CreateCovenantInput,
+  AuthorizationEvidenceSubmission,
   WebhookEndpointCreated,
 } from "./types.js";
 
@@ -96,6 +97,80 @@ export function assertCreateCovenantInput(
 export function assertId(value: string, field: string): void {
   if (typeof value !== "string") invalid(`${field} must be a string.`);
   assertBytes32(value, field);
+}
+
+export function assertAuthorizationEvidenceSubmission(
+  value: unknown,
+): asserts value is AuthorizationEvidenceSubmission {
+  if (!isRecord(value)) invalid("Authorization evidence must be an object.");
+  if (
+    Object.keys(value).some(
+      (key) =>
+        !["evidence", "signedPaymentIntent", "ruleResults"].includes(key),
+    )
+  )
+    invalid("Authorization evidence contains unsupported fields.");
+  if (!isRecord(value.evidence)) invalid("evidence must be an object.");
+  const evidence = value.evidence;
+  const allowed = new Set([
+    "covenantId",
+    "policyVersion",
+    "decisionId",
+    "intentId",
+    "intentHash",
+    "decision",
+    "authorizationId",
+    "validUntil",
+    "signedDecisionReceipt",
+    "decisionReceipt",
+    "signedAuthorizationReceipt",
+    "authorizationReceipt",
+  ]);
+  if (Object.keys(evidence).some((key) => !allowed.has(key)))
+    invalid("evidence contains unsupported fields.");
+  for (const field of ["covenantId", "decisionId", "intentId", "intentHash"])
+    assertBytes32(String(evidence[field]), `evidence.${field}`);
+  nonEmptyString(evidence.policyVersion, "evidence.policyVersion");
+  if (evidence.decision !== "APPROVED" && evidence.decision !== "REJECTED")
+    invalid("evidence.decision must be APPROVED or REJECTED.");
+  if (
+    evidence.authorizationId !== null &&
+    evidence.authorizationId !== undefined
+  ) {
+    if (typeof evidence.authorizationId !== "string")
+      invalid("evidence.authorizationId must be a string.");
+    assertBytes32(evidence.authorizationId, "evidence.authorizationId");
+  }
+  if (evidence.validUntil !== null && evidence.validUntil !== undefined)
+    assertTimestamp(evidence.validUntil, "evidence.validUntil");
+  if (evidence.decision === "APPROVED") {
+    if (
+      evidence.authorizationId === null ||
+      evidence.authorizationId === undefined ||
+      evidence.validUntil === null ||
+      evidence.validUntil === undefined
+    )
+      invalid("approved evidence requires authorizationId and validUntil.");
+    if (
+      evidence.signedDecisionReceipt === undefined &&
+      evidence.decisionReceipt === undefined
+    )
+      invalid("approved evidence requires a signed DecisionReceipt.");
+    if (
+      evidence.signedAuthorizationReceipt === undefined &&
+      evidence.authorizationReceipt === undefined
+    )
+      invalid("approved evidence requires a signed AuthorizationReceipt.");
+  } else if (
+    evidence.authorizationId !== null ||
+    evidence.validUntil !== null
+  ) {
+    invalid("rejected evidence cannot carry an authorization grant.");
+  }
+  if (!isRecord(value.signedPaymentIntent))
+    invalid("signedPaymentIntent must be an object.");
+  if (!Array.isArray(value.ruleResults))
+    invalid("ruleResults must be an array.");
 }
 
 export function assertListParams(

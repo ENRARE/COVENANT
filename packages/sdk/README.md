@@ -61,7 +61,13 @@ const requested = await covenant.covenants.authorize(agreement.id, {
 });
 // This requests the authority workflow; the SDK does not sign an authorization.
 
-const operation = await covenant.covenants.execute(agreement.id, {
+const authorized = await covenant.covenants.submitAuthorizationEvidence(
+  agreement.id,
+  externallyProducedEvidence,
+  { idempotencyKey: "evidence-order-123" },
+);
+
+const operation = await covenant.covenants.execute(authorized.id, {
   idempotencyKey: "execute-order-123",
 });
 const execution = await covenant.executions.retrieve(operation.execution.id);
@@ -73,6 +79,11 @@ retrieve the execution resource when an operation ID is available.
 
 Use `covenant.covenants.list({ limit, after })` for explicit bounded cursor
 pagination. The SDK never performs unbounded page traversal.
+
+`submitAuthorizationEvidence` transports an externally produced, signed
+authority bundle. It does not approve, sign, evaluate policy, or hold any
+financial credential. The API verifies the unchanged V1 signatures and only
+then applies the V2 lifecycle transition.
 
 ## API keys and webhooks
 
