@@ -15,7 +15,7 @@ import {
   type AuthorizationVerificationContext,
 } from "@covenant/core";
 import { DurableExecutionRuntime } from "@covenant/runtime";
-import { ApiError, apiError, mapError } from "./errors.js";
+import { ApiError, apiError, mapError, rateLimitError } from "./errors.js";
 import { ApiKeyService } from "./api-keys.js";
 import { canonicalJson } from "./canonical-json.js";
 import {
@@ -26,11 +26,14 @@ import {
   webhookEndpointRequestSchema,
 } from "./schemas.js";
 import { WebhookService } from "./webhooks.js";
+import { InMemoryRateLimiter, type RateLimitRule } from "./rate-limit.js";
+import { redactSensitiveText } from "./redaction.js";
 
 export type ApiRequest = Readonly<{
   method: string;
   path: string;
   headers?: Readonly<Record<string, string | undefined>>;
+  remoteAddress?: string;
   body?: unknown;
 }>;
 export type ApiResponse = Readonly<{
@@ -51,6 +54,12 @@ export type CovenantApiOptions = Readonly<{
     | AuthorizationVerificationContext
     | undefined
     | Promise<AuthorizationVerificationContext | undefined>;
+  rateLimits?: Readonly<{
+    authentication?: RateLimitRule;
+    mutations?: RateLimitRule;
+    evidence?: RateLimitRule;
+  }>;
+  readinessCheck?: () => boolean | Promise<boolean>;
 }>;
 
 function id(): `0x${string}` {
@@ -128,6 +137,13 @@ export class CovenantApi {
   readonly #keys: ApiKeyService;
   readonly #webhooks: WebhookService;
   readonly #authorizationContextResolver: CovenantApiOptions["authorizationContextResolver"];
+  readonly #readinessCheck: CovenantApiOptions["readinessCheck"];
+  readonly #rateLimiter: InMemoryRateLimiter;
+  readonly #rateLimits: Required<NonNullable<CovenantApiOptions["rateLimits"]>>;
+  readonly #idempotencyInFlight = new Map<
+    string,
+    Promise<Readonly<{ status: number; body: unknown }>>
+  >();
 
   constructor(options: CovenantApiOptions) {
     this.#runtime = options.runtime;
@@ -144,6 +160,21 @@ export class CovenantApi {
       now: this.#now,
     });
     this.#authorizationContextResolver = options.authorizationContextResolver;
+    this.#readinessCheck =
+      options.readinessCheck ??
+      (() => options.authorizationContextResolver !== undefined);
+    this.#rateLimiter = new InMemoryRateLimiter({ now: this.#now });
+    this.#rateLimits = {
+      authentication: options.rateLimits?.authentication ?? {
+        limit: 30,
+        windowMs: 60_000,
+      },
+      mutations: options.rateLimits?.mutations ?? {
+        limit: 60,
+        windowMs: 60_000,
+      },
+      evidence: options.rateLimits?.evidence ?? { limit: 20, windowMs: 60_000 },
+    };
   }
 
   provisionProject(name?: string) {
@@ -154,6 +185,22 @@ export class CovenantApi {
   }
   get webhooks(): WebhookService {
     return this.#webhooks;
+  }
+
+  async ready(): Promise<boolean> {
+    try {
+      const configured =
+        this.#readinessCheck === undefined
+          ? true
+          : await this.#readinessCheck();
+      return configured && this.#runtime.store.checkReady();
+    } catch {
+      return false;
+    }
+  }
+
+  close(): void {
+    this.#runtime.store.close();
   }
 
   async handle(input: ApiRequest): Promise<ApiResponse> {
@@ -169,6 +216,14 @@ export class CovenantApi {
           rid,
         );
       }
+      if (method === "GET" && url.pathname === "/ready") {
+        const ready = await this.ready();
+        return this.response(
+          ready ? 200 : 503,
+          { ok: ready, service: "covenant-api", version: "v1" },
+          rid,
+        );
+      }
       if (!url.pathname.startsWith("/v1/"))
         apiError("not_found", "NOT_FOUND", "Route was not found.", 404);
       const presentedKey =
@@ -177,6 +232,12 @@ export class CovenantApi {
           const auth = header(headers, "authorization");
           return auth?.startsWith("Bearer ") ? auth.slice(7) : undefined;
         })();
+      const authLimit = this.#rateLimiter.consume(
+        "auth",
+        `${input.remoteAddress ?? "unknown"}:${presentedKey?.slice(0, 18) ?? "anonymous"}`,
+        this.#rateLimits.authentication,
+      );
+      if (!authLimit.allowed) rateLimitError(authLimit.retryAfterMs);
       let identity;
       try {
         identity = this.#keys.authenticate(presentedKey);
@@ -200,6 +261,17 @@ export class CovenantApi {
       const route = url.pathname;
       const idemKey = header(headers, "idempotency-key");
       const mutation = method === "POST" || method === "DELETE";
+      if (mutation) {
+        const scope = route.endsWith("/authorization-evidence")
+          ? "evidence"
+          : "mutation";
+        const limit =
+          scope === "evidence"
+            ? this.#rateLimits.evidence
+            : this.#rateLimits.mutations;
+        const result = this.#rateLimiter.consume(scope, projectId, limit);
+        if (!result.allowed) rateLimitError(result.retryAfterMs);
+      }
       const run = (): Promise<Readonly<{ status: number; body: unknown }>> =>
         Promise.resolve(this.route(method, url, projectId, body));
       let result: Readonly<{ status: number; body: unknown }>;
@@ -251,56 +323,91 @@ export class CovenantApi {
             at: this.#now(),
           });
         }
-        try {
-          result = await run();
-        } catch (error) {
-          this.#runtime.store.deleteHttpIdempotency(
-            projectId,
-            route,
-            keyDigest,
-          );
-          throw error;
+        const inFlightKey = `${projectId}:${route}:${keyDigest}`;
+        const inFlight = this.#idempotencyInFlight.get(inFlightKey);
+        if (inFlight !== undefined) {
+          result = await inFlight;
+        } else {
+          const operation = (async () => {
+            try {
+              const completed = await run();
+              this.#runtime.store.saveHttpIdempotency({
+                projectId,
+                route,
+                keyDigest,
+                requestFingerprint: fingerprint,
+                responseStatus: completed.status,
+                responseJson: JSON.stringify(completed.body),
+                resourceReference:
+                  typeof completed.body === "object" &&
+                  completed.body !== null &&
+                  "id" in completed.body
+                    ? String(completed.body.id)
+                    : null,
+                at: this.#now(),
+              });
+              return completed;
+            } catch (error) {
+              this.#runtime.store.deleteHttpIdempotency(
+                projectId,
+                route,
+                keyDigest,
+              );
+              throw error;
+            }
+          })();
+          this.#idempotencyInFlight.set(inFlightKey, operation);
+          try {
+            result = await operation;
+          } finally {
+            if (this.#idempotencyInFlight.get(inFlightKey) === operation)
+              this.#idempotencyInFlight.delete(inFlightKey);
+          }
         }
-        this.#runtime.store.saveHttpIdempotency({
-          projectId,
-          route,
-          keyDigest,
-          requestFingerprint: fingerprint,
-          responseStatus: result.status,
-          responseJson: JSON.stringify(result.body),
-          resourceReference:
-            typeof result.body === "object" &&
-            result.body !== null &&
-            "id" in result.body
-              ? String(result.body.id)
-              : null,
-          at: this.#now(),
-        });
       } else {
         result = await run();
       }
       return this.response(result.status, result.body, rid);
     } catch (error) {
       const mapped = mapError(error);
+      const responseHeaders =
+        mapped.retryAfterMs === undefined
+          ? {}
+          : {
+              "retry-after": String(
+                Math.max(1, Math.ceil(mapped.retryAfterMs / 1000)),
+              ),
+            };
       return this.response(
         mapped.status,
         {
           error: {
             type: mapped.type,
             code: mapped.code,
-            message: mapped.message,
+            message: redactSensitiveText(mapped.message),
             requestId: rid,
           },
         },
         rid,
+        responseHeaders,
       );
     }
   }
 
-  private response(status: number, body: unknown, rid: string): ApiResponse {
+  private response(
+    status: number,
+    body: unknown,
+    rid: string,
+    additionalHeaders: Readonly<Record<string, string>> = {},
+  ): ApiResponse {
     return {
       status,
-      headers: { "content-type": "application/json", "x-request-id": rid },
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        "x-request-id": rid,
+        ...additionalHeaders,
+      },
       body,
     };
   }
@@ -613,13 +720,27 @@ export class CovenantApi {
   }
 }
 
-async function readBody(request: IncomingMessage): Promise<unknown> {
+async function readBody(
+  request: IncomingMessage,
+  maxBodyBytes: number,
+): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
+  const declaredLength = request.headers["content-length"];
+  if (declaredLength !== undefined) {
+    const parsed = Number(declaredLength);
+    if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > maxBodyBytes)
+      throw new ApiError(
+        "invalid_request",
+        "BODY_TOO_LARGE",
+        "Request body is too large.",
+        413,
+      );
+  }
   for await (const chunk of request) {
     const value = Buffer.from(chunk as Uint8Array);
     size += value.length;
-    if (size > 1_048_576)
+    if (size > maxBodyBytes)
       throw new ApiError(
         "invalid_request",
         "BODY_TOO_LARGE",
@@ -641,47 +762,149 @@ async function readBody(request: IncomingMessage): Promise<unknown> {
   }
 }
 
-export function createHttpServer(api: CovenantApi): Server {
-  return createServer((request: IncomingMessage, response: ServerResponse) => {
-    void (async () => {
-      const rid = requestId();
-      try {
-        const body =
-          request.method === "GET" || request.method === "HEAD"
-            ? {}
-            : await readBody(request);
-        const result = await api.handle({
-          method: request.method ?? "GET",
-          path: request.url ?? "/",
-          headers: Object.fromEntries(
-            Object.entries(request.headers).map(([key, value]) => [
-              key,
-              Array.isArray(value) ? value[0] : value,
-            ]),
-          ),
-          body,
-        });
-        response.statusCode = result.status;
-        for (const [key, value] of Object.entries(result.headers))
-          response.setHeader(key, value);
-        response.end(
-          result.status === 204 ? undefined : JSON.stringify(result.body),
-        );
-      } catch (error) {
-        const mapped = mapError(error);
-        response.statusCode = mapped.status;
-        response.setHeader("content-type", "application/json");
-        response.end(
-          JSON.stringify({
-            error: {
-              type: mapped.type,
-              code: mapped.code,
-              message: mapped.message,
-              requestId: rid,
-            },
-          }),
-        );
+export type HttpServerOptions = Readonly<{
+  allowedOrigins?: readonly string[];
+  maxBodyBytes?: number;
+  requestTimeoutMs?: number;
+  headersTimeoutMs?: number;
+  maxHeadersCount?: number;
+}>;
+
+export function createHttpServer(
+  api: CovenantApi,
+  options: HttpServerOptions = {},
+): Server {
+  const maxBodyBytes = options.maxBodyBytes ?? 1_048_576;
+  if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes < 1_024)
+    throw new Error("maxBodyBytes must be a positive bounded integer");
+  const allowedOrigins = new Set(options.allowedOrigins ?? []);
+  const server = createServer(
+    (request: IncomingMessage, response: ServerResponse) => {
+      void (async () => {
+        const rid = requestId();
+        try {
+          const origin = request.headers.origin;
+          const corsOrigin =
+            origin !== undefined && allowedOrigins.has(origin)
+              ? origin
+              : undefined;
+          if (corsOrigin !== undefined) {
+            response.setHeader("access-control-allow-origin", corsOrigin);
+            response.setHeader("vary", "Origin");
+            response.setHeader("access-control-allow-credentials", "true");
+          }
+          if (request.method === "OPTIONS") {
+            if (corsOrigin === undefined) {
+              response.statusCode = 403;
+              response.end();
+              return;
+            }
+            response.statusCode = 204;
+            response.setHeader(
+              "access-control-allow-methods",
+              "GET,POST,DELETE,OPTIONS",
+            );
+            response.setHeader(
+              "access-control-allow-headers",
+              "content-type,x-api-key,authorization,idempotency-key",
+            );
+            response.end();
+            return;
+          }
+          const hasBody =
+            request.headers["content-length"] !== undefined ||
+            request.headers["transfer-encoding"] !== undefined;
+          if (
+            (request.method === "POST" ||
+              (request.method === "DELETE" && hasBody)) &&
+            !(request.headers["content-type"] ?? "")
+              .toLowerCase()
+              .startsWith("application/json")
+          ) {
+            throw new ApiError(
+              "invalid_request",
+              "UNSUPPORTED_CONTENT_TYPE",
+              "JSON content-type is required for this operation.",
+              415,
+            );
+          }
+          const body =
+            request.method === "GET" || request.method === "HEAD"
+              ? {}
+              : await readBody(request, maxBodyBytes);
+          const result = await api.handle({
+            method: request.method ?? "GET",
+            path: request.url ?? "/",
+            headers: Object.fromEntries(
+              Object.entries(request.headers).map(([key, value]) => [
+                key,
+                Array.isArray(value) ? value[0] : value,
+              ]),
+            ),
+            ...(request.socket.remoteAddress === undefined
+              ? {}
+              : { remoteAddress: request.socket.remoteAddress }),
+            body,
+          });
+          response.statusCode = result.status;
+          for (const [key, value] of Object.entries(result.headers))
+            response.setHeader(key, value);
+          response.end(
+            result.status === 204 ? undefined : JSON.stringify(result.body),
+          );
+        } catch (error) {
+          const mapped = mapError(error);
+          response.statusCode = mapped.status;
+          response.setHeader("content-type", "application/json");
+          response.setHeader("cache-control", "no-store");
+          response.setHeader("x-request-id", rid);
+          response.end(
+            JSON.stringify({
+              error: {
+                type: mapped.type,
+                code: mapped.code,
+                message: mapped.message,
+                requestId: rid,
+              },
+            }),
+          );
+        }
+      })();
+    },
+  );
+  server.requestTimeout = options.requestTimeoutMs ?? 30_000;
+  server.headersTimeout = options.headersTimeoutMs ?? 10_000;
+  server.keepAliveTimeout = Math.min(server.requestTimeout, 5_000);
+  server.maxHeadersCount = options.maxHeadersCount ?? 100;
+  return server;
+}
+
+export async function gracefulShutdown(
+  server: Server,
+  api: CovenantApi,
+  timeoutMs = 10_000,
+): Promise<void> {
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      api.close();
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      server.closeAllConnections();
+      finish();
+    }, timeoutMs);
+    server.close((error) => {
+      if (
+        error !== undefined &&
+        (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING"
+      ) {
+        /* The durable store is still closed; callers cannot safely continue. */
       }
-    })();
+      finish();
+    });
   });
 }

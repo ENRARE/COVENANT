@@ -38,6 +38,14 @@ function setup() {
     webhookMasterKey: new Uint8Array(32).fill(8),
     authorizationContextResolver: (_projectId, covenant) =>
       contexts.get(covenant.id),
+    // The dogfood scenario intentionally exercises more requests than a
+    // production request window. Keep the fixture deterministic without
+    // changing the deployment-safe default limits.
+    rateLimits: {
+      authentication: { limit: 64, windowMs: 60_000 },
+      mutations: { limit: 32, windowMs: 60_000 },
+      evidence: { limit: 16, windowMs: 60_000 },
+    },
   });
   const project = api.provisionProject("reference-integrations");
   const fetcher: FetchLike = async (input, init = {}) => {

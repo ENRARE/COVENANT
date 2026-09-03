@@ -44,3 +44,12 @@ AuthorizationReceipt evidence. A caller submits that unchanged output to
 deployment-owned V1 CovenantSpec context and delegates the state transition to
 `@covenant/core`. Possession of the project API key never authorizes money, and
 the API has no signing key. Deployments without an evidence verifier fail closed.
+
+The deployable Node entrypoint is `dist/main.js` (`pnpm --filter @covenant/api
+start`). It requires `COVENANT_MODE=deployment`, a durable database filename,
+explicit resolver/adapter modules, and the fixed Arc Testnet RPC. The validated
+configuration boundary is in `src/configuration.ts`; test mode is only for
+explicitly injected deterministic fakes. `GET /ready` reports configuration and
+store readiness, while `GET /health` reports process liveness only. HTTP
+requests have bounded bodies, headers, timeouts, JSON content types, deny-by-
+default CORS, and project/key-scoped in-process rate limits.

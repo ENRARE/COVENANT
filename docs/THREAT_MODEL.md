@@ -506,3 +506,17 @@ fee policies, or operations require a separate threat model.
 **Protocol:** Generic HTTP, arbitrary contract or wallet execution, generalized
 transaction construction, arbitrary calldata, and multichain execution remain
 excluded.
+
+## COV-027 developer-release review
+
+**V2:** The final internal review covered API authentication and project
+isolation, evidence authenticity, execution identity and ambiguity, persistence
+and leases, webhook retries, secrets, configuration, request limits, logging,
+deployment, SDK packaging, OpenAPI drift, examples, migrations, and CI. No
+BLOCKER or HIGH finding requiring a contract, signer, EIP-712, chain, asset, or
+authority redesign remains open within developer-release scope.
+
+**V2:** Remaining findings are bounded release limitations: the limiter is
+in-process rather than distributed, the durable adapter is SQLite/PostgreSQL-
+shaped rather than a managed HA service, and no external security audit has
+occurred. These are explicitly Production prerequisites, not hidden claims.

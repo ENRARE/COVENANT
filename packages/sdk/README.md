@@ -130,3 +130,11 @@ configured limit.
 
 See `apps/api/openapi.json` for the public API contract and ADR 0026 for the
 SDK boundary decision.
+
+## Developer-release packaging
+
+The package remains pre-1.0 at version `0.1.0`. From the repository root,
+`pnpm test:sdk-release` builds the package, inspects its local tarball, installs
+it into an isolated temporary consumer, and verifies a mocked import. This is
+an offline proof; `npm publish` is intentionally not run until a separate
+founder authorization after merge.

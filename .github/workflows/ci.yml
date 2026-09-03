@@ -60,6 +60,12 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Verify OpenAPI and SDK contract
+        run: pnpm verify:openapi-sdk
+
+      - name: Verify packed SDK consumer
+        run: pnpm test:sdk-release
+
       - name: Test Foundry package
         run: pnpm test:contracts
 
