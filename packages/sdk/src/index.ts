@@ -17,6 +17,8 @@ export type {
   ApiKeyResource,
   AuditEvent,
   AuditResource,
+  AuthorizationEvidence,
+  AuthorizationEvidenceSubmission,
   Bytes32,
   CovenantAsset,
   CovenantConditions,

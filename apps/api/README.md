@@ -35,3 +35,12 @@ restarts so existing endpoint secrets remain decryptable.
 Credential-creation responses are intentionally excluded from HTTP
 idempotency response persistence so plaintext API keys and webhook secrets do
 not enter the durable store.
+
+`POST /v1/covenants/:id/authorize` requests the reviewed authority workflow and
+leaves the Covenant in `AWAITING_AUTHORIZATION`. The authority boundary then
+produces the existing signed PaymentIntent, DecisionReceipt, and
+AuthorizationReceipt evidence. A caller submits that unchanged output to
+`POST /v1/covenants/:id/authorization-evidence`; the API verifies it against
+deployment-owned V1 CovenantSpec context and delegates the state transition to
+`@covenant/core`. Possession of the project API key never authorizes money, and
+the API has no signing key. Deployments without an evidence verifier fail closed.

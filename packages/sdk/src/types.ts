@@ -47,6 +47,29 @@ export type CreateCovenantInput = Readonly<{
   auditReference?: string;
 }>;
 
+/** Existing authority output transported to the API for verification. */
+export type AuthorizationEvidence = Readonly<{
+  covenantId: Bytes32;
+  policyVersion: string;
+  decisionId: Bytes32;
+  intentId: Bytes32;
+  intentHash: Bytes32;
+  decision: "APPROVED" | "REJECTED";
+  authorizationId: Bytes32 | null;
+  validUntil: string | null;
+  signedDecisionReceipt?: unknown;
+  decisionReceipt?: unknown;
+  signedAuthorizationReceipt?: unknown;
+  authorizationReceipt?: unknown;
+}>;
+
+/** Evidence plus the unchanged V1 intent and canonical policy observations. */
+export type AuthorizationEvidenceSubmission = Readonly<{
+  evidence: AuthorizationEvidence;
+  signedPaymentIntent: unknown;
+  ruleResults: readonly unknown[];
+}>;
+
 export type CovenantListParams = Readonly<{
   limit?: number;
   after?: Bytes32;

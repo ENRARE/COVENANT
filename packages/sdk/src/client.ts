@@ -4,6 +4,7 @@ import { verifyWebhook } from "./webhooks.js";
 import { CovenantValidationError } from "./errors.js";
 import {
   assertCreateCovenantInput,
+  assertAuthorizationEvidenceSubmission,
   assertId,
   assertListParams,
   assertResponseList,
@@ -19,6 +20,7 @@ import type {
   CovenantResource,
   CovenantOptions,
   CreateCovenantInput,
+  AuthorizationEvidenceSubmission,
   ExecutionAccepted,
   ExecutionResource,
   RequestOptions,
@@ -88,6 +90,22 @@ export class CovenantsResource {
       "POST",
       `${SDK_ROUTES.covenants}/${encodeURIComponent(id)}/authorize`,
       {},
+      mutationOptions(options, true),
+    );
+    return assertResponseObject(value, "Covenant") as CovenantResource;
+  }
+
+  async submitAuthorizationEvidence(
+    id: string,
+    evidence: AuthorizationEvidenceSubmission,
+    options?: RequestOptions,
+  ): Promise<CovenantResource> {
+    assertId(id, "id");
+    assertAuthorizationEvidenceSubmission(evidence);
+    const value = await this.transport.request<unknown>(
+      "POST",
+      `${SDK_ROUTES.covenants}/${encodeURIComponent(id)}/${SDK_ROUTES.authorizationEvidence}`,
+      evidence,
       mutationOptions(options, true),
     );
     return assertResponseObject(value, "Covenant") as CovenantResource;

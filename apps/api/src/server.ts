@@ -8,8 +8,11 @@ import {
 import {
   cancelCovenant,
   createCovenant,
+  applyAuthorizationEvidence,
   requestAuthorization,
+  verifyAuthorizationEvidence,
   type PlatformCovenant,
+  type AuthorizationVerificationContext,
 } from "@covenant/core";
 import { DurableExecutionRuntime } from "@covenant/runtime";
 import { ApiError, apiError, mapError } from "./errors.js";
@@ -18,6 +21,7 @@ import { canonicalJson } from "./canonical-json.js";
 import {
   createCovenantRequestSchema,
   emptyMutationSchema,
+  authorizationEvidenceSubmissionSchema,
   paginationSchema,
   webhookEndpointRequestSchema,
 } from "./schemas.js";
@@ -39,6 +43,14 @@ export type CovenantApiOptions = Readonly<{
   now?: () => number;
   webhookMasterKey?: Uint8Array | string;
   webhookSender?: ConstructorParameters<typeof WebhookService>[0]["sender"];
+  /** Deployment-owned V1 CovenantSpec lookup used only to verify evidence. */
+  authorizationContextResolver?: (
+    projectId: string,
+    covenant: PlatformCovenant,
+  ) =>
+    | AuthorizationVerificationContext
+    | undefined
+    | Promise<AuthorizationVerificationContext | undefined>;
 }>;
 
 function id(): `0x${string}` {
@@ -115,6 +127,7 @@ export class CovenantApi {
   readonly #now: () => number;
   readonly #keys: ApiKeyService;
   readonly #webhooks: WebhookService;
+  readonly #authorizationContextResolver: CovenantApiOptions["authorizationContextResolver"];
 
   constructor(options: CovenantApiOptions) {
     this.#runtime = options.runtime;
@@ -130,6 +143,7 @@ export class CovenantApi {
         : { sender: options.webhookSender }),
       now: this.#now,
     });
+    this.#authorizationContextResolver = options.authorizationContextResolver;
   }
 
   provisionProject(name?: string) {
@@ -291,12 +305,12 @@ export class CovenantApi {
     };
   }
 
-  private route(
+  private async route(
     method: string,
     url: URL,
     projectId: string,
     body: unknown,
-  ): Readonly<{ status: number; body: unknown }> {
+  ): Promise<Readonly<{ status: number; body: unknown }>> {
     const path = url.pathname;
     if (method === "POST" && path === "/v1/covenants") {
       const input = createCovenantRequestSchema.parse(body);
@@ -346,7 +360,7 @@ export class CovenantApi {
       };
     }
     const covenantMatch =
-      /^\/v1\/covenants\/(0x[0-9a-fA-F]{64})(?:\/(authorize|execute|cancel|audit))?$/u.exec(
+      /^\/v1\/covenants\/(0x[0-9a-fA-F]{64})(?:\/(authorize|authorization-evidence|execute|cancel|audit))?$/u.exec(
         path,
       );
     if (covenantMatch !== null) {
@@ -388,6 +402,58 @@ export class CovenantApi {
           `covenant_authorization_requested_${next.id}`,
         );
         return { status: 202, body: publicCovenant(next) };
+      }
+      if (action === "authorization-evidence" && method === "POST") {
+        if (this.#authorizationContextResolver === undefined)
+          apiError(
+            "server_error",
+            "AUTHORIZATION_VERIFIER_UNAVAILABLE",
+            "Authorization verification is not configured.",
+            503,
+          );
+        const submission = authorizationEvidenceSubmissionSchema.parse(body);
+        if (projection.resource.status !== "AWAITING_AUTHORIZATION")
+          apiError(
+            "invalid_state",
+            "AUTHORIZATION_REQUIRED",
+            "Covenant is not awaiting authorization evidence.",
+            409,
+          );
+        const context = await this.#authorizationContextResolver(
+          projectId,
+          projection.resource,
+        );
+        if (context === undefined)
+          apiError(
+            "server_error",
+            "AUTHORIZATION_VERIFIER_UNAVAILABLE",
+            "Authorization verification is not configured for this Covenant.",
+            503,
+          );
+        const verified = await verifyAuthorizationEvidence(
+          projection.resource,
+          submission,
+          context,
+        );
+        const next = applyAuthorizationEvidence(
+          projection.resource,
+          verified.evidence,
+          nowSeconds(this.#now),
+        );
+        this.#runtime.store.replaceCovenantProjection(
+          projectId,
+          next,
+          this.#now(),
+        );
+        this.#webhooks.emitEvent(
+          projectId,
+          next.status === "AUTHORIZED"
+            ? "covenant.authorized"
+            : "covenant.rejected",
+          publicCovenant(next),
+          `covenant_authorization_evidence_${next.id}_${next.authorizationStatus.decisionId ?? "unknown"}`,
+        );
+        return { status: 200, body: publicCovenant(next) };
       }
       if (action === "cancel" && method === "POST") {
         emptyMutationSchema.parse(body);

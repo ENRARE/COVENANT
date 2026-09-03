@@ -63,6 +63,31 @@
         }
       }
     },
+    "/v1/covenants/{id}/authorization-evidence": {
+      "post": {
+        "description": "Submit externally produced, signed authority evidence. The API key authenticates project access only; the server verifies the existing authority/signer chain and never signs or manufactures authorization.",
+        "parameters": [
+          { "$ref": "#/components/parameters/CovenantId" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizationEvidenceSubmission"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Covenant" },
+          "400": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
     "/v1/covenants/{id}/execute": {
       "post": {
         "parameters": [
@@ -227,6 +252,50 @@
           "createdAt": { "type": "string" },
           "expiresAt": { "type": "string" },
           "auditReference": { "type": "string" }
+        }
+      },
+      "AuthorizationEvidenceSubmission": {
+        "type": "object",
+        "required": ["evidence", "signedPaymentIntent", "ruleResults"],
+        "additionalProperties": false,
+        "description": "Existing authority output transported for server-side verification. It is not an approval command.",
+        "properties": {
+          "evidence": { "$ref": "#/components/schemas/AuthorizationEvidence" },
+          "signedPaymentIntent": { "type": "object" },
+          "ruleResults": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "AuthorizationEvidence": {
+        "type": "object",
+        "required": [
+          "covenantId",
+          "policyVersion",
+          "decisionId",
+          "intentId",
+          "intentHash",
+          "decision",
+          "authorizationId",
+          "validUntil"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "covenantId": { "$ref": "#/components/schemas/Bytes32" },
+          "policyVersion": { "type": "string" },
+          "decisionId": { "$ref": "#/components/schemas/Bytes32" },
+          "intentId": { "$ref": "#/components/schemas/Bytes32" },
+          "intentHash": { "$ref": "#/components/schemas/Bytes32" },
+          "decision": { "type": "string", "enum": ["APPROVED", "REJECTED"] },
+          "authorizationId": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/Bytes32" },
+              { "type": "null" }
+            ]
+          },
+          "validUntil": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+          "signedDecisionReceipt": { "type": "object" },
+          "decisionReceipt": { "type": "object" },
+          "signedAuthorizationReceipt": { "type": "object" },
+          "authorizationReceipt": { "type": "object" }
         }
       },
       "Covenant": {

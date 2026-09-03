@@ -1,8 +1,17 @@
 import {
+  EIP712_DOMAIN_NAMES,
+  canonicalRuleResultsSchema,
+  covenantSpecSchema,
+  deriveSigningDomainForCovenant,
   formatUsdc,
+  hashPaymentIntent,
   signedAuthorizationReceiptSchema,
   signedDecisionReceiptSchema,
+  signedPaymentIntentSchema,
   UINT256_MAX_DECIMAL,
+  verifyAuthorizationChain,
+  verifySignedDecisionReceiptForCovenant,
+  verifySignedPaymentIntentForCovenant,
 } from "@covenant/spec";
 import {
   COVENANT_TRANSITIONS,
@@ -13,10 +22,12 @@ import {
 import { CovenantDomainError, covenantFailure } from "./errors.js";
 import {
   authorizationEvidenceSchema,
+  authorizationEvidenceSubmissionSchema,
   createCovenantInputSchema,
   executionEvidenceSchema,
   platformCovenantSchema,
   type AuthorizationEvidence,
+  type AuthorizationEvidenceSubmission,
   type CreateCovenantInput,
   type ExecutionEvidence,
   type PlatformCovenant,
@@ -374,6 +385,160 @@ function validateSignedEvidence(
       covenantFailure("EVIDENCE_MISMATCH");
     }
   }
+}
+
+export type AuthorizationVerificationContext = Readonly<{
+  /** Deployment-owned, immutable V1 CovenantSpec used as the trust anchor. */
+  covenantSpec: unknown;
+}>;
+
+function sameIdentifier(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
+/**
+ * Verify an externally generated authorization bundle against the existing
+ * V1 cryptographic boundary. The V1 CovenantSpec is supplied by trusted
+ * deployment configuration, never by the public request. This function does
+ * not sign, mutate, or choose a V2 lifecycle state.
+ */
+export async function verifyAuthorizationEvidence(
+  input: unknown,
+  rawSubmission: unknown,
+  context: AuthorizationVerificationContext,
+): Promise<AuthorizationEvidenceSubmission> {
+  const covenant = parseCovenant(input);
+  const submission = authorizationEvidenceSubmissionSchema.parse(rawSubmission);
+  const rawCovenantSpec = context.covenantSpec;
+  const covenantSpec = covenantSpecSchema.parse(rawCovenantSpec);
+  const signedPaymentIntent = signedPaymentIntentSchema.parse(
+    submission.signedPaymentIntent,
+  );
+  const ruleResults = canonicalRuleResultsSchema.parse(submission.ruleResults);
+  const evidence = submission.evidence;
+  const decisionEnvelope =
+    evidence.signedDecisionReceipt ?? evidence.decisionReceipt;
+  const authorizationEnvelope =
+    evidence.signedAuthorizationReceipt ?? evidence.authorizationReceipt;
+
+  if (decisionEnvelope === undefined) covenantFailure("EVIDENCE_MISMATCH");
+  if (!sameIdentifier(covenant.id, covenantSpec.covenantId)) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (
+    !sameIdentifier(covenant.conditions.policyHash, covenantSpec.policyHash)
+  ) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (covenant.conditions.policyVersion !== covenantSpec.policyVersion) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (covenant.payer !== covenantSpec.issuer) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (covenant.beneficiary !== covenantSpec.recipientAddress) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (BigInt(covenant.expiresAt) > covenantSpec.validUntil) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (BigInt(covenant.createdAt) < covenantSpec.createdAt) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+
+  const intent = signedPaymentIntent.payload;
+  if (
+    intent.recipient !== covenantSpec.recipientAddress ||
+    intent.token !== covenantSpec.tokenAddress ||
+    intent.purpose !== covenantSpec.purpose ||
+    intent.amount > covenantSpec.maxAmountPerPayment ||
+    intent.createdAt < covenantSpec.validAfter ||
+    intent.expiresAt > covenantSpec.validUntil
+  ) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  const intentDomain = deriveSigningDomainForCovenant(
+    rawCovenantSpec,
+    EIP712_DOMAIN_NAMES.paymentIntent,
+  );
+  const rawIntent = (submission.signedPaymentIntent as { payload: unknown })
+    .payload;
+  const intentHash = hashPaymentIntent(rawIntent, intentDomain);
+  if (
+    !sameIdentifier(evidence.covenantId, covenant.id) ||
+    !sameIdentifier(evidence.intentId, intent.intentId) ||
+    evidence.intentHash.toLowerCase() !== intentHash.toLowerCase()
+  ) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (formatUsdc(intent.amount) !== covenant.amount) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (
+    intent.recipient !== covenant.beneficiary ||
+    intent.token !== covenant.asset.address
+  ) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (intent.expiresAt > BigInt(covenant.expiresAt)) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (
+    evidence.decision === "APPROVED" &&
+    (evidence.validUntil === null ||
+      BigInt(evidence.validUntil) > BigInt(covenant.expiresAt))
+  ) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+
+  await verifySignedPaymentIntentForCovenant(
+    submission.signedPaymentIntent,
+    rawCovenantSpec,
+  );
+
+  const parsedDecision = signedDecisionReceiptSchema.parse(decisionEnvelope);
+  if (
+    !sameIdentifier(parsedDecision.payload.decisionId, evidence.decisionId) ||
+    !sameIdentifier(parsedDecision.payload.intentId, evidence.intentId) ||
+    parsedDecision.payload.intentHash.toLowerCase() !==
+      evidence.intentHash.toLowerCase() ||
+    parsedDecision.payload.decision !== evidence.decision ||
+    parsedDecision.payload.policyVersion !== evidence.policyVersion
+  ) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+  if (
+    parsedDecision.payload.createdAt < intent.createdAt ||
+    parsedDecision.payload.createdAt >= intent.expiresAt
+  ) {
+    covenantFailure("EVIDENCE_MISMATCH");
+  }
+
+  if (evidence.decision === "APPROVED") {
+    if (authorizationEnvelope === undefined) {
+      covenantFailure("EVIDENCE_MISMATCH");
+    }
+    await verifyAuthorizationChain(
+      rawCovenantSpec,
+      submission.signedPaymentIntent,
+      decisionEnvelope,
+      ruleResults,
+      authorizationEnvelope,
+    );
+  } else {
+    if (authorizationEnvelope !== undefined) {
+      covenantFailure("EVIDENCE_MISMATCH");
+    }
+    await verifySignedDecisionReceiptForCovenant(
+      decisionEnvelope,
+      ruleResults,
+      rawCovenantSpec,
+    );
+    if (parsedDecision.payload.decision !== "REJECTED") {
+      covenantFailure("EVIDENCE_MISMATCH");
+    }
+  }
+  return submission;
 }
 
 export function createCovenant(input: unknown): PlatformCovenant {

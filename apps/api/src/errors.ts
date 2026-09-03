@@ -1,5 +1,6 @@
 import { CovenantDomainError } from "@covenant/core";
 import { RuntimeError } from "@covenant/runtime";
+import { CovenantVerificationError } from "@covenant/spec";
 import { ZodError } from "zod";
 
 export type ApiErrorType =
@@ -56,6 +57,41 @@ export function mapError(error: unknown): ApiError {
       "Request validation failed.",
       400,
     );
+  if (error instanceof CovenantVerificationError) {
+    if (
+      error.code === "AUTHORIZATION_EXPIRED" ||
+      error.code === "INTENT_EXPIRED"
+    )
+      return new ApiError(
+        "invalid_state",
+        "AUTHORIZATION_EXPIRED",
+        "Authorization evidence is expired or outside the Covenant validity window.",
+        409,
+      );
+    if (error.code === "SIGNATURE_INVALID")
+      return new ApiError(
+        "invalid_request",
+        "INVALID_AUTHORIZATION_SIGNATURE",
+        "Authorization evidence signature is invalid.",
+        400,
+      );
+    if (
+      error.code === "UNTRUSTED_AGENT_SIGNER" ||
+      error.code === "UNTRUSTED_AUTHORIZATION_SIGNER"
+    )
+      return new ApiError(
+        "invalid_request",
+        "AUTHORIZATION_AUTHENTICITY_FAILED",
+        "Authorization evidence was not produced by the configured authority boundary.",
+        400,
+      );
+    return new ApiError(
+      "invalid_request",
+      "EVIDENCE_MISMATCH",
+      "Authorization evidence does not match the Covenant.",
+      400,
+    );
+  }
   if (error instanceof CovenantDomainError) {
     const code = error.code;
     const status: ApiErrorType = ["PROJECT_MISMATCH"].includes(code)
