@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import type { ApiKeyRecord, DurableRuntimeStore } from "@covenant/runtime";
+import type { ApiKeyRecord, RuntimeStore } from "@covenant/runtime";
 
 function digest(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -17,7 +17,7 @@ export type ProvisionedProject = Readonly<{
 
 export class ApiKeyService {
   constructor(
-    private readonly store: DurableRuntimeStore,
+    private readonly store: RuntimeStore,
     private readonly now: () => number,
   ) {}
 

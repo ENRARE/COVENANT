@@ -13,9 +13,12 @@ export type ApiRateLimits = Readonly<{
 
 export type ApiDeploymentConfig = Readonly<{
   mode: ApiRunMode;
+  databaseDriver: "sqlite" | "postgres";
   host: string;
   port: number;
   databaseFilename: string;
+  databaseUrl: string | undefined;
+  databaseModule: string | undefined;
   webhookMasterKey: Uint8Array;
   authorizationResolverModule: string | undefined;
   executionAdapterModule: string | undefined;
@@ -156,12 +159,31 @@ export function loadApiDeploymentConfig(
   const webhookMasterKey = decodeMasterKey(
     required(env, "COVENANT_WEBHOOK_MASTER_KEY"),
   );
+  const databaseDriver = env.COVENANT_DATABASE_DRIVER?.trim() ?? "sqlite";
+  if (databaseDriver !== "sqlite" && databaseDriver !== "postgres")
+    throw new ApiConfigurationError(
+      "COVENANT_DATABASE_DRIVER must be sqlite or postgres.",
+    );
+  const databaseUrl = optionalValue(env, "COVENANT_DATABASE_URL");
+  const databaseModule = optionalValue(env, "COVENANT_DATABASE_MODULE");
+  if (databaseDriver === "postgres" && databaseModule === undefined)
+    throw new ApiConfigurationError(
+      "COVENANT_DATABASE_MODULE is required for the postgres driver.",
+    );
+  if (databaseDriver === "postgres" && databaseUrl === undefined)
+    throw new ApiConfigurationError(
+      "COVENANT_DATABASE_URL is required for the postgres driver.",
+    );
   const databaseFilename =
     env.COVENANT_DATABASE_FILENAME?.trim() ??
-    (mode === "test" ? ":memory:" : "");
-  if (databaseFilename.length === 0)
+    (mode === "test"
+      ? ":memory:"
+      : databaseDriver === "sqlite"
+        ? ""
+        : ":postgres:");
+  if (databaseDriver === "sqlite" && databaseFilename.length === 0)
     throw new ApiConfigurationError(
-      "COVENANT_DATABASE_FILENAME is required in deployment mode.",
+      "COVENANT_DATABASE_FILENAME is required for the sqlite driver.",
     );
   const arcRpcUrl = env.COVENANT_ARC_RPC_URL?.trim() ?? ARC_RPC;
   if (arcRpcUrl !== ARC_RPC)
@@ -186,9 +208,12 @@ export function loadApiDeploymentConfig(
     );
   return Object.freeze({
     mode,
+    databaseDriver,
     host: optionalValue(env, "COVENANT_API_HOST") ?? "127.0.0.1",
     port: boundedInteger(env, "COVENANT_API_PORT", 8787, 1, 65_535),
     databaseFilename,
+    databaseUrl,
+    databaseModule,
     webhookMasterKey,
     authorizationResolverModule,
     executionAdapterModule,

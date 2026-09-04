@@ -3,6 +3,7 @@ import { isAbsolute, resolve } from "node:path";
 import {
   DurableExecutionRuntime,
   DurableRuntimeStore,
+  type RuntimeStore,
   type ExecutionAdapter,
 } from "@covenant/runtime";
 import { CovenantApi, createHttpServer, gracefulShutdown } from "./server.js";
@@ -76,6 +77,55 @@ function assertResolver(value: unknown): Resolver {
   return value as Resolver;
 }
 
+function assertStore(value: unknown): RuntimeStore {
+  if (value === null || typeof value !== "object")
+    throw new Error("Configured database store is invalid.");
+  const required = [
+    "close",
+    "checkReady",
+    "saveCovenant",
+    "getCovenant",
+    "saveAuthorizationEvidence",
+    "getAuthorizationEvidence",
+    "getOperation",
+    "createOrJoinOperation",
+    "claimOperation",
+    "renewLease",
+    "releaseLease",
+    "recoverExpiredLeases",
+    "transitionLeased",
+    "updateCovenantAndOperation",
+    "listOutbox",
+    "markOutboxDelivered",
+    "ensureDeveloperProject",
+    "getDeveloperProject",
+    "saveApiKey",
+    "findApiKeyCandidates",
+    "listApiKeys",
+    "revokeApiKey",
+    "replaceCovenantProjection",
+    "listCovenants",
+    "getOperationByExecution",
+    "getHttpIdempotency",
+    "saveHttpIdempotency",
+    "deleteHttpIdempotency",
+    "createWebhookEndpoint",
+    "getWebhookEndpoint",
+    "listWebhookEndpoints",
+    "revokeWebhookEndpoint",
+    "createWebhookDelivery",
+    "listWebhookDeliveries",
+    "updateWebhookDelivery",
+  ] as const;
+  if (
+    required.some(
+      (name) => typeof (value as Record<string, unknown>)[name] !== "function",
+    )
+  )
+    throw new Error("Configured database store is invalid.");
+  return value as RuntimeStore;
+}
+
 export type RunningApi = Readonly<{
   config: ApiDeploymentConfig;
   api: CovenantApi;
@@ -105,7 +155,20 @@ export async function startApiServer(
             "Authorization resolver",
           ),
         );
-  const store = new DurableRuntimeStore({ filename: config.databaseFilename });
+  let store: RuntimeStore;
+  if (config.databaseDriver === "postgres") {
+    const databaseModule = config.databaseModule;
+    if (!databaseModule) {
+      throw new Error("Postgres database module is required");
+    }
+    const configured = await loadConfiguredModule<unknown>(
+      databaseModule,
+      "Database store",
+    );
+    store = assertStore(configured);
+  } else {
+    store = new DurableRuntimeStore({ filename: config.databaseFilename });
+  }
   const runtime = new DurableExecutionRuntime({ store, adapter });
   const api = new CovenantApi({
     runtime,

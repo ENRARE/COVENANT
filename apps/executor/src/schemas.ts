@@ -13,6 +13,12 @@ const publicExecutionRequestSchema = z
     ruleResults: z.unknown(),
     decisionReceipt: z.unknown(),
     authorizationReceipt: z.unknown(),
+    /** Runtime-created identity; the executor verifies it rather than
+     * inventing a second identity for the same durable operation. */
+    executionId: z
+      .string()
+      .regex(/^0x[0-9a-f]{64}$/u)
+      .optional(),
   })
   .strict();
 

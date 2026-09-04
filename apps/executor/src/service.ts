@@ -244,6 +244,12 @@ export function createExecutorService(
         ],
       ),
     );
+    if (
+      request.raw.executionId !== undefined &&
+      request.raw.executionId.toLowerCase() !== executionId.toLowerCase()
+    ) {
+      throw new ExecutorError("EXECUTION_CONFLICT");
+    }
     const transaction = constructExecutePaymentRequest({
       chainId: ARC_TESTNET_CHAIN_ID,
       target: covenant.vaultAddress,
