@@ -542,6 +542,14 @@ export class CovenantApi {
           submission,
           context,
         );
+        // Keep the exact verified bundle for the isolated executor. This is
+        // operational evidence only; the API does not sign or manufacture it.
+        this.#runtime.store.saveAuthorizationEvidence(
+          projectId,
+          covenantId,
+          verified,
+          this.#now(),
+        );
         const next = applyAuthorizationEvidence(
           projection.resource,
           verified.evidence,

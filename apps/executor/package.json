@@ -12,6 +12,7 @@
     }
   },
   "scripts": {
+    "start": "node dist/worker-main.js",
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",

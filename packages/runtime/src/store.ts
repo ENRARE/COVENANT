@@ -3,7 +3,9 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   assertProjectOwnership,
+  authorizationEvidenceSubmissionSchema,
   parseCovenantResource,
+  type AuthorizationEvidenceSubmission,
   type PlatformCovenant,
 } from "@covenant/core";
 import {
@@ -41,6 +43,8 @@ export type CreateOperationInput = Readonly<{
   amount: string;
   beneficiary: string;
   resource: PlatformCovenant;
+  /** Verified external evidence; the runtime never creates or signs it. */
+  authorizationEvidence?: unknown;
   at: number;
 }>;
 
@@ -123,6 +127,180 @@ export type CreateWebhookDeliveryInput = Readonly<{
   at: number;
 }>;
 
+/**
+ * Persistence boundary shared by the local SQLite adapter and the
+ * PostgreSQL/Supabase deployment adapter.  Implementations contain only
+ * operational projections; CovenantVault remains authoritative for money,
+ * replay, revocation, and settlement state.
+ */
+export type RuntimeStore = Readonly<{
+  close: () => void;
+  checkReady: () => boolean;
+  saveCovenant: (
+    projectId: string,
+    resource: unknown,
+    at: number,
+  ) => RuntimeCovenant;
+  getCovenant: (
+    projectId: string,
+    covenantId: string,
+  ) => RuntimeCovenant | undefined;
+  replaceCovenantProjection: (
+    projectId: string,
+    resource: unknown,
+    at: number,
+  ) => RuntimeCovenant;
+  saveAuthorizationEvidence: (
+    projectId: string,
+    covenantId: string,
+    evidence: unknown,
+    at: number,
+  ) => AuthorizationEvidenceSubmission;
+  getAuthorizationEvidence: (
+    projectId: string,
+    covenantId: string,
+  ) => AuthorizationEvidenceSubmission | null;
+  getOperation: (operationKey: string) => RuntimeOperation | undefined;
+  getOperationByExecution: (
+    projectId: string,
+    executionId: string,
+  ) => RuntimeOperation | undefined;
+  createOrJoinOperation: (
+    input: CreateOperationInput,
+  ) => Readonly<{ operation: RuntimeOperation; joined: boolean }>;
+  claimOperation: (
+    operationKey: string,
+    workerId: string,
+    at: number,
+    leaseMs?: number,
+  ) => RuntimeOperation | undefined;
+  renewLease: (
+    operationKey: string,
+    workerId: string,
+    expectedVersion: number,
+    at: number,
+    leaseMs?: number,
+  ) => RuntimeOperation;
+  releaseLease: (
+    operationKey: string,
+    workerId: string,
+    expectedVersion: number,
+    at: number,
+  ) => RuntimeOperation;
+  recoverExpiredLeases: (at: number) => RuntimeOperation[];
+  transitionLeased: (
+    operationKey: string,
+    workerId: string,
+    expectedVersion: number,
+    nextState: RuntimeState,
+    at: number,
+    patch?: OperationPatch,
+  ) => RuntimeOperation;
+  updateCovenantAndOperation: (
+    operationKey: string,
+    workerId: string,
+    expectedVersion: number,
+    resource: PlatformCovenant,
+    operationState: RuntimeState,
+    at: number,
+    patch?: OperationPatch,
+  ) => Readonly<{ covenant: RuntimeCovenant; operation: RuntimeOperation }>;
+  listOutbox: (
+    options?: Readonly<{ undeliveredOnly?: boolean; limit?: number }>,
+  ) => RuntimeOutboxRecord[];
+  markOutboxDelivered: (
+    id: number,
+    at: number,
+  ) => RuntimeOutboxRecord | undefined;
+  ensureDeveloperProject: (
+    projectId: string,
+    name: string,
+    at: number,
+  ) => DeveloperProjectRecord;
+  getDeveloperProject: (
+    projectId: string,
+  ) => DeveloperProjectRecord | undefined;
+  saveApiKey: (
+    input: Readonly<{
+      keyId: string;
+      projectId: string;
+      prefix: string;
+      digest: string;
+      at: number;
+    }>,
+  ) => ApiKeyRecord;
+  findApiKeyCandidates: (prefix: string) => ApiKeyRecord[];
+  listApiKeys: (projectId: string) => ApiKeyRecord[];
+  revokeApiKey: (
+    projectId: string,
+    keyId: string,
+    at: number,
+  ) => ApiKeyRecord | undefined;
+  listCovenants: (
+    projectId: string,
+    options?: Readonly<{ limit?: number; after?: string }>,
+  ) => Readonly<{ items: RuntimeCovenant[]; nextAfter: string | null }>;
+  getHttpIdempotency: (
+    projectId: string,
+    route: string,
+    keyDigest: string,
+  ) => HttpIdempotencyRecord | undefined;
+  saveHttpIdempotency: (
+    input: Readonly<{
+      projectId: string;
+      route: string;
+      keyDigest: string;
+      requestFingerprint: string;
+      responseStatus?: number | null;
+      responseJson?: string | null;
+      resourceReference?: string | null;
+      at: number;
+    }>,
+  ) => HttpIdempotencyRecord;
+  deleteHttpIdempotency: (
+    projectId: string,
+    route: string,
+    keyDigest: string,
+  ) => void;
+  createWebhookEndpoint: (
+    input: Readonly<{
+      endpointId: string;
+      projectId: string;
+      url: string;
+      secretCiphertext: string;
+      at: number;
+    }>,
+  ) => WebhookEndpointRecord;
+  getWebhookEndpoint: (
+    projectId: string,
+    endpointId: string,
+  ) => WebhookEndpointRecord | undefined;
+  listWebhookEndpoints: (projectId: string) => WebhookEndpointRecord[];
+  revokeWebhookEndpoint: (
+    projectId: string,
+    endpointId: string,
+    at: number,
+  ) => WebhookEndpointRecord | undefined;
+  createWebhookDelivery: (
+    input: CreateWebhookDeliveryInput,
+  ) => WebhookDeliveryRecord;
+  listWebhookDeliveries: (
+    options?: Readonly<{ projectId?: string; dueAt?: number; limit?: number }>,
+  ) => WebhookDeliveryRecord[];
+  updateWebhookDelivery: (
+    input: Readonly<{
+      deliveryId: string;
+      status: WebhookDeliveryRecord["status"];
+      attemptCount: number;
+      nextAttemptAt: number;
+      lastAttemptAt: number;
+      deliveredAt?: number | null;
+      lastError?: string | null;
+      at: number;
+    }>,
+  ) => WebhookDeliveryRecord | undefined;
+}>;
+
 type SqlRow = Record<string, unknown>;
 
 function parseJson(value: unknown): unknown {
@@ -156,6 +334,20 @@ function textValue(value: unknown): string {
 
 function nullableText(value: unknown): string | null {
   return value === null ? null : textValue(value);
+}
+
+function parseAuthorizationEvidence(
+  value: unknown,
+): AuthorizationEvidenceSubmission {
+  try {
+    return authorizationEvidenceSubmissionSchema.parse(value);
+  } catch (error) {
+    runtimeFailure(
+      "RUNTIME_PERSISTENCE_FAILURE",
+      "Stored authorization evidence is invalid",
+      error,
+    );
+  }
 }
 
 function validateId(value: string, name: string): string {
@@ -269,6 +461,11 @@ function rowToOperation(row: SqlRow): RuntimeOperation {
       : parseJson(row.provider_evidence_json);
   const arcEvidence =
     row.arc_evidence_json === null ? null : parseJson(row.arc_evidence_json);
+  const authorizationEvidence =
+    row.authorization_evidence_json === undefined ||
+    row.authorization_evidence_json === null
+      ? null
+      : parseAuthorizationEvidence(parseJson(row.authorization_evidence_json));
   return Object.freeze({
     operationKey: textValue(row.operation_key),
     projectId: textValue(row.project_id),
@@ -291,6 +488,7 @@ function rowToOperation(row: SqlRow): RuntimeOperation {
     providerState: nullableText(row.provider_state),
     providerEvidence,
     arcEvidence,
+    authorizationEvidence,
     retryReason:
       row.retry_reason === null
         ? null
@@ -436,6 +634,7 @@ CREATE TABLE IF NOT EXISTS execution_operations (
   provider_state TEXT,
   provider_evidence_json TEXT,
   arc_evidence_json TEXT,
+  authorization_evidence_json TEXT,
   retry_reason TEXT,
   no_resubmit_reason TEXT,
   failure_reason TEXT,
@@ -443,6 +642,15 @@ CREATE TABLE IF NOT EXISTS execution_operations (
   updated_at INTEGER NOT NULL,
   UNIQUE (project_id, covenant_id, execution_id),
   UNIQUE (project_id, covenant_id, operation_key),
+  FOREIGN KEY (project_id, covenant_id) REFERENCES covenants(project_id, covenant_id)
+);
+CREATE TABLE IF NOT EXISTS authorization_evidence (
+  project_id TEXT NOT NULL,
+  covenant_id TEXT NOT NULL,
+  evidence_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (project_id, covenant_id),
   FOREIGN KEY (project_id, covenant_id) REFERENCES covenants(project_id, covenant_id)
 );
 CREATE INDEX IF NOT EXISTS execution_operations_claim_idx
@@ -524,7 +732,7 @@ CREATE TABLE IF NOT EXISTS http_idempotency (
 );
 `;
 
-export class DurableRuntimeStore {
+export class DurableRuntimeStore implements RuntimeStore {
   readonly #db: DatabaseSync;
 
   constructor(options: DurableRuntimeStoreOptions = {}) {
@@ -537,6 +745,18 @@ export class DurableRuntimeStore {
       "PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;",
     );
     this.#db.exec(SCHEMA);
+    const operationColumns = this.#db
+      .prepare("PRAGMA table_info(execution_operations)")
+      .all() as { name?: unknown }[];
+    if (
+      !operationColumns.some(
+        (column) => column.name === "authorization_evidence_json",
+      )
+    ) {
+      this.#db.exec(
+        "ALTER TABLE execution_operations ADD COLUMN authorization_evidence_json TEXT",
+      );
+    }
     if (filename !== ":memory:") {
       try {
         chmodSync(filename, 0o600);
@@ -638,6 +858,80 @@ export class DurableRuntimeStore {
     return row === undefined ? undefined : rowToCovenant(row);
   }
 
+  /**
+   * Persist the exact verified authority bundle supplied by the API. This is
+   * operational evidence only: no signature is generated or modified here.
+   */
+  saveAuthorizationEvidence(
+    projectId: string,
+    covenantId: string,
+    submissionInput: unknown,
+    at: number,
+  ): AuthorizationEvidenceSubmission {
+    const project = validateId(projectId, "projectId");
+    const covenant = validateId(covenantId, "covenantId");
+    const timestamp = validateAt(at);
+    let submission: AuthorizationEvidenceSubmission;
+    try {
+      submission = authorizationEvidenceSubmissionSchema.parse(submissionInput);
+    } catch (error) {
+      runtimeFailure(
+        "RUNTIME_INVALID_STATE",
+        "Authorization evidence is invalid",
+        error,
+      );
+    }
+    const evidenceJson = metadataJson(submission);
+    return this.#transaction(() => {
+      const covenantRow = this.#db
+        .prepare(
+          "SELECT 1 AS present FROM covenants WHERE project_id = ? AND covenant_id = ?",
+        )
+        .get(project, covenant);
+      if (covenantRow === undefined)
+        runtimeFailure(
+          "RUNTIME_NOT_FOUND",
+          "Covenant projection was not found",
+        );
+      const existing = this.#db
+        .prepare(
+          "SELECT evidence_json FROM authorization_evidence WHERE project_id = ? AND covenant_id = ?",
+        )
+        .get(project, covenant) as SqlRow | undefined;
+      if (existing !== undefined) {
+        if (textValue(existing.evidence_json) !== evidenceJson)
+          runtimeFailure(
+            "RUNTIME_CONFLICT",
+            "Authorization evidence is immutable once stored",
+          );
+        return submission;
+      }
+      this.#db
+        .prepare(
+          "INSERT INTO authorization_evidence(project_id,covenant_id,evidence_json,created_at,updated_at) VALUES (?,?,?,?,?)",
+        )
+        .run(project, covenant, evidenceJson, timestamp, timestamp);
+      return submission;
+    });
+  }
+
+  getAuthorizationEvidence(
+    projectId: string,
+    covenantId: string,
+  ): AuthorizationEvidenceSubmission | null {
+    const row = this.#db
+      .prepare(
+        "SELECT evidence_json FROM authorization_evidence WHERE project_id = ? AND covenant_id = ?",
+      )
+      .get(
+        validateId(projectId, "projectId"),
+        validateId(covenantId, "covenantId"),
+      ) as SqlRow | undefined;
+    return row === undefined
+      ? null
+      : parseAuthorizationEvidence(parseJson(row.evidence_json));
+  }
+
   #getOperation(operationKey: string): RuntimeOperation | undefined {
     const row = this.#db
       .prepare("SELECT * FROM execution_operations WHERE operation_key = ?")
@@ -657,6 +951,27 @@ export class DurableRuntimeStore {
     const executionId = validateId(input.executionId, "executionId");
     const operationKey = validateId(input.operationKey, "operationKey");
     const at = validateAt(input.at);
+    const authorizationEvidence =
+      input.authorizationEvidence === undefined ||
+      input.authorizationEvidence === null
+        ? null
+        : (() => {
+            try {
+              return authorizationEvidenceSubmissionSchema.parse(
+                input.authorizationEvidence,
+              );
+            } catch (error) {
+              runtimeFailure(
+                "RUNTIME_INVALID_STATE",
+                "Authorization evidence is invalid",
+                error,
+              );
+            }
+          })();
+    const authorizationEvidenceJson =
+      authorizationEvidence === null
+        ? null
+        : metadataJson(authorizationEvidence);
     if (
       input.resource.id !== covenantId ||
       input.resource.projectId !== projectId
@@ -677,7 +992,9 @@ export class DurableRuntimeStore {
           existing.intentId !== input.intentId ||
           existing.intentHash !== input.intentHash ||
           existing.amount !== input.amount ||
-          existing.beneficiary !== input.beneficiary
+          existing.beneficiary !== input.beneficiary ||
+          JSON.stringify(existing.authorizationEvidence) !==
+            JSON.stringify(authorizationEvidence)
         ) {
           runtimeFailure(
             "RUNTIME_CONFLICT",
@@ -726,8 +1043,8 @@ export class DurableRuntimeStore {
         .prepare(
           `INSERT INTO execution_operations(
           operation_key,project_id,covenant_id,execution_id,authorization_id,intent_id,intent_hash,
-          amount,beneficiary,state,attempt_count,version,submission_boundary,created_at,updated_at
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          amount,beneficiary,state,attempt_count,version,submission_boundary,authorization_evidence_json,created_at,updated_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         )
         .run(
           operationKey,
@@ -743,6 +1060,7 @@ export class DurableRuntimeStore {
           0,
           0,
           0,
+          authorizationEvidenceJson,
           at,
           at,
         );
@@ -1370,28 +1688,43 @@ export class DurableRuntimeStore {
   ): HttpIdempotencyRecord {
     const projectId = validateId(input.projectId, "projectId");
     const at = validateAt(input.at);
-    this.#db
-      .prepare(
-        "INSERT INTO http_idempotency(project_id,route,key_digest,request_fingerprint,response_status,response_json,resource_reference,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,route,key_digest) DO UPDATE SET response_status=excluded.response_status,response_json=excluded.response_json,resource_reference=excluded.resource_reference,updated_at=excluded.updated_at",
+    return this.#transaction(() => {
+      const existing = this.#db
+        .prepare(
+          "SELECT * FROM http_idempotency WHERE project_id=? AND route=? AND key_digest=?",
+        )
+        .get(projectId, input.route, input.keyDigest) as SqlRow | undefined;
+      if (
+        existing !== undefined &&
+        textValue(existing.request_fingerprint) !== input.requestFingerprint
       )
-      .run(
-        projectId,
-        input.route,
-        input.keyDigest,
-        input.requestFingerprint,
-        input.responseStatus ?? null,
-        input.responseJson ?? null,
-        input.resourceReference ?? null,
-        at,
-        at,
-      );
-    const row = this.#db
-      .prepare(
-        "SELECT * FROM http_idempotency WHERE project_id=? AND route=? AND key_digest=?",
-      )
-      .get(projectId, input.route, input.keyDigest) as SqlRow | undefined;
-    if (row === undefined) runtimeFailure("RUNTIME_PERSISTENCE_FAILURE");
-    return rowToIdempotency(row);
+        runtimeFailure(
+          "RUNTIME_CONFLICT",
+          "Idempotency key was used with a different request",
+        );
+      this.#db
+        .prepare(
+          "INSERT INTO http_idempotency(project_id,route,key_digest,request_fingerprint,response_status,response_json,resource_reference,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,route,key_digest) DO UPDATE SET response_status=excluded.response_status,response_json=excluded.response_json,resource_reference=excluded.resource_reference,updated_at=excluded.updated_at",
+        )
+        .run(
+          projectId,
+          input.route,
+          input.keyDigest,
+          input.requestFingerprint,
+          input.responseStatus ?? null,
+          input.responseJson ?? null,
+          input.resourceReference ?? null,
+          at,
+          at,
+        );
+      const row = this.#db
+        .prepare(
+          "SELECT * FROM http_idempotency WHERE project_id=? AND route=? AND key_digest=?",
+        )
+        .get(projectId, input.route, input.keyDigest) as SqlRow | undefined;
+      if (row === undefined) runtimeFailure("RUNTIME_PERSISTENCE_FAILURE");
+      return rowToIdempotency(row);
+    });
   }
 
   deleteHttpIdempotency(

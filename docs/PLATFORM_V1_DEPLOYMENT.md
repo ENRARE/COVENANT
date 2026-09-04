@@ -7,9 +7,11 @@ credentials, or anonymous project provisioning.
 ## Runtime
 
 - Node.js 22 or newer and pnpm 11.7.0 (the repository `packageManager`).
-- PostgreSQL/Supabase-compatible persistence may use the committed migrations;
-  the included Node `node:sqlite` store is a deterministic local/developer
-  adapter, not a financial ledger or HA guarantee.
+- PostgreSQL/Supabase-compatible persistence may use the committed migrations
+  through the exported `PostgresRuntimeStore` adapter and a deployment-owned
+  PostgreSQL client module. The included Node `node:sqlite` store is a
+  deterministic local/developer adapter, not a financial ledger or HA
+  guarantee.
 - Apply migrations in filename order: COV-023 durable runtime first, then
   COV-024 developer API tables. Do not move spend, replay, revocation, or
   payment authority into the database.
@@ -22,6 +24,20 @@ closure (`@covenant/api`, `@covenant/runtime`, `@covenant/core`,
 `@covenant/spec`, and `@covenant/config`), and runs `dist/main.js` as the
 non-root `node` user. Foundry, tests, web assets, and development tooling are
 not copied into the final image.
+
+The executor is a separate service (`pnpm --filter @covenant/executor start`).
+It loads `COVENANT_EXECUTOR_SERVICE_MODULE`, binds the authenticated worker
+routes, and keeps Circle/provider credentials and signer material in that
+service's environment only. The API image never imports or receives those
+credentials.
+
+The service module must construct the existing `ExecutorService` with its
+reviewed `CovenantProvider`, `TransactionTransport`, `Clock`, and a durable
+`CircleOperationRepository` (for example the existing file journal). The
+repository itself does not invent environment names for provider credentials:
+the module owns those bindings. Its reviewed inputs are Arc RPC, the fixed
+CovenantVault address, Circle/provider API credentials, the Circle wallet
+identity, and the isolated executor signer. Values are never committed here.
 
 Build the image from a clean checkout:
 
@@ -44,10 +60,17 @@ Set `COVENANT_MODE=deployment` and provide:
 ```text
 COVENANT_API_HOST
 COVENANT_API_PORT
-COVENANT_DATABASE_FILENAME
+COVENANT_DATABASE_DRIVER         # sqlite or postgres; explicit, never inferred
+COVENANT_DATABASE_FILENAME       # sqlite only
+COVENANT_DATABASE_URL            # postgres only; supplied to the DB module
+COVENANT_DATABASE_MODULE         # postgres only; deployment-owned store module
 COVENANT_WEBHOOK_MASTER_KEY       # 32 bytes, hex or base64url
 COVENANT_AUTHORIZATION_RESOLVER_MODULE
+COVENANT_AUTHORIZATION_SPEC_FILE  # mounted, public CovenantSpec trust anchors
 COVENANT_EXECUTION_ADAPTER_MODULE
+COVENANT_EXECUTOR_WORKER_URL      # HTTPS URL for the isolated executor worker
+COVENANT_EXECUTOR_WORKER_AUTH_TOKEN # internal channel secret, >=32 characters
+COVENANT_EXECUTOR_SERVICE_MODULE    # worker-only service factory module
 COVENANT_ARC_RPC_URL              # must be https://rpc.testnet.arc.network
 ```
 
@@ -60,8 +83,21 @@ secrets. The loader fixes chain `5042002`, Arc Testnet, and six-decimal USDC.
 The webhook master key must be retained across restarts. Losing it prevents
 decryption of existing endpoint secrets; it cannot be regenerated from the
 database. Resolver and adapter modules are deployment-owned integrations. The
-adapter receives only the narrow runtime operation and the resolver verifies
-existing V1 authority evidence; neither turns the API into a signer.
+resolver entrypoint loads a mounted JSON file of strict `{ projectId,
+covenantSpec }` trust anchors and selects an exact project/Covenant match. The
+file contains public signer identities and frozen V1 configuration only; it
+must not contain private keys or signed evidence. The adapter receives only the
+narrow runtime operation and the resolver verifies existing V1 authority
+evidence; neither turns the API into a signer. The runtime package exports
+`createIsolatedExecutorAdapter` for an adapter backed by a narrow RPC/worker
+port. The deployment entrypoint posts only to the worker's
+`/simulate-authorized-payment` and `/execute-authorized-payment` endpoints;
+every request carries the separate `COVENANT_EXECUTOR_WORKER_AUTH_TOKEN`
+channel credential. The worker rejects anonymous, non-JSON, oversized, and
+unknown-route requests and never logs the credential.
+Keep Circle credentials and the `@covenant/executor` service in that isolated
+worker; the API-side module must contain only the RPC client and must not
+acquire execution credentials.
 
 ## Start and operate
 

@@ -87,6 +87,31 @@ describe("COV-027 configuration and abuse boundaries", () => {
     }
   });
 
+  it("requires explicit PostgreSQL deployment wiring", () => {
+    expect(() =>
+      loadApiDeploymentConfig({
+        COVENANT_MODE: "deployment",
+        COVENANT_WEBHOOK_MASTER_KEY: key,
+        COVENANT_DATABASE_DRIVER: "sqlite",
+        COVENANT_DATABASE_FILENAME: "",
+      }),
+    ).toThrow(/DATABASE_FILENAME/u);
+    const config = loadApiDeploymentConfig({
+      COVENANT_MODE: "deployment",
+      COVENANT_WEBHOOK_MASTER_KEY: key,
+      COVENANT_DATABASE_DRIVER: "postgres",
+      COVENANT_DATABASE_URL: "postgresql://db.invalid/covenant",
+      COVENANT_DATABASE_MODULE: "/run/secrets/covenant-runtime-store.js",
+      COVENANT_AUTHORIZATION_RESOLVER_MODULE: "/run/secrets/resolver.js",
+      COVENANT_EXECUTION_ADAPTER_MODULE: "/run/secrets/adapter.js",
+    });
+    expect(config.databaseDriver).toBe("postgres");
+    expect(config.databaseUrl).toBe("postgresql://db.invalid/covenant");
+    expect(config.databaseModule).toBe(
+      "/run/secrets/covenant-runtime-store.js",
+    );
+  });
+
   it("enforces deterministic in-process limits and readiness", async () => {
     const { api, project } = apiWith({
       rateLimits: { authentication: { limit: 1, windowMs: 60_000 } },

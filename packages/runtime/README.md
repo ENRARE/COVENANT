@@ -19,6 +19,14 @@ again. An explicit provider assertion that no submission occurred is the only
 post-boundary retry path.
 
 The schema migration in `supabase/migrations` is the PostgreSQL deployment
-shape. The local SQLite adapter mirrors its constraints and is not an
-authoritative financial ledger. There is no HTTP, API authentication, webhook,
-SDK runtime, or outbox delivery implementation in COV-023.
+shape. `PostgresRuntimeStore` implements the same synchronous `RuntimeStore`
+boundary over a deployment-owned, transaction-capable PostgreSQL client; the
+repository intentionally does not bundle a database driver or credentials.
+The API selects that adapter only when `COVENANT_DATABASE_DRIVER=postgres` and
+an explicit store module/connection URL are configured. The local SQLite
+adapter mirrors the same constraints and is not an authoritative financial
+ledger. Verified authorization bundles are retained
+as immutable operational evidence and can be handed to an isolated executor
+through `createIsolatedExecutorAdapter`; the runtime never creates, signs, or
+reinterprets them. HTTP/API authentication and webhook delivery remain owned
+by `@covenant/api`.

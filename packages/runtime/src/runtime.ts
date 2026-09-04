@@ -8,7 +8,7 @@ import {
 import { CovenantDomainError } from "@covenant/core";
 import { runtimeFailure } from "./errors.js";
 import { type RetryReason, type RuntimeState } from "./constants.js";
-import { DurableRuntimeStore } from "./store.js";
+import type { RuntimeStore } from "./store.js";
 import type {
   ExecutionAdapter,
   ExecutionStartInput,
@@ -50,14 +50,14 @@ function retryAt(now: number, attempt: number): number {
 }
 
 export type DurableExecutionRuntimeOptions = Readonly<{
-  store: DurableRuntimeStore;
+  store: RuntimeStore;
   adapter: ExecutionAdapter;
   clock?: RuntimeClock;
   leaseMs?: number;
 }>;
 
 export class DurableExecutionRuntime {
-  readonly #store: DurableRuntimeStore;
+  readonly #store: RuntimeStore;
   readonly #adapter: ExecutionAdapter;
   readonly #clock: RuntimeClock;
   readonly #leaseMs: number;
@@ -69,14 +69,14 @@ export class DurableExecutionRuntime {
     this.#leaseMs = options.leaseMs ?? 30_000;
   }
 
-  get store(): DurableRuntimeStore {
+  get store(): RuntimeStore {
     return this.#store;
   }
 
   saveCovenant(
     projectId: string,
     resource: unknown,
-  ): ReturnType<DurableRuntimeStore["saveCovenant"]> {
+  ): ReturnType<RuntimeStore["saveCovenant"]> {
     return this.#store.saveCovenant(projectId, resource, this.#clock.now());
   }
 
@@ -135,6 +135,10 @@ export class DurableExecutionRuntime {
       amount: next.amount,
       beneficiary: next.beneficiary,
       resource: next,
+      authorizationEvidence: this.#store.getAuthorizationEvidence(
+        input.projectId,
+        input.covenantId,
+      ),
       at: this.#clock.now(),
     });
     if (!result.joined) {

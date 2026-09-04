@@ -37,6 +37,7 @@ create table if not exists public.execution_operations (
   provider_state text,
   provider_evidence jsonb,
   arc_evidence jsonb,
+  authorization_evidence jsonb,
   retry_reason text,
   no_resubmit_reason text,
   failure_reason text,
@@ -44,6 +45,24 @@ create table if not exists public.execution_operations (
   updated_at timestamptz not null,
   unique (project_id, covenant_id, execution_id),
   unique (project_id, covenant_id, operation_key),
+  foreign key (project_id, covenant_id)
+    references public.covenants(project_id, covenant_id)
+);
+
+-- Preserve upgrade compatibility for databases created before authority
+-- evidence became an executor input.
+alter table public.execution_operations
+  add column if not exists authorization_evidence jsonb;
+
+-- Exact verified authority evidence is retained for the isolated executor.
+-- It is operational input only; CovenantVault remains authoritative.
+create table if not exists public.authorization_evidence (
+  project_id text not null,
+  covenant_id text not null,
+  evidence jsonb not null,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  primary key (project_id, covenant_id),
   foreign key (project_id, covenant_id)
     references public.covenants(project_id, covenant_id)
 );

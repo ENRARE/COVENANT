@@ -342,6 +342,9 @@ describe("COV-024 developer API", () => {
     });
     expect(accepted.status).toBe(200);
     expect((accepted.body as { status: string }).status).toBe("AUTHORIZED");
+    expect(
+      runtime.store.getAuthorizationEvidence(project.projectId, covenantId),
+    ).toEqual(evidence.submission);
     const replay = await api.handle({
       method: "POST",
       path: `/v1/covenants/${covenantId}/authorization-evidence`,

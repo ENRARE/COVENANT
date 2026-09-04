@@ -16,3 +16,5 @@ export * from "./ports/transaction-transport.js";
 export * from "./repositories/in-memory-execution-repository.js";
 export * from "./service.js";
 export * from "./types.js";
+export * from "./worker.js";
+export * from "./worker-main.js";
