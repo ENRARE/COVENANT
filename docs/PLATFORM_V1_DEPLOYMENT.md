@@ -14,6 +14,29 @@ credentials, or anonymous project provisioning.
   COV-024 developer API tables. Do not move spend, replay, revocation, or
   payment authority into the database.
 
+## Provider-neutral container
+
+`Dockerfile` provides a provider-neutral API image. It uses Node 24 and pnpm
+11.7.0, installs from the frozen lockfile, builds only the API dependency
+closure (`@covenant/api`, `@covenant/runtime`, `@covenant/core`,
+`@covenant/spec`, and `@covenant/config`), and runs `dist/main.js` as the
+non-root `node` user. Foundry, tests, web assets, and development tooling are
+not copied into the final image.
+
+Build the image from a clean checkout:
+
+```text
+docker build -t covenant-api:platform-v1 .
+```
+
+The image defaults to `0.0.0.0:8787` and creates `/var/lib/covenant` for a
+mounted persistent volume. Supply deployment configuration through the host
+secret manager or an untracked environment file; never bake it into the image.
+Resolver and execution-adapter modules are deployment-owned and should be
+mounted read-only (or supplied by the selected host) with absolute module
+paths. Deployment mode intentionally fails closed when either module is
+missing or invalid.
+
 ## Required configuration
 
 Set `COVENANT_MODE=deployment` and provide:
@@ -54,6 +77,14 @@ closing the listener, and closing the store. `GET /health` only reports process
 liveness. `GET /ready` reports internal configuration/store readiness and never
 reports Circle or Arc financial success.
 
+The container does not run migrations automatically. Apply the reviewed
+PostgreSQL/Supabase-compatible migrations in lexical order against the intended
+developer database before starting a multi-instance deployment, then verify
+the migration and uniqueness/index checks. A single-container local run may
+use the file-backed `node:sqlite` adapter with `/var/lib/covenant` persisted;
+that remains operational projection storage and is not an HA or financial
+ledger guarantee.
+
 The first project and initial test API key are provisioned through the private
 administrative `CovenantApi.provisionProject` operation. No anonymous signup or
 browser API-key mode exists. Use the server-side SDK only; keep keys and
@@ -72,3 +103,9 @@ Only Arc Testnet and USDC are supported. CI and this guide do not send real
 USDC or use production Circle credentials. Provider acceptance is not Arc
 execution, and `EXECUTED` means only the reviewed matching Arc evidence; it is
 not a universal finality or irreversibility claim.
+
+The container is an artifact, not a hosting-provider selection. No external
+account, TLS endpoint, persistent database, resolver, execution adapter, or
+Circle credential is bundled or created by this repository. A hosting provider
+must supply those separately and classify the service as the **Arc Testnet
+Developer Release** before any live smoke test.
