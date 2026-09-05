@@ -36,6 +36,12 @@ service: the API uses the existing root `Dockerfile`, while the executor uses
 `Dockerfile.executor`. The executor image starts `node dist/worker-main.js`,
 exposes only the worker port (`8788` by default), and must receive its
 provider-owned service module and secrets only through the worker service.
+Set Railway's executor service variable
+`COVENANT_EXECUTOR_SERVICE_MODULE=./dist/deployment-service.js`. The module
+loads the mounted public CovenantSpec trust anchor named by
+`COVENANT_EXECUTOR_COVENANT_SPEC_FILE` (or the existing
+`COVENANT_AUTHORIZATION_SPEC_FILE`) and the isolated signer descriptor named
+by `EXECUTOR_SIGNER_SOURCE`; neither file belongs in the image.
 
 The service module must construct the existing `ExecutorService` with its
 reviewed `CovenantProvider`, `TransactionTransport`, `Clock`, and a durable
@@ -77,6 +83,7 @@ COVENANT_EXECUTION_ADAPTER_MODULE
 COVENANT_EXECUTOR_WORKER_URL      # HTTPS URL for the isolated executor worker
 COVENANT_EXECUTOR_WORKER_AUTH_TOKEN # internal channel secret, >=32 characters
 COVENANT_EXECUTOR_SERVICE_MODULE    # worker-only service factory module
+COVENANT_EXECUTOR_COVENANT_SPEC_FILE # mounted public CovenantSpec trust anchor
 COVENANT_ARC_RPC_URL              # must be https://rpc.testnet.arc.network
 ```
 

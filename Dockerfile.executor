@@ -32,6 +32,10 @@ ENV COVENANT_EXECUTOR_WORKER_PORT=8788
 
 WORKDIR /app
 COPY --from=build --chown=node:node /out/ ./
+# The executor's calldata verifier needs only this generated ABI entry at
+# runtime. Keep the public artifact, while leaving Foundry sources, tests, and
+# build tooling out of the image.
+COPY --from=build --chown=node:node /workspace/packages/contracts/abi/CovenantVault.json /packages/contracts/abi/CovenantVault.json
 
 # Mount the durable operation journal here. Provider credentials and signer
 # material are supplied by the deployment-owned service module, never baked
