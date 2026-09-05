@@ -3,6 +3,10 @@ import { pathToFileURL } from "node:url";
 import { createExecutorWorkerServer } from "./worker.js";
 import type { ExecutorService } from "./service.js";
 
+type ClosableExecutorService = ExecutorService & {
+  close?: () => Promise<void>;
+};
+
 function required(
   env: Readonly<Record<string, string | undefined>>,
   name: string,
@@ -28,7 +32,7 @@ function moduleUrl(specifier: string): string {
     ? pathToFileURL(specifier).href
     : pathToFileURL(resolve(process.cwd(), specifier)).href;
 }
-function assertService(value: unknown): ExecutorService {
+function assertService(value: unknown): ClosableExecutorService {
   if (
     value === null ||
     typeof value !== "object" ||
@@ -38,7 +42,19 @@ function assertService(value: unknown): ExecutorService {
       .executeAuthorizedPayment !== "function"
   )
     throw new Error("Configured executor service is invalid");
-  return value as ExecutorService;
+  return value as ClosableExecutorService;
+}
+
+/** Never print loader paths, environment values, or provider error text. */
+export function sanitizedStartupErrorCategory(
+  error: unknown,
+): "CONFIGURATION" | "STARTUP_FAILURE" {
+  if (
+    error instanceof Error &&
+    error.name === "ExecutorDeploymentConfigurationError"
+  )
+    return "CONFIGURATION";
+  return "STARTUP_FAILURE";
 }
 
 export type RunningExecutorWorker = Readonly<{
@@ -95,6 +111,7 @@ export async function startExecutorWorker(
           else resolveClose();
         });
       });
+      await service.close?.();
     },
   };
 }
@@ -113,7 +130,10 @@ if (
       process.once("SIGINT", shutdown);
       process.once("SIGTERM", shutdown);
     })
-    .catch(() => {
+    .catch((error: unknown) => {
+      process.stderr.write(
+        `Covenant executor worker startup failed: ${sanitizedStartupErrorCategory(error)}\n`,
+      );
       process.exitCode = 1;
     });
 }
