@@ -168,6 +168,9 @@ importers:
 
   apps/executor:
     dependencies:
+      '@covenant/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@covenant/spec':
         specifier: workspace:*
         version: link:../../packages/spec
