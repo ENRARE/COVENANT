@@ -31,6 +31,12 @@ routes, and keeps Circle/provider credentials and signer material in that
 service's environment only. The API image never imports or receives those
 credentials.
 
+When using Railway or another service-based builder, select the Dockerfile per
+service: the API uses the existing root `Dockerfile`, while the executor uses
+`Dockerfile.executor`. The executor image starts `node dist/worker-main.js`,
+exposes only the worker port (`8788` by default), and must receive its
+provider-owned service module and secrets only through the worker service.
+
 The service module must construct the existing `ExecutorService` with its
 reviewed `CovenantProvider`, `TransactionTransport`, `Clock`, and a durable
 `CircleOperationRepository` (for example the existing file journal). The
