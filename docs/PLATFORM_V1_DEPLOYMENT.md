@@ -38,10 +38,29 @@ exposes only the worker port (`8788` by default), and must receive its
 provider-owned service module and secrets only through the worker service.
 Set Railway's executor service variable
 `COVENANT_EXECUTOR_SERVICE_MODULE=./dist/deployment-service.js`. The module
-loads the mounted public CovenantSpec trust anchor named by
-`COVENANT_EXECUTOR_COVENANT_SPEC_FILE` (or the existing
-`COVENANT_AUTHORIZATION_SPEC_FILE`) and the isolated signer descriptor named
-by `EXECUTOR_SIGNER_SOURCE`; neither file belongs in the image.
+loads the public CovenantSpec trust anchor named by
+`COVENANT_EXECUTOR_COVENANT_SPEC_FILE` and the isolated signer descriptor named
+by `EXECUTOR_SIGNER_SOURCE`. For the reviewed COV-010 deployment, the executor
+image contains the non-secret trust anchor and Railway must set:
+
+```text
+COVENANT_EXECUTOR_COVENANT_SPEC_FILE=/app/deployment/arc-testnet/cov010-runtime-trust-anchor.json
+```
+
+The artifact is a reconstructed runtime projection of independently verified
+COV-010 immutable deployment evidence. Historical CovenantSpec `createdAt` was
+not recovered. Its `createdAt` is deterministically normalized to
+`validAfter = 1785615913` only to satisfy the frozen CovenantSpec schema; it is
+not historical signed CovenantSpec evidence and must never be represented as
+the original `createdAt`. The artifact is unsigned and does not change V1
+EIP-712 fields or verification. The signer descriptor remains deployment-owned
+secret configuration and is never included in the image.
+
+The API authorization resolver cannot consume this exact single-artifact shape:
+it requires a project-bound `entries` wrapper. Continue mounting that separate
+public resolver file through `COVENANT_AUTHORIZATION_SPEC_FILE`; do not mutate or
+reinterpret this reviewed executor artifact and do not add a second
+authorization path.
 
 The service module must construct the existing `ExecutorService` with its
 reviewed `CovenantProvider`, `TransactionTransport`, `Clock`, and a durable
