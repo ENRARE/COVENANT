@@ -62,6 +62,31 @@ export type RunningExecutorWorker = Readonly<{
   close: () => Promise<void>;
 }>;
 
+type ShutdownSignalTarget = Readonly<{
+  once: (event: "SIGINT" | "SIGTERM", listener: () => void) => unknown;
+}>;
+
+/** Installs one-shot handlers while keeping process termination testable. */
+export function installExecutorWorkerShutdownHandlers(
+  running: RunningExecutorWorker,
+  target: ShutdownSignalTarget = process,
+  exit: (code: number) => unknown = (code) => process.exit(code),
+): void {
+  let shutdownPromise: Promise<void> | undefined;
+  const shutdown = () => {
+    shutdownPromise ??= running.close().then(
+      () => {
+        exit(0);
+      },
+      () => {
+        exit(1);
+      },
+    );
+  };
+  target.once("SIGINT", shutdown);
+  target.once("SIGTERM", shutdown);
+}
+
 /** Starts the executor as a separately deployable process. The service module
  * is deployment-owned and is the only place where Circle/provider credentials
  * and any isolated signer material are assembled. */
@@ -92,26 +117,35 @@ export async function startExecutorWorker(
   });
   const host = env.COVENANT_EXECUTOR_WORKER_HOST?.trim() ?? "0.0.0.0";
   const port = bounded(env, "COVENANT_EXECUTOR_WORKER_PORT", 8788, 65_535);
-  await new Promise<void>((resolveListen, reject) => {
-    server.once("error", reject);
-    server.listen(port, host, () => {
-      server.removeListener("error", reject);
-      resolveListen();
+  try {
+    await new Promise<void>((resolveListen, reject) => {
+      server.once("error", reject);
+      server.listen(port, host, () => {
+        server.removeListener("error", reject);
+        resolveListen();
+      });
     });
-  });
-  let closed = false;
+  } catch (error) {
+    await service.close?.();
+    throw error;
+  }
+  let closePromise: Promise<void> | undefined;
   return {
     server,
-    close: async () => {
-      if (closed) return;
-      closed = true;
-      await new Promise<void>((resolveClose, reject) => {
-        server.close((error) => {
-          if (error) reject(error);
-          else resolveClose();
-        });
-      });
-      await service.close?.();
+    close: () => {
+      closePromise ??= (async () => {
+        try {
+          await new Promise<void>((resolveClose, reject) => {
+            server.close((error) => {
+              if (error) reject(error);
+              else resolveClose();
+            });
+          });
+        } finally {
+          await service.close?.();
+        }
+      })();
+      return closePromise;
     },
   };
 }
@@ -124,11 +158,7 @@ if (
   void startExecutorWorker()
     .then((running) => {
       process.stdout.write("Covenant executor worker listening\n");
-      const shutdown = () => {
-        void running.close().finally(() => process.exit(0));
-      };
-      process.once("SIGINT", shutdown);
-      process.once("SIGTERM", shutdown);
+      installExecutorWorkerShutdownHandlers(running);
     })
     .catch((error: unknown) => {
       process.stderr.write(
