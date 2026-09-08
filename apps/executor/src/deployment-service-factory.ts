@@ -457,16 +457,15 @@ export async function createExecutorDeploymentService(
       ? {}
       : { executionRepository: overrides.executionRepository }),
   });
-  const closeOperations = operations?.close;
-  if (closeOperations !== undefined) {
-    let closed = false;
+  const ownedOperations = operations;
+  if (ownedOperations?.close !== undefined) {
+    let closePromise: Promise<void> | undefined;
     Object.defineProperty(service, "close", {
       configurable: false,
       enumerable: false,
       value: async () => {
-        if (closed) return;
-        closed = true;
-        await closeOperations();
+        closePromise ??= ownedOperations.close?.() ?? Promise.resolve();
+        await closePromise;
       },
       writable: false,
     });
