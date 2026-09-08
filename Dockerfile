@@ -27,11 +27,13 @@ ENV COVENANT_API_PORT=8787
 
 WORKDIR /app
 COPY --from=build --chown=node:node /out/ ./
+COPY --from=build --chown=node:node /workspace/deployment/arc-testnet/cov010-api-authorization-spec.json /app/deployment/arc-testnet/cov010-api-authorization-spec.json
 
 # Mount a persistent volume here for SQLite. The compiled PostgreSQL deployment
-# entrypoint is included under dist/deployment. Resolver/adapter modules remain
-# deployment-owned and must be supplied separately; startup fails closed when
-# they are absent.
+# entrypoint and authorization resolver are included under dist/deployment. The
+# reviewed public COV-010 resolver artifact is copied above; alternate resolver
+# data and adapter modules remain deployment-owned. Startup fails closed when
+# required configuration is absent.
 RUN mkdir -p /var/lib/covenant \
   && chown node:node /var/lib/covenant
 

@@ -57,9 +57,15 @@ EIP-712 fields or verification. The signer descriptor remains deployment-owned
 secret configuration and is never included in the image.
 
 The API authorization resolver cannot consume this exact single-artifact shape:
-it requires a project-bound `entries` wrapper. Continue mounting that separate
-public resolver file through `COVENANT_AUTHORIZATION_SPEC_FILE`; do not mutate or
-reinterpret this reviewed executor artifact and do not add a second
+it requires a project-bound `entries` wrapper. The API image therefore includes
+the reviewed public wrapper derived from this exact CovenantSpec. For the
+reviewed Platform v1 Arc Testnet project, set:
+
+```text
+COVENANT_AUTHORIZATION_SPEC_FILE=/app/deployment/arc-testnet/cov010-api-authorization-spec.json
+```
+
+Do not mutate or reinterpret the executor artifact, and do not add a second
 authorization path.
 
 The service module must construct the existing `ExecutorService` with its
