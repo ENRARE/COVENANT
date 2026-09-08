@@ -134,60 +134,60 @@ export type CreateWebhookDeliveryInput = Readonly<{
  * replay, revocation, and settlement state.
  */
 export type RuntimeStore = Readonly<{
-  close: () => void;
-  checkReady: () => boolean;
+  close: () => Promise<void>;
+  checkReady: () => Promise<boolean>;
   saveCovenant: (
     projectId: string,
     resource: unknown,
     at: number,
-  ) => RuntimeCovenant;
+  ) => Promise<RuntimeCovenant>;
   getCovenant: (
     projectId: string,
     covenantId: string,
-  ) => RuntimeCovenant | undefined;
+  ) => Promise<RuntimeCovenant | undefined>;
   replaceCovenantProjection: (
     projectId: string,
     resource: unknown,
     at: number,
-  ) => RuntimeCovenant;
+  ) => Promise<RuntimeCovenant>;
   saveAuthorizationEvidence: (
     projectId: string,
     covenantId: string,
     evidence: unknown,
     at: number,
-  ) => AuthorizationEvidenceSubmission;
+  ) => Promise<AuthorizationEvidenceSubmission>;
   getAuthorizationEvidence: (
     projectId: string,
     covenantId: string,
-  ) => AuthorizationEvidenceSubmission | null;
-  getOperation: (operationKey: string) => RuntimeOperation | undefined;
+  ) => Promise<AuthorizationEvidenceSubmission | null>;
+  getOperation: (operationKey: string) => Promise<RuntimeOperation | undefined>;
   getOperationByExecution: (
     projectId: string,
     executionId: string,
-  ) => RuntimeOperation | undefined;
+  ) => Promise<RuntimeOperation | undefined>;
   createOrJoinOperation: (
     input: CreateOperationInput,
-  ) => Readonly<{ operation: RuntimeOperation; joined: boolean }>;
+  ) => Promise<Readonly<{ operation: RuntimeOperation; joined: boolean }>>;
   claimOperation: (
     operationKey: string,
     workerId: string,
     at: number,
     leaseMs?: number,
-  ) => RuntimeOperation | undefined;
+  ) => Promise<RuntimeOperation | undefined>;
   renewLease: (
     operationKey: string,
     workerId: string,
     expectedVersion: number,
     at: number,
     leaseMs?: number,
-  ) => RuntimeOperation;
+  ) => Promise<RuntimeOperation>;
   releaseLease: (
     operationKey: string,
     workerId: string,
     expectedVersion: number,
     at: number,
-  ) => RuntimeOperation;
-  recoverExpiredLeases: (at: number) => RuntimeOperation[];
+  ) => Promise<RuntimeOperation>;
+  recoverExpiredLeases: (at: number) => Promise<RuntimeOperation[]>;
   transitionLeased: (
     operationKey: string,
     workerId: string,
@@ -195,7 +195,7 @@ export type RuntimeStore = Readonly<{
     nextState: RuntimeState,
     at: number,
     patch?: OperationPatch,
-  ) => RuntimeOperation;
+  ) => Promise<RuntimeOperation>;
   updateCovenantAndOperation: (
     operationKey: string,
     workerId: string,
@@ -204,22 +204,24 @@ export type RuntimeStore = Readonly<{
     operationState: RuntimeState,
     at: number,
     patch?: OperationPatch,
-  ) => Readonly<{ covenant: RuntimeCovenant; operation: RuntimeOperation }>;
+  ) => Promise<
+    Readonly<{ covenant: RuntimeCovenant; operation: RuntimeOperation }>
+  >;
   listOutbox: (
     options?: Readonly<{ undeliveredOnly?: boolean; limit?: number }>,
-  ) => RuntimeOutboxRecord[];
+  ) => Promise<RuntimeOutboxRecord[]>;
   markOutboxDelivered: (
     id: number,
     at: number,
-  ) => RuntimeOutboxRecord | undefined;
+  ) => Promise<RuntimeOutboxRecord | undefined>;
   ensureDeveloperProject: (
     projectId: string,
     name: string,
     at: number,
-  ) => DeveloperProjectRecord;
+  ) => Promise<DeveloperProjectRecord>;
   getDeveloperProject: (
     projectId: string,
-  ) => DeveloperProjectRecord | undefined;
+  ) => Promise<DeveloperProjectRecord | undefined>;
   saveApiKey: (
     input: Readonly<{
       keyId: string;
@@ -228,23 +230,25 @@ export type RuntimeStore = Readonly<{
       digest: string;
       at: number;
     }>,
-  ) => ApiKeyRecord;
-  findApiKeyCandidates: (prefix: string) => ApiKeyRecord[];
-  listApiKeys: (projectId: string) => ApiKeyRecord[];
+  ) => Promise<ApiKeyRecord>;
+  findApiKeyCandidates: (prefix: string) => Promise<ApiKeyRecord[]>;
+  listApiKeys: (projectId: string) => Promise<ApiKeyRecord[]>;
   revokeApiKey: (
     projectId: string,
     keyId: string,
     at: number,
-  ) => ApiKeyRecord | undefined;
+  ) => Promise<ApiKeyRecord | undefined>;
   listCovenants: (
     projectId: string,
     options?: Readonly<{ limit?: number; after?: string }>,
-  ) => Readonly<{ items: RuntimeCovenant[]; nextAfter: string | null }>;
+  ) => Promise<
+    Readonly<{ items: RuntimeCovenant[]; nextAfter: string | null }>
+  >;
   getHttpIdempotency: (
     projectId: string,
     route: string,
     keyDigest: string,
-  ) => HttpIdempotencyRecord | undefined;
+  ) => Promise<HttpIdempotencyRecord | undefined>;
   saveHttpIdempotency: (
     input: Readonly<{
       projectId: string;
@@ -256,12 +260,12 @@ export type RuntimeStore = Readonly<{
       resourceReference?: string | null;
       at: number;
     }>,
-  ) => HttpIdempotencyRecord;
+  ) => Promise<HttpIdempotencyRecord>;
   deleteHttpIdempotency: (
     projectId: string,
     route: string,
     keyDigest: string,
-  ) => void;
+  ) => Promise<void>;
   createWebhookEndpoint: (
     input: Readonly<{
       endpointId: string;
@@ -270,23 +274,23 @@ export type RuntimeStore = Readonly<{
       secretCiphertext: string;
       at: number;
     }>,
-  ) => WebhookEndpointRecord;
+  ) => Promise<WebhookEndpointRecord>;
   getWebhookEndpoint: (
     projectId: string,
     endpointId: string,
-  ) => WebhookEndpointRecord | undefined;
-  listWebhookEndpoints: (projectId: string) => WebhookEndpointRecord[];
+  ) => Promise<WebhookEndpointRecord | undefined>;
+  listWebhookEndpoints: (projectId: string) => Promise<WebhookEndpointRecord[]>;
   revokeWebhookEndpoint: (
     projectId: string,
     endpointId: string,
     at: number,
-  ) => WebhookEndpointRecord | undefined;
+  ) => Promise<WebhookEndpointRecord | undefined>;
   createWebhookDelivery: (
     input: CreateWebhookDeliveryInput,
-  ) => WebhookDeliveryRecord;
+  ) => Promise<WebhookDeliveryRecord>;
   listWebhookDeliveries: (
     options?: Readonly<{ projectId?: string; dueAt?: number; limit?: number }>,
-  ) => WebhookDeliveryRecord[];
+  ) => Promise<WebhookDeliveryRecord[]>;
   updateWebhookDelivery: (
     input: Readonly<{
       deliveryId: string;
@@ -298,7 +302,7 @@ export type RuntimeStore = Readonly<{
       lastError?: string | null;
       at: number;
     }>,
-  ) => WebhookDeliveryRecord | undefined;
+  ) => Promise<WebhookDeliveryRecord | undefined>;
 }>;
 
 type SqlRow = Record<string, unknown>;
@@ -732,7 +736,7 @@ CREATE TABLE IF NOT EXISTS http_idempotency (
 );
 `;
 
-export class DurableRuntimeStore implements RuntimeStore {
+class SqliteRuntimeStore {
   readonly #db: DatabaseSync;
 
   constructor(options: DurableRuntimeStoreOptions = {}) {
@@ -1904,5 +1908,180 @@ export class DurableRuntimeStore implements RuntimeStore {
       .prepare("SELECT * FROM webhook_deliveries WHERE delivery_id=?")
       .get(input.deliveryId) as SqlRow | undefined;
     return row === undefined ? undefined : rowToWebhookDelivery(row);
+  }
+}
+
+async function runSqliteOperation<T>(work: () => T): Promise<T> {
+  const result = work();
+  await Promise.resolve();
+  return result;
+}
+
+/**
+ * Async persistence facade for the local SQLite implementation. Each operation
+ * completes synchronously inside SQLite before its Promise resolves, preserving
+ * the existing transaction boundaries while matching real database clients.
+ */
+export class DurableRuntimeStore implements RuntimeStore {
+  readonly #store: SqliteRuntimeStore;
+
+  constructor(options: DurableRuntimeStoreOptions = {}) {
+    this.#store = new SqliteRuntimeStore(options);
+  }
+
+  async close(): Promise<void> {
+    await runSqliteOperation(() => {
+      this.#store.close();
+    });
+  }
+
+  async checkReady(): Promise<boolean> {
+    return await Promise.resolve(this.#store.checkReady());
+  }
+
+  async saveCovenant(...args: Parameters<RuntimeStore["saveCovenant"]>) {
+    return Promise.resolve(this.#store.saveCovenant(...args));
+  }
+  async getCovenant(...args: Parameters<RuntimeStore["getCovenant"]>) {
+    return Promise.resolve(this.#store.getCovenant(...args));
+  }
+  async replaceCovenantProjection(
+    ...args: Parameters<RuntimeStore["replaceCovenantProjection"]>
+  ) {
+    return Promise.resolve(this.#store.replaceCovenantProjection(...args));
+  }
+  async saveAuthorizationEvidence(
+    ...args: Parameters<RuntimeStore["saveAuthorizationEvidence"]>
+  ) {
+    return Promise.resolve(this.#store.saveAuthorizationEvidence(...args));
+  }
+  async getAuthorizationEvidence(
+    ...args: Parameters<RuntimeStore["getAuthorizationEvidence"]>
+  ) {
+    return Promise.resolve(this.#store.getAuthorizationEvidence(...args));
+  }
+  async getOperation(...args: Parameters<RuntimeStore["getOperation"]>) {
+    return Promise.resolve(this.#store.getOperation(...args));
+  }
+  async getOperationByExecution(
+    ...args: Parameters<RuntimeStore["getOperationByExecution"]>
+  ) {
+    return Promise.resolve(this.#store.getOperationByExecution(...args));
+  }
+  async createOrJoinOperation(
+    ...args: Parameters<RuntimeStore["createOrJoinOperation"]>
+  ) {
+    return Promise.resolve(this.#store.createOrJoinOperation(...args));
+  }
+  async claimOperation(...args: Parameters<RuntimeStore["claimOperation"]>) {
+    return Promise.resolve(this.#store.claimOperation(...args));
+  }
+  async renewLease(...args: Parameters<RuntimeStore["renewLease"]>) {
+    return Promise.resolve(this.#store.renewLease(...args));
+  }
+  async releaseLease(...args: Parameters<RuntimeStore["releaseLease"]>) {
+    return Promise.resolve(this.#store.releaseLease(...args));
+  }
+  async recoverExpiredLeases(
+    ...args: Parameters<RuntimeStore["recoverExpiredLeases"]>
+  ) {
+    return Promise.resolve(this.#store.recoverExpiredLeases(...args));
+  }
+  async transitionLeased(
+    ...args: Parameters<RuntimeStore["transitionLeased"]>
+  ) {
+    return Promise.resolve(this.#store.transitionLeased(...args));
+  }
+  async updateCovenantAndOperation(
+    ...args: Parameters<RuntimeStore["updateCovenantAndOperation"]>
+  ) {
+    return Promise.resolve(this.#store.updateCovenantAndOperation(...args));
+  }
+  async listOutbox(...args: Parameters<RuntimeStore["listOutbox"]>) {
+    return Promise.resolve(this.#store.listOutbox(...args));
+  }
+  async markOutboxDelivered(
+    ...args: Parameters<RuntimeStore["markOutboxDelivered"]>
+  ) {
+    return Promise.resolve(this.#store.markOutboxDelivered(...args));
+  }
+  async ensureDeveloperProject(
+    ...args: Parameters<RuntimeStore["ensureDeveloperProject"]>
+  ) {
+    return Promise.resolve(this.#store.ensureDeveloperProject(...args));
+  }
+  async getDeveloperProject(
+    ...args: Parameters<RuntimeStore["getDeveloperProject"]>
+  ) {
+    return Promise.resolve(this.#store.getDeveloperProject(...args));
+  }
+  async saveApiKey(...args: Parameters<RuntimeStore["saveApiKey"]>) {
+    return Promise.resolve(this.#store.saveApiKey(...args));
+  }
+  async findApiKeyCandidates(
+    ...args: Parameters<RuntimeStore["findApiKeyCandidates"]>
+  ) {
+    return Promise.resolve(this.#store.findApiKeyCandidates(...args));
+  }
+  async listApiKeys(...args: Parameters<RuntimeStore["listApiKeys"]>) {
+    return Promise.resolve(this.#store.listApiKeys(...args));
+  }
+  async revokeApiKey(...args: Parameters<RuntimeStore["revokeApiKey"]>) {
+    return Promise.resolve(this.#store.revokeApiKey(...args));
+  }
+  async listCovenants(...args: Parameters<RuntimeStore["listCovenants"]>) {
+    return Promise.resolve(this.#store.listCovenants(...args));
+  }
+  async getHttpIdempotency(
+    ...args: Parameters<RuntimeStore["getHttpIdempotency"]>
+  ) {
+    return Promise.resolve(this.#store.getHttpIdempotency(...args));
+  }
+  async saveHttpIdempotency(
+    ...args: Parameters<RuntimeStore["saveHttpIdempotency"]>
+  ) {
+    return Promise.resolve(this.#store.saveHttpIdempotency(...args));
+  }
+  async deleteHttpIdempotency(
+    ...args: Parameters<RuntimeStore["deleteHttpIdempotency"]>
+  ): Promise<void> {
+    await runSqliteOperation(() => {
+      this.#store.deleteHttpIdempotency(...args);
+    });
+  }
+  async createWebhookEndpoint(
+    ...args: Parameters<RuntimeStore["createWebhookEndpoint"]>
+  ) {
+    return Promise.resolve(this.#store.createWebhookEndpoint(...args));
+  }
+  async getWebhookEndpoint(
+    ...args: Parameters<RuntimeStore["getWebhookEndpoint"]>
+  ) {
+    return Promise.resolve(this.#store.getWebhookEndpoint(...args));
+  }
+  async listWebhookEndpoints(
+    ...args: Parameters<RuntimeStore["listWebhookEndpoints"]>
+  ) {
+    return Promise.resolve(this.#store.listWebhookEndpoints(...args));
+  }
+  async revokeWebhookEndpoint(
+    ...args: Parameters<RuntimeStore["revokeWebhookEndpoint"]>
+  ) {
+    return Promise.resolve(this.#store.revokeWebhookEndpoint(...args));
+  }
+  async createWebhookDelivery(
+    ...args: Parameters<RuntimeStore["createWebhookDelivery"]>
+  ) {
+    return Promise.resolve(this.#store.createWebhookDelivery(...args));
+  }
+  async listWebhookDeliveries(
+    ...args: Parameters<RuntimeStore["listWebhookDeliveries"]>
+  ) {
+    return Promise.resolve(this.#store.listWebhookDeliveries(...args));
+  }
+  async updateWebhookDelivery(
+    ...args: Parameters<RuntimeStore["updateWebhookDelivery"]>
+  ) {
+    return Promise.resolve(this.#store.updateWebhookDelivery(...args));
   }
 }

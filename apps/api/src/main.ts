@@ -169,6 +169,10 @@ export async function startApiServer(
   } else {
     store = new DurableRuntimeStore({ filename: config.databaseFilename });
   }
+  if (!(await store.checkReady())) {
+    await store.close();
+    throw new Error("Database store is not ready.");
+  }
   const runtime = new DurableExecutionRuntime({ store, adapter });
   const api = new CovenantApi({
     runtime,
@@ -187,13 +191,18 @@ export async function startApiServer(
     requestTimeoutMs: config.requestTimeoutMs,
     headersTimeoutMs: config.headersTimeoutMs,
   });
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(config.port, config.host, () => {
-      server.removeListener("error", reject);
-      resolve();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(config.port, config.host, () => {
+        server.removeListener("error", reject);
+        resolve();
+      });
     });
-  });
+  } catch (error) {
+    await store.close();
+    throw error;
+  }
   let closed = false;
   const close = async () => {
     if (closed) return;
@@ -208,10 +217,18 @@ async function main(): Promise<void> {
   process.stdout.write(
     `Covenant API listening on ${running.config.host}:${String(running.config.port)}\n`,
   );
-  const shutdown = () => {
-    void running.close().finally(() => process.exit(0));
+  const shutdown = async () => {
+    try {
+      await running.close();
+      process.exit(0);
+    } catch {
+      process.exit(1);
+    }
   };
+  // The listener owns the full awaited shutdown and handles all failures.
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
   process.once("SIGINT", shutdown);
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
   process.once("SIGTERM", shutdown);
 }
 

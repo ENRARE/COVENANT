@@ -76,8 +76,8 @@ function runtime(adapter: ExecutionAdapter, now = 200) {
   };
 }
 
-function start(value: DurableExecutionRuntime) {
-  value.saveCovenant(projectId, authorizedResource());
+async function start(value: DurableExecutionRuntime) {
+  await value.saveCovenant(projectId, authorizedResource());
   return value.startExecution({
     projectId,
     covenantId,
@@ -98,22 +98,22 @@ const acceptedArc = {
 };
 
 describe("@covenant/runtime COV-023 durable execution", () => {
-  it("round-trips multiple project-scoped Covenants and emits a transactional outbox row", () => {
+  it("round-trips multiple project-scoped Covenants and emits a transactional outbox row", async () => {
     const store = new DurableRuntimeStore();
     const first = authorizedResource();
     const second = authorizedResource(id(2), id(0xb0));
-    store.saveCovenant(projectId, first, 200);
-    store.saveCovenant(id(0xb0), second, 201);
-    expect(store.getCovenant(projectId, covenantId)?.resource.id).toBe(
+    await store.saveCovenant(projectId, first, 200);
+    await store.saveCovenant(id(0xb0), second, 201);
+    expect((await store.getCovenant(projectId, covenantId))?.resource.id).toBe(
       covenantId,
     );
-    expect(store.getCovenant(id(0xb0), id(2))?.resource.projectId).toBe(
+    expect((await store.getCovenant(id(0xb0), id(2)))?.resource.projectId).toBe(
       id(0xb0),
     );
-    expect(store.listOutbox()).toHaveLength(0);
+    expect(await store.listOutbox()).toHaveLength(0);
   });
 
-  it("survives a process restart and keeps outbox delivery separate from state", () => {
+  it("survives a process restart and keeps outbox delivery separate from state", async () => {
     const directory = mkdtempSync(join(tmpdir(), "covenant-cov023-"));
     const filename = join(directory, "runtime.sqlite");
     try {
@@ -127,33 +127,37 @@ describe("@covenant/runtime COV-023 durable execution", () => {
         },
         clock: { now: () => 200 },
       });
-      const started = start(firstRuntime);
-      const event = firstStore.listOutbox()[0];
+      const started = await start(firstRuntime);
+      const event = (await firstStore.listOutbox())[0];
       expect(event?.eventType).toBe("execution.queued");
-      firstStore.close();
+      await firstStore.close();
       const secondStore = new DurableRuntimeStore({ filename });
       expect(
-        secondStore.getOperation(started.operation.operationKey)?.state,
+        (await secondStore.getOperation(started.operation.operationKey))?.state,
       ).toBe("QUEUED");
-      expect(secondStore.listOutbox({ undeliveredOnly: true })).toHaveLength(1);
+      expect(
+        await secondStore.listOutbox({ undeliveredOnly: true }),
+      ).toHaveLength(1);
       if (event !== undefined)
         expect(
-          secondStore.markOutboxDelivered(event.id, 300)?.deliveredAt,
+          (await secondStore.markOutboxDelivered(event.id, 300))?.deliveredAt,
         ).toBe(300);
-      expect(secondStore.listOutbox({ undeliveredOnly: true })).toHaveLength(0);
-      secondStore.close();
+      expect(
+        await secondStore.listOutbox({ undeliveredOnly: true }),
+      ).toHaveLength(0);
+      await secondStore.close();
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
   });
 
-  it("joins the same durable execution and rejects a conflicting identity", () => {
+  it("joins the same durable execution and rejects a conflicting identity", async () => {
     const setup = runtime({
       simulate: async () => ({ status: "READY" }),
       submit: async () => ({ status: "ACCEPTED", transactionId: "circle-1" }),
     });
-    const first = start(setup.runtime);
-    const joined = setup.runtime.startExecution({
+    const first = await start(setup.runtime);
+    const joined = await setup.runtime.startExecution({
       projectId,
       covenantId,
       executionId,
@@ -162,7 +166,7 @@ describe("@covenant/runtime COV-023 durable execution", () => {
     });
     expect(joined.joined).toBe(true);
     expect(joined.operation.operationKey).toBe(first.operation.operationKey);
-    expect(() =>
+    await expect(
       setup.runtime.startExecution({
         projectId,
         covenantId,
@@ -170,21 +174,24 @@ describe("@covenant/runtime COV-023 durable execution", () => {
         operationKey: id(13),
         at: "112",
       }),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 
-  it("allows exactly one claim and rejects stale lease writes", () => {
+  it("allows exactly one claim and rejects stale lease writes", async () => {
     const setup = runtime({
       simulate: async () => ({ status: "READY" }),
       submit: async () => ({ status: "ACCEPTED", transactionId: "circle-1" }),
     });
-    const started = start(setup.runtime);
-    const one = setup.runtime.claim(started.operation.operationKey, "worker-a");
+    const started = await start(setup.runtime);
+    const one = await setup.runtime.claim(
+      started.operation.operationKey,
+      "worker-a",
+    );
     expect(one?.leaseOwner).toBe("worker-a");
     expect(
-      setup.runtime.claim(started.operation.operationKey, "worker-b"),
+      await setup.runtime.claim(started.operation.operationKey, "worker-b"),
     ).toBeUndefined();
-    expect(() =>
+    await expect(
       setup.store.transitionLeased(
         started.operation.operationKey,
         "worker-a",
@@ -192,7 +199,22 @@ describe("@covenant/runtime COV-023 durable execution", () => {
         "PREPARING",
         201,
       ),
-    ).toThrowError(RuntimeError);
+    ).rejects.toThrowError(RuntimeError);
+  });
+
+  it("allows only one winner when claims are issued concurrently", async () => {
+    const setup = runtime({
+      simulate: async () => ({ status: "READY" }),
+      submit: async () => ({ status: "ACCEPTED", transactionId: "circle-1" }),
+    });
+    const started = await start(setup.runtime);
+    const claims = await Promise.all([
+      setup.runtime.claim(started.operation.operationKey, "worker-a"),
+      setup.runtime.claim(started.operation.operationKey, "worker-b"),
+    ]);
+
+    expect(claims.filter((claim) => claim !== undefined)).toHaveLength(1);
+    expect(claims.filter((claim) => claim === undefined)).toHaveLength(1);
   });
 
   it("recovers an expired pre-submission lease but never retries a post-boundary operation", async () => {
@@ -202,14 +224,16 @@ describe("@covenant/runtime COV-023 durable execution", () => {
         throw new Error("provider timeout");
       },
     });
-    const started = start(setup.runtime);
-    const claimed = setup.runtime.claim(
+    const started = await start(setup.runtime);
+    const claimed = await setup.runtime.claim(
       started.operation.operationKey,
       "worker-a",
     );
     expect(claimed).toBeDefined();
     setup.tick(220);
-    expect(setup.runtime.recoverExpiredLeases()[0]?.state).toBe("QUEUED");
+    expect((await setup.runtime.recoverExpiredLeases())[0]?.state).toBe(
+      "QUEUED",
+    );
     const result = await setup.runtime.process(
       started.operation.operationKey,
       "worker-a",
@@ -217,10 +241,13 @@ describe("@covenant/runtime COV-023 durable execution", () => {
     expect(result.state).toBe("AMBIGUOUS");
     expect(result.submissionBoundary).toBe(true);
     expect(
-      setup.runtime.claim(started.operation.operationKey, "worker-a")?.state,
+      (await setup.runtime.claim(started.operation.operationKey, "worker-a"))
+        ?.state,
     ).toBe("AMBIGUOUS");
     setup.tick(300);
-    expect(setup.runtime.recoverExpiredLeases()[0]?.state).toBe("AMBIGUOUS");
+    expect((await setup.runtime.recoverExpiredLeases())[0]?.state).toBe(
+      "AMBIGUOUS",
+    );
   });
 
   it("persists the submission boundary before the external call and does not resubmit ambiguity", async () => {
@@ -232,7 +259,7 @@ describe("@covenant/runtime COV-023 durable execution", () => {
         throw new Error("unknown");
       },
     });
-    const started = start(setup.runtime);
+    const started = await start(setup.runtime);
     const result = await setup.runtime.process(
       started.operation.operationKey,
       "worker-a",
@@ -254,7 +281,7 @@ describe("@covenant/runtime COV-023 durable execution", () => {
         reason: "provider rejected before dispatch",
       }),
     });
-    const started = start(setup.runtime);
+    const started = await start(setup.runtime);
     const retry = await setup.runtime.process(
       started.operation.operationKey,
       "worker-a",
@@ -270,14 +297,14 @@ describe("@covenant/runtime COV-023 durable execution", () => {
         return { status: "ACCEPTED", transactionId: "circle-2" };
       },
     });
-    const acceptedStart = start(acceptedRuntime.runtime);
+    const acceptedStart = await start(acceptedRuntime.runtime);
     const submitted = await acceptedRuntime.runtime.process(
       acceptedStart.operation.operationKey,
       "worker-a",
     );
     expect(accepted).toBe(true);
     expect(submitted.state).toBe("SUBMITTED");
-    const providerOnly = acceptedRuntime.runtime.reconcile({
+    const providerOnly = await acceptedRuntime.runtime.reconcile({
       operationKey: submitted.operationKey,
       projectId,
       workerId: "worker-b",
@@ -287,7 +314,7 @@ describe("@covenant/runtime COV-023 durable execution", () => {
     expect(providerOnly.operation.state).toBe("RECONCILING");
     expect(providerOnly.covenant.status).toBe("EXECUTING");
     acceptedRuntime.tick(3_000);
-    const executed = acceptedRuntime.runtime.reconcile({
+    const executed = await acceptedRuntime.runtime.reconcile({
       operationKey: submitted.operationKey,
       projectId,
       workerId: "worker-b",
@@ -303,12 +330,12 @@ describe("@covenant/runtime COV-023 durable execution", () => {
       simulate: async () => ({ status: "READY" }),
       submit: async () => ({ status: "ACCEPTED", transactionId: "circle-3" }),
     });
-    const started = start(setup.runtime);
+    const started = await start(setup.runtime);
     const submitted = await setup.runtime.process(
       started.operation.operationKey,
       "worker-a",
     );
-    const failed = setup.runtime.reconcile({
+    const failed = await setup.runtime.reconcile({
       operationKey: submitted.operationKey,
       projectId,
       workerId: "worker-b",
@@ -316,7 +343,7 @@ describe("@covenant/runtime COV-023 durable execution", () => {
       arc: { status: "EVIDENCE_CONFLICT", reason: "two Arc observations" },
     });
     expect(failed.operation.state).toBe("TERMINAL_FAILED");
-    expect(() =>
+    await expect(
       setup.store.transitionLeased(
         failed.operation.operationKey,
         "worker-b",
@@ -324,25 +351,25 @@ describe("@covenant/runtime COV-023 durable execution", () => {
         "QUEUED",
         130,
       ),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 
-  it("does not persist credentials or secret-bearing execution payloads", () => {
+  it("does not persist credentials or secret-bearing execution payloads", async () => {
     const setup = runtime({
       simulate: async () => ({ status: "READY" }),
       submit: async () => ({ status: "ACCEPTED", transactionId: "circle-4" }),
     });
-    const started = start(setup.runtime);
+    const started = await start(setup.runtime);
     const serialized = JSON.stringify(started.operation);
     expect(serialized).not.toContain("signedTransaction");
     expect(Object.keys(started.operation)).not.toContain("signedTransaction");
-    const claimed = setup.runtime.claim(
+    const claimed = await setup.runtime.claim(
       started.operation.operationKey,
       "worker-a",
     );
     expect(claimed).toBeDefined();
     if (claimed === undefined) throw new Error("expected a lease");
-    expect(() =>
+    await expect(
       setup.store.transitionLeased(
         started.operation.operationKey,
         "worker-a",
@@ -353,6 +380,6 @@ describe("@covenant/runtime COV-023 durable execution", () => {
           providerEvidence: { ["api" + "Key"]: "must-not-persist" },
         },
       ),
-    ).toThrowError(RuntimeError);
+    ).rejects.toThrowError(RuntimeError);
   });
 });

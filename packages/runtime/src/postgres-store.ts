@@ -32,18 +32,18 @@ import type {
   RuntimeOutboxRecord,
 } from "./types.js";
 
-/** A deliberately tiny driver boundary.  The repository does not bundle a
- * PostgreSQL client or credentials; deployment supplies a vetted driver
- * (node-postgres, Supabase pool, or an equivalent) through this interface. */
+/** A deliberately tiny asynchronous driver boundary. */
 export type PostgresQueryClient = Readonly<{
   // Generic rows let deployment drivers retain their typed result shape.
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   query: <Row extends Record<string, unknown> = Record<string, unknown>>(
     text: string,
     values?: readonly unknown[],
-  ) => { rows: Row[] };
-  transaction: <T>(work: (client: PostgresQueryClient) => T) => T;
-  close?: () => void;
+  ) => Promise<{ rows: Row[] }>;
+  transaction: <T>(
+    work: (client: PostgresQueryClient) => Promise<T>,
+  ) => Promise<T>;
+  close?: () => Promise<void>;
 }>;
 
 export type PostgresRuntimeStoreOptions = Readonly<{
@@ -299,20 +299,20 @@ export class PostgresRuntimeStore implements RuntimeStore {
   constructor(options: PostgresRuntimeStoreOptions) {
     this.#client = options.client;
   }
-  close(): void {
-    this.#client.close?.();
+  async close(): Promise<void> {
+    await this.#client.close?.();
   }
-  checkReady(): boolean {
+  async checkReady(): Promise<boolean> {
     try {
-      this.#client.query("select 1 as ok");
+      await this.#client.query("select 1 as ok");
       return true;
     } catch {
       return false;
     }
   }
-  #tx<T>(work: (client: PostgresQueryClient) => T): T {
+  async #tx<T>(work: (client: PostgresQueryClient) => Promise<T>): Promise<T> {
     try {
-      return this.#client.transaction(work);
+      return await this.#client.transaction(work);
     } catch (error) {
       if (error instanceof RuntimeError) throw error;
       runtimeFailure(
@@ -322,50 +322,59 @@ export class PostgresRuntimeStore implements RuntimeStore {
       );
     }
   }
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
-  #one<T extends Row>(
+  async #one<T extends Row>(
     client: PostgresQueryClient,
     sql: string,
     values: readonly unknown[] = [],
-  ): T | undefined {
-    return client.query<T>(sql, values).rows[0];
+  ): Promise<T | undefined> {
+    return (await client.query<T>(sql, values)).rows[0];
   }
-  #operation(
+  async #operation(
     client: PostgresQueryClient,
     key: string,
-  ): RuntimeOperation | undefined {
-    const row = this.#one(
+  ): Promise<RuntimeOperation | undefined> {
+    const row = await this.#one(
       client,
       `select ${OPERATION_COLUMNS} from public.execution_operations where operation_key=$1`,
       [key],
     );
     return row === undefined ? undefined : operation(row);
   }
-  #covenant(
+  async #covenant(
     client: PostgresQueryClient,
     projectId: string,
     covenantId: string,
-  ): RuntimeCovenant | undefined {
-    const row = this.#one(
+    forUpdate = false,
+  ): Promise<RuntimeCovenant | undefined> {
+    const row = await this.#one(
       client,
-      `select ${COVENANT_COLUMNS} from public.covenants where project_id=$1 and covenant_id=$2`,
+      `select ${COVENANT_COLUMNS} from public.covenants where project_id=$1 and covenant_id=$2${forUpdate ? " for update" : ""}`,
       [projectId, covenantId],
     );
     return row === undefined ? undefined : covenant(row);
   }
-  saveCovenant(
+  async saveCovenant(
     projectIdInput: string,
     resourceInput: unknown,
     timestamp: number,
-  ): RuntimeCovenant {
+  ): Promise<RuntimeCovenant> {
     const projectId = id(projectIdInput, "projectId");
     const resource = parseCovenantResource(resourceInput);
     assertProjectOwnership(resource, projectId);
     const covenantId = id(resource.id, "covenantId");
     const now = at(timestamp);
     const resourceJson = json(resource);
-    return this.#tx((client) => {
-      const previous = this.#covenant(client, projectId, covenantId);
+    return this.#tx(async (client) => {
+      await client.query(
+        "select pg_advisory_xact_lock(hashtextextended($1,0))",
+        [`covenant:${projectId}:${covenantId}`],
+      );
+      const previous = await this.#covenant(
+        client,
+        projectId,
+        covenantId,
+        true,
+      );
       if (previous !== undefined) {
         if (canonicalJson(previous.resource) !== canonicalJson(resource))
           runtimeFailure(
@@ -374,35 +383,40 @@ export class PostgresRuntimeStore implements RuntimeStore {
           );
         return previous;
       }
-      client.query(
+      await client.query(
         "insert into public.covenants(project_id,covenant_id,resource,created_at,updated_at) values($1,$2,$3::jsonb,to_timestamp($4/1000.0),to_timestamp($4/1000.0))",
         [projectId, covenantId, resourceJson, now],
       );
-      return this.#covenant(client, projectId, covenantId) ?? fail();
+      return (await this.#covenant(client, projectId, covenantId)) ?? fail();
     });
   }
-  getCovenant(
+  async getCovenant(
     projectIdInput: string,
     covenantIdInput: string,
-  ): RuntimeCovenant | undefined {
+  ): Promise<RuntimeCovenant | undefined> {
     return this.#covenant(
       this.#client,
       id(projectIdInput, "projectId"),
       id(covenantIdInput, "covenantId"),
     );
   }
-  replaceCovenantProjection(
+  async replaceCovenantProjection(
     projectIdInput: string,
     resourceInput: unknown,
     timestamp: number,
-  ): RuntimeCovenant {
+  ): Promise<RuntimeCovenant> {
     const projectId = id(projectIdInput, "projectId");
     const resource = parseCovenantResource(resourceInput);
     assertProjectOwnership(resource, projectId);
     const covenantId = id(resource.id, "covenantId");
     const now = at(timestamp);
-    return this.#tx((client) => {
-      const previous = this.#covenant(client, projectId, covenantId);
+    return this.#tx(async (client) => {
+      const previous = await this.#covenant(
+        client,
+        projectId,
+        covenantId,
+        true,
+      );
       if (previous === undefined)
         runtimeFailure(
           "RUNTIME_NOT_FOUND",
@@ -413,19 +427,19 @@ export class PostgresRuntimeStore implements RuntimeStore {
           "RUNTIME_CONFLICT",
           "Covenant projection cannot move backwards",
         );
-      client.query(
+      await client.query(
         "update public.covenants set resource=$1::jsonb,updated_at=to_timestamp($2/1000.0) where project_id=$3 and covenant_id=$4",
         [json(resource), now, projectId, covenantId],
       );
-      return this.#covenant(client, projectId, covenantId) ?? fail();
+      return (await this.#covenant(client, projectId, covenantId)) ?? fail();
     });
   }
-  saveAuthorizationEvidence(
+  async saveAuthorizationEvidence(
     projectIdInput: string,
     covenantIdInput: string,
     input: unknown,
     timestamp: number,
-  ): AuthorizationEvidenceSubmission {
+  ): Promise<AuthorizationEvidenceSubmission> {
     const projectId = id(projectIdInput, "projectId");
     const covenantId = id(covenantIdInput, "covenantId");
     const now = at(timestamp);
@@ -439,13 +453,17 @@ export class PostgresRuntimeStore implements RuntimeStore {
       );
     }
     const body = json(parsed);
-    return this.#tx((client) => {
-      if (this.#covenant(client, projectId, covenantId) === undefined)
+    return this.#tx(async (client) => {
+      await client.query(
+        "select pg_advisory_xact_lock(hashtextextended($1,0))",
+        [`authorization-evidence:${projectId}:${covenantId}`],
+      );
+      if ((await this.#covenant(client, projectId, covenantId)) === undefined)
         runtimeFailure(
           "RUNTIME_NOT_FOUND",
           "Covenant projection was not found",
         );
-      const prior = this.#one<Row>(
+      const prior = await this.#one<Row>(
         client,
         "select evidence from public.authorization_evidence where project_id=$1 and covenant_id=$2",
         [projectId, covenantId],
@@ -458,41 +476,41 @@ export class PostgresRuntimeStore implements RuntimeStore {
           );
         return parsed;
       }
-      client.query(
+      await client.query(
         "insert into public.authorization_evidence(project_id,covenant_id,evidence,created_at,updated_at) values($1,$2,$3::jsonb,to_timestamp($4/1000.0),to_timestamp($4/1000.0))",
         [projectId, covenantId, body, now],
       );
       return parsed;
     });
   }
-  getAuthorizationEvidence(
+  async getAuthorizationEvidence(
     projectIdInput: string,
     covenantIdInput: string,
-  ): AuthorizationEvidenceSubmission | null {
-    const row = this.#one<Row>(
+  ): Promise<AuthorizationEvidenceSubmission | null> {
+    const row = await this.#one<Row>(
       this.#client,
       "select evidence from public.authorization_evidence where project_id=$1 and covenant_id=$2",
       [id(projectIdInput, "projectId"), id(covenantIdInput, "covenantId")],
     );
     return row === undefined ? null : evidence(row.evidence);
   }
-  getOperation(input: string): RuntimeOperation | undefined {
+  async getOperation(input: string): Promise<RuntimeOperation | undefined> {
     return this.#operation(this.#client, id(input, "operationKey"));
   }
-  getOperationByExecution(
+  async getOperationByExecution(
     projectIdInput: string,
     executionIdInput: string,
-  ): RuntimeOperation | undefined {
-    const row = this.#one<Row>(
+  ): Promise<RuntimeOperation | undefined> {
+    const row = await this.#one<Row>(
       this.#client,
       `select ${OPERATION_COLUMNS} from public.execution_operations where project_id=$1 and execution_id=$2`,
       [id(projectIdInput, "projectId"), id(executionIdInput, "executionId")],
     );
     return row === undefined ? undefined : operation(row);
   }
-  createOrJoinOperation(
+  async createOrJoinOperation(
     input: CreateOperationInput,
-  ): Readonly<{ operation: RuntimeOperation; joined: boolean }> {
+  ): Promise<Readonly<{ operation: RuntimeOperation; joined: boolean }>> {
     const projectId = id(input.projectId, "projectId");
     const covenantId = id(input.covenantId, "covenantId");
     const executionId = id(input.executionId, "executionId");
@@ -519,8 +537,12 @@ export class PostgresRuntimeStore implements RuntimeStore {
         );
       }
     }
-    return this.#tx((client) => {
-      const existing = this.#operation(client, operationKey);
+    return this.#tx(async (client) => {
+      await client.query(
+        "select pg_advisory_xact_lock(hashtextextended($1,0))",
+        [`execution-operation:${operationKey}`],
+      );
+      const existing = await this.#operation(client, operationKey);
       if (existing !== undefined) {
         if (
           existing.projectId !== projectId ||
@@ -539,7 +561,7 @@ export class PostgresRuntimeStore implements RuntimeStore {
           );
         return { operation: existing, joined: true };
       }
-      const byExecution = this.getOperationByExecutionIn(
+      const byExecution = await this.getOperationByExecutionIn(
         client,
         projectId,
         executionId,
@@ -552,7 +574,7 @@ export class PostgresRuntimeStore implements RuntimeStore {
           "RUNTIME_CONFLICT",
           "Execution identity already belongs to another operation",
         );
-      const cov = this.#covenant(client, projectId, covenantId);
+      const cov = await this.#covenant(client, projectId, covenantId, true);
       if (cov === undefined)
         runtimeFailure(
           "RUNTIME_NOT_FOUND",
@@ -563,11 +585,11 @@ export class PostgresRuntimeStore implements RuntimeStore {
           "RUNTIME_CONFLICT",
           "Covenant is not available for a new execution",
         );
-      client.query(
+      await client.query(
         "update public.covenants set resource=$1::jsonb,updated_at=to_timestamp($2/1000.0) where project_id=$3 and covenant_id=$4",
         [json(input.resource), now, projectId, covenantId],
       );
-      client.query(
+      await client.query(
         "insert into public.execution_operations(operation_key,project_id,covenant_id,execution_id,authorization_id,intent_id,intent_hash,amount,beneficiary,state,attempt_count,version,submission_boundary,authorization_evidence,created_at,updated_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,'QUEUED',0,0,false,$10::jsonb,to_timestamp($11/1000.0),to_timestamp($11/1000.0))",
         [
           operationKey,
@@ -583,7 +605,7 @@ export class PostgresRuntimeStore implements RuntimeStore {
           now,
         ],
       );
-      client.query(
+      await client.query(
         "insert into public.runtime_outbox(operation_key,project_id,covenant_id,event_type,version,payload,created_at) values($1,$2,$3,$4,0,$5::jsonb,to_timestamp($6/1000.0))",
         [
           operationKey,
@@ -600,31 +622,31 @@ export class PostgresRuntimeStore implements RuntimeStore {
           now,
         ],
       );
-      const next = this.#operation(client, operationKey);
+      const next = await this.#operation(client, operationKey);
       if (next === undefined) fail();
       return { operation: next, joined: false };
     });
   }
-  private getOperationByExecutionIn(
+  private async getOperationByExecutionIn(
     client: PostgresQueryClient,
     projectId: string,
     executionId: string,
-  ): RuntimeOperation | undefined {
-    const row = this.#one<Row>(
+  ): Promise<RuntimeOperation | undefined> {
+    const row = await this.#one<Row>(
       client,
       `select ${OPERATION_COLUMNS} from public.execution_operations where project_id=$1 and execution_id=$2`,
       [projectId, executionId],
     );
     return row === undefined ? undefined : operation(row);
   }
-  #requireLease(
+  async #requireLease(
     client: PostgresQueryClient,
     key: string,
     workerId: string,
     version: number,
     now: number,
-  ): RuntimeOperation {
-    const current = this.#operation(client, key);
+  ): Promise<RuntimeOperation> {
+    const current = await this.#operation(client, key);
     if (current === undefined)
       runtimeFailure("RUNTIME_NOT_FOUND", "Execution operation was not found");
     if (
@@ -636,19 +658,19 @@ export class PostgresRuntimeStore implements RuntimeStore {
       runtimeFailure("LEASE_LOST", "Worker lease is stale or expired");
     return current;
   }
-  claimOperation(
+  async claimOperation(
     operationKeyInput: string,
     workerIdInput: string,
     timestamp: number,
     leaseMs = 30_000,
-  ): RuntimeOperation | undefined {
+  ): Promise<RuntimeOperation | undefined> {
     const key = id(operationKeyInput, "operationKey");
     const workerId = owner(workerIdInput);
     const now = at(timestamp);
     if (!Number.isSafeInteger(leaseMs) || leaseMs <= 0 || leaseMs > 86_400_000)
       runtimeFailure("LEASE_LOST", "Lease duration is invalid");
-    return this.#tx((client) => {
-      const current = this.#operation(client, key);
+    return this.#tx(async (client) => {
+      const current = await this.#operation(client, key);
       if (current === undefined) return undefined;
       if (
         (TERMINAL_RUNTIME_STATES as readonly string[]).includes(current.state)
@@ -659,69 +681,77 @@ export class PostgresRuntimeStore implements RuntimeStore {
         (current.nextAttemptAt !== null && current.nextAttemptAt > now)
       )
         return undefined;
-      const updated = client.query(
-        "update public.execution_operations set lease_owner=$1,lease_expires_at=to_timestamp($2/1000.0),version=version+1,updated_at=to_timestamp($3/1000.0) where operation_key=$4 and version=$5 and (lease_expires_at is null or lease_expires_at<=to_timestamp($3/1000.0)) returning *",
-        [workerId, now + leaseMs, now, key, current.version],
+      const updated = (
+        await client.query(
+          "update public.execution_operations set lease_owner=$1,lease_expires_at=to_timestamp($2/1000.0),version=version+1,updated_at=to_timestamp($3/1000.0) where operation_key=$4 and version=$5 and (lease_expires_at is null or lease_expires_at<=to_timestamp($3/1000.0)) returning *",
+          [workerId, now + leaseMs, now, key, current.version],
+        )
       ).rows[0];
       return updated === undefined
         ? undefined
         : operation({
             ...updated,
-            ...this.#one<Row>(
+            ...(await this.#one<Row>(
               client,
               `select ${OPERATION_COLUMNS} from public.execution_operations where operation_key=$1`,
               [key],
-            ),
+            )),
           });
     });
   }
-  renewLease(
+  async renewLease(
     operationKeyInput: string,
     workerIdInput: string,
     expectedVersion: number,
     timestamp: number,
     leaseMs = 30_000,
-  ): RuntimeOperation {
+  ): Promise<RuntimeOperation> {
     const key = id(operationKeyInput, "operationKey");
     const workerId = owner(workerIdInput);
     const now = at(timestamp);
     if (!Number.isSafeInteger(leaseMs) || leaseMs <= 0 || leaseMs > 86_400_000)
       runtimeFailure("LEASE_LOST", "Lease duration is invalid");
-    return this.#tx((client) => {
-      this.#requireLease(client, key, workerId, expectedVersion, now);
-      const result = client.query(
-        "update public.execution_operations set lease_expires_at=to_timestamp($1/1000.0),version=version+1,updated_at=to_timestamp($2/1000.0) where operation_key=$3 and version=$4 and lease_owner=$5 returning version",
-        [now + leaseMs, now, key, expectedVersion, workerId],
+    return this.#tx(async (client) => {
+      await this.#requireLease(client, key, workerId, expectedVersion, now);
+      const result = (
+        await client.query(
+          "update public.execution_operations set lease_expires_at=to_timestamp($1/1000.0),version=version+1,updated_at=to_timestamp($2/1000.0) where operation_key=$3 and version=$4 and lease_owner=$5 returning version",
+          [now + leaseMs, now, key, expectedVersion, workerId],
+        )
       ).rows[0];
       if (result === undefined) runtimeFailure("LEASE_LOST");
-      return this.#operation(client, key) ?? fail();
+      return (await this.#operation(client, key)) ?? fail();
     });
   }
-  releaseLease(
+  async releaseLease(
     operationKeyInput: string,
     workerIdInput: string,
     expectedVersion: number,
     timestamp: number,
-  ): RuntimeOperation {
+  ): Promise<RuntimeOperation> {
     const key = id(operationKeyInput, "operationKey");
     const workerId = owner(workerIdInput);
     const now = at(timestamp);
-    return this.#tx((client) => {
-      this.#requireLease(client, key, workerId, expectedVersion, now);
-      const result = client.query(
-        "update public.execution_operations set lease_owner=null,lease_expires_at=null,version=version+1,updated_at=to_timestamp($1/1000.0) where operation_key=$2 and version=$3 and lease_owner=$4 returning version",
-        [now, key, expectedVersion, workerId],
+    return this.#tx(async (client) => {
+      await this.#requireLease(client, key, workerId, expectedVersion, now);
+      const result = (
+        await client.query(
+          "update public.execution_operations set lease_owner=null,lease_expires_at=null,version=version+1,updated_at=to_timestamp($1/1000.0) where operation_key=$2 and version=$3 and lease_owner=$4 returning version",
+          [now, key, expectedVersion, workerId],
+        )
       ).rows[0];
       if (result === undefined) runtimeFailure("LEASE_LOST");
-      return this.#operation(client, key) ?? fail();
+      return (await this.#operation(client, key)) ?? fail();
     });
   }
-  recoverExpiredLeases(timestamp: number): RuntimeOperation[] {
+  async recoverExpiredLeases(timestamp: number): Promise<RuntimeOperation[]> {
     const now = at(timestamp);
-    return this.#tx((client) => {
-      const rows = client.query<Row>(
-        `select ${OPERATION_COLUMNS} from public.execution_operations where lease_owner is not null and lease_expires_at<=to_timestamp($1/1000.0) and state not in ('SUCCEEDED','TERMINAL_FAILED') for update`,
-        [now],
+    return this.#tx(async (client) => {
+      const rows = (
+        await client.query<Row>(
+          `select ${OPERATION_COLUMNS} from public.execution_operations where lease_owner is not null and lease_expires_at<=to_timestamp($1/1000.0) and state not in ('SUCCEEDED','TERMINAL_FAILED') for update`,
+          [now],
+        )
       ).rows;
       const recovered: RuntimeOperation[] = [];
       for (const row of rows) {
@@ -736,12 +766,12 @@ export class PostgresRuntimeStore implements RuntimeStore {
           ].includes(current.state);
         const state = postBoundary ? "AMBIGUOUS" : "QUEUED";
         const reason = postBoundary ? "CRASH_AFTER_BOUNDARY" : null;
-        client.query(
+        await client.query(
           "update public.execution_operations set state=$1,lease_owner=null,lease_expires_at=null,version=version+1,no_resubmit_reason=$2,updated_at=to_timestamp($3/1000.0) where operation_key=$4 and version=$5",
           [state, reason, now, current.operationKey, current.version],
         );
         const version = current.version + 1;
-        client.query(
+        await client.query(
           "insert into public.runtime_outbox(operation_key,project_id,covenant_id,event_type,version,payload,created_at) values($1,$2,$3,$4,$5,$6::jsonb,to_timestamp($7/1000.0)) on conflict do nothing",
           [
             current.operationKey,
@@ -759,13 +789,13 @@ export class PostgresRuntimeStore implements RuntimeStore {
             now,
           ],
         );
-        const next = this.#operation(client, current.operationKey);
+        const next = await this.#operation(client, current.operationKey);
         if (next !== undefined) recovered.push(next);
       }
       return recovered;
     });
   }
-  #transition(
+  async #transition(
     client: PostgresQueryClient,
     key: string,
     workerId: string,
@@ -773,10 +803,10 @@ export class PostgresRuntimeStore implements RuntimeStore {
     nextState: RuntimeState,
     now: number,
     patch: OperationPatch,
-  ): RuntimeOperation {
+  ): Promise<RuntimeOperation> {
     if (!RUNTIME_STATES.includes(nextState))
       runtimeFailure("RUNTIME_INVALID_STATE");
-    const current = this.#requireLease(
+    const current = await this.#requireLease(
       client,
       key,
       workerId,
@@ -799,43 +829,45 @@ export class PostgresRuntimeStore implements RuntimeStore {
       patch.failureReason === undefined
         ? current.failureReason
         : patch.failureReason;
-    const result = client.query(
-      "update public.execution_operations set state=$1,attempt_count=$2,next_attempt_at=case when $3::bigint is null then null else to_timestamp($3::bigint/1000.0) end,last_attempt_at=to_timestamp($4/1000.0),version=$5,submission_boundary=$6,provider_transaction_id=$7,provider_state=$8,provider_evidence=$9::jsonb,arc_evidence=$10::jsonb,retry_reason=$11,no_resubmit_reason=$12,failure_reason=$13,updated_at=to_timestamp($4/1000.0) where operation_key=$14 and version=$15 and lease_owner=$16 returning version",
-      [
-        nextState,
-        attemptCount,
-        patch.nextAttemptAt ?? null,
-        now,
-        nextVersion,
-        submissionBoundary,
-        patch.providerTransactionId === undefined
-          ? current.providerTransactionId
-          : patch.providerTransactionId,
-        patch.providerState === undefined
-          ? current.providerState
-          : patch.providerState,
-        providerEvidence == null ? null : json(providerEvidence),
-        arcEvidence == null ? null : json(arcEvidence),
-        patch.retryReason === undefined
-          ? current.retryReason
-          : patch.retryReason,
-        patch.noResubmitReason === undefined
-          ? current.noResubmitReason
-          : patch.noResubmitReason,
-        failureReason,
-        key,
-        expectedVersion,
-        workerId,
-      ],
+    const result = (
+      await client.query(
+        "update public.execution_operations set state=$1,attempt_count=$2,next_attempt_at=case when $3::bigint is null then null else to_timestamp($3::bigint/1000.0) end,last_attempt_at=to_timestamp($4/1000.0),version=$5,submission_boundary=$6,provider_transaction_id=$7,provider_state=$8,provider_evidence=$9::jsonb,arc_evidence=$10::jsonb,retry_reason=$11,no_resubmit_reason=$12,failure_reason=$13,updated_at=to_timestamp($4/1000.0) where operation_key=$14 and version=$15 and lease_owner=$16 returning version",
+        [
+          nextState,
+          attemptCount,
+          patch.nextAttemptAt ?? null,
+          now,
+          nextVersion,
+          submissionBoundary,
+          patch.providerTransactionId === undefined
+            ? current.providerTransactionId
+            : patch.providerTransactionId,
+          patch.providerState === undefined
+            ? current.providerState
+            : patch.providerState,
+          providerEvidence == null ? null : json(providerEvidence),
+          arcEvidence == null ? null : json(arcEvidence),
+          patch.retryReason === undefined
+            ? current.retryReason
+            : patch.retryReason,
+          patch.noResubmitReason === undefined
+            ? current.noResubmitReason
+            : patch.noResubmitReason,
+          failureReason,
+          key,
+          expectedVersion,
+          workerId,
+        ],
+      )
     ).rows[0];
     if (result === undefined) runtimeFailure("LEASE_LOST");
-    const next = this.#operation(client, key);
+    const next = await this.#operation(client, key);
     if (next === undefined) fail();
     const retryable =
       nextState === "QUEUED" &&
       patch.retryReason !== undefined &&
       patch.retryReason !== null;
-    client.query(
+    await client.query(
       "insert into public.runtime_outbox(operation_key,project_id,covenant_id,event_type,version,payload,created_at) values($1,$2,$3,$4,$5,$6::jsonb,to_timestamp($7/1000.0)) on conflict do nothing",
       [
         next.operationKey,
@@ -858,15 +890,15 @@ export class PostgresRuntimeStore implements RuntimeStore {
     );
     return next;
   }
-  transitionLeased(
+  async transitionLeased(
     operationKeyInput: string,
     workerIdInput: string,
     expectedVersion: number,
     nextState: RuntimeState,
     timestamp: number,
     patch: OperationPatch = {},
-  ): RuntimeOperation {
-    return this.#tx((client) =>
+  ): Promise<RuntimeOperation> {
+    return this.#tx(async (client) =>
       this.#transition(
         client,
         id(operationKeyInput, "operationKey"),
@@ -878,7 +910,7 @@ export class PostgresRuntimeStore implements RuntimeStore {
       ),
     );
   }
-  updateCovenantAndOperation(
+  async updateCovenantAndOperation(
     operationKeyInput: string,
     workerIdInput: string,
     expectedVersion: number,
@@ -886,12 +918,14 @@ export class PostgresRuntimeStore implements RuntimeStore {
     operationState: RuntimeState,
     timestamp: number,
     patch: OperationPatch = {},
-  ): Readonly<{ covenant: RuntimeCovenant; operation: RuntimeOperation }> {
+  ): Promise<
+    Readonly<{ covenant: RuntimeCovenant; operation: RuntimeOperation }>
+  > {
     const key = id(operationKeyInput, "operationKey");
     const workerId = owner(workerIdInput);
     const now = at(timestamp);
-    return this.#tx((client) => {
-      const current = this.#requireLease(
+    return this.#tx(async (client) => {
+      const current = await this.#requireLease(
         client,
         key,
         workerId,
@@ -904,7 +938,7 @@ export class PostgresRuntimeStore implements RuntimeStore {
       )
         runtimeFailure("RUNTIME_CONFLICT");
       parseCovenantResource(resource);
-      const next = this.#transition(
+      const next = await this.#transition(
         client,
         key,
         workerId,
@@ -913,84 +947,88 @@ export class PostgresRuntimeStore implements RuntimeStore {
         now,
         patch,
       );
-      client.query(
+      await client.query(
         "update public.covenants set resource=$1::jsonb,updated_at=to_timestamp($2/1000.0) where project_id=$3 and covenant_id=$4",
         [json(resource), now, current.projectId, current.covenantId],
       );
       return {
         operation: next,
         covenant:
-          this.#covenant(client, current.projectId, current.covenantId) ??
-          fail(),
+          (await this.#covenant(
+            client,
+            current.projectId,
+            current.covenantId,
+            true,
+          )) ?? fail(),
       };
     });
   }
-  listOutbox(
+  async listOutbox(
     options: Readonly<{ undeliveredOnly?: boolean; limit?: number }> = {},
-  ): RuntimeOutboxRecord[] {
+  ): Promise<RuntimeOutboxRecord[]> {
     const limit = options.limit ?? 100;
     if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 1000)
       runtimeFailure("RUNTIME_PERSISTENCE_FAILURE", "Outbox limit is invalid");
     const where =
       options.undeliveredOnly === false ? "" : "where delivered_at is null";
-    return this.#client
-      .query<Row>(
+    return (
+      await this.#client.query<Row>(
         `select ${OUTBOX_COLUMNS} from public.runtime_outbox ${where} order by id limit $1`,
         [limit],
       )
-      .rows.map(outbox);
+    ).rows.map(outbox);
   }
-  markOutboxDelivered(
+  async markOutboxDelivered(
     idInput: number,
     timestamp: number,
-  ): RuntimeOutboxRecord | undefined {
+  ): Promise<RuntimeOutboxRecord | undefined> {
     const idValue = integer(idInput);
     if (idValue <= 0) runtimeFailure("RUNTIME_PERSISTENCE_FAILURE");
     const now = at(timestamp);
-    this.#client.query(
+    await this.#client.query(
       "update public.runtime_outbox set delivered_at=to_timestamp($1/1000.0) where id=$2 and delivered_at is null",
       [now, idValue],
     );
-    const row = this.#one<Row>(
+    const row = await this.#one<Row>(
       this.#client,
       `select ${OUTBOX_COLUMNS} from public.runtime_outbox where id=$1`,
       [idValue],
     );
     return row === undefined ? undefined : outbox(row);
   }
-  ensureDeveloperProject(
+  async ensureDeveloperProject(
     projectIdInput: string,
     nameInput: string,
     timestamp: number,
-  ): DeveloperProjectRecord {
+  ): Promise<DeveloperProjectRecord> {
     const projectId = id(projectIdInput, "projectId");
     const name = nameInput.trim().slice(0, 128);
     if (name.length === 0)
       runtimeFailure("RUNTIME_INVALID_STATE", "Project name is required");
     const now = at(timestamp);
-    this.#client.query(
+    await this.#client.query(
       "insert into public.developer_projects(project_id,name,created_at) values($1,$2,to_timestamp($3/1000.0)) on conflict(project_id) do nothing",
       [projectId, name, now],
     );
     return project(
-      this.#one<Row>(
+      (await this.#one<Row>(
         this.#client,
         `select ${PROJECT_COLUMNS} from public.developer_projects where project_id=$1`,
         [projectId],
-      ) ?? fail(),
+      )) ?? fail(),
     );
   }
-  getDeveloperProject(
+  async getDeveloperProject(
     projectIdInput: string,
-  ): DeveloperProjectRecord | undefined {
-    const row = this.#one<Row>(
+  ): Promise<DeveloperProjectRecord | undefined> {
+    const row = await this.#one<Row>(
       this.#client,
       `select ${PROJECT_COLUMNS} from public.developer_projects where project_id=$1`,
       [id(projectIdInput, "projectId")],
     );
     return row === undefined ? undefined : project(row);
   }
-  saveApiKey(
+  async saveApiKey(
     input: Readonly<{
       keyId: string;
       projectId: string;
@@ -998,7 +1036,7 @@ export class PostgresRuntimeStore implements RuntimeStore {
       digest: string;
       at: number;
     }>,
-  ): ApiKeyRecord {
+  ): Promise<ApiKeyRecord> {
     if (
       !/^[A-Za-z0-9._:-]{1,128}$/u.test(input.keyId) ||
       !/^cov_test_[A-Za-z0-9_-]{8,}$/u.test(input.prefix) ||
@@ -1006,55 +1044,55 @@ export class PostgresRuntimeStore implements RuntimeStore {
     )
       runtimeFailure("RUNTIME_INVALID_STATE", "API key identity is invalid");
     const projectId = id(input.projectId, "projectId");
-    this.#client.query(
+    await this.#client.query(
       "insert into public.api_keys(key_id,project_id,public_prefix,digest,created_at) values($1,$2,$3,$4,to_timestamp($5/1000.0))",
       [input.keyId, projectId, input.prefix, input.digest, at(input.at)],
     );
     return apiKey(
-      this.#one<Row>(
+      (await this.#one<Row>(
         this.#client,
         `select ${API_KEY_COLUMNS} from public.api_keys where key_id=$1`,
         [input.keyId],
-      ) ?? fail(),
+      )) ?? fail(),
     );
   }
-  findApiKeyCandidates(prefix: string): ApiKeyRecord[] {
-    return this.#client
-      .query<Row>(
+  async findApiKeyCandidates(prefix: string): Promise<ApiKeyRecord[]> {
+    return (
+      await this.#client.query<Row>(
         `select ${API_KEY_COLUMNS} from public.api_keys where public_prefix=$1`,
         [prefix.trim()],
       )
-      .rows.map(apiKey);
+    ).rows.map(apiKey);
   }
-  listApiKeys(projectIdInput: string): ApiKeyRecord[] {
-    return this.#client
-      .query<Row>(
+  async listApiKeys(projectIdInput: string): Promise<ApiKeyRecord[]> {
+    return (
+      await this.#client.query<Row>(
         `select ${API_KEY_COLUMNS} from public.api_keys where project_id=$1 order by created_at,key_id`,
         [id(projectIdInput, "projectId")],
       )
-      .rows.map(apiKey);
+    ).rows.map(apiKey);
   }
-  revokeApiKey(
+  async revokeApiKey(
     projectIdInput: string,
     keyIdInput: string,
     timestamp: number,
-  ): ApiKeyRecord | undefined {
+  ): Promise<ApiKeyRecord | undefined> {
     const projectId = id(projectIdInput, "projectId");
-    this.#client.query(
+    await this.#client.query(
       "update public.api_keys set revoked_at=to_timestamp($1/1000.0) where project_id=$2 and key_id=$3 and revoked_at is null",
       [at(timestamp), projectId, keyIdInput],
     );
-    const row = this.#one<Row>(
+    const row = await this.#one<Row>(
       this.#client,
       `select ${API_KEY_COLUMNS} from public.api_keys where project_id=$1 and key_id=$2`,
       [projectId, keyIdInput],
     );
     return row === undefined ? undefined : apiKey(row);
   }
-  listCovenants(
+  async listCovenants(
     projectIdInput: string,
     options: Readonly<{ limit?: number; after?: string }> = {},
-  ): Readonly<{ items: RuntimeCovenant[]; nextAfter: string | null }> {
+  ): Promise<Readonly<{ items: RuntimeCovenant[]; nextAfter: string | null }>> {
     const projectId = id(projectIdInput, "projectId");
     const limit = options.limit ?? 20;
     if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 100)
@@ -1071,12 +1109,12 @@ export class PostgresRuntimeStore implements RuntimeStore {
         : "and (created_at,covenant_id) > (select created_at,covenant_id from public.covenants where project_id=$2 and covenant_id=$3)";
     if (cursor !== null) values.push(projectId, cursor);
     values.push(limit + 1);
-    const rows = this.#client
-      .query<Row>(
+    const rows = (
+      await this.#client.query<Row>(
         `select ${COVENANT_COLUMNS} from public.covenants where project_id=$1 ${predicate} order by created_at,covenant_id limit $${String(values.length)}`,
         values,
       )
-      .rows.map(covenant);
+    ).rows.map(covenant);
     const hasMore = rows.length > limit;
     const items = rows.slice(0, limit);
     return {
@@ -1084,19 +1122,19 @@ export class PostgresRuntimeStore implements RuntimeStore {
       nextAfter: hasMore ? (items.at(-1)?.covenantId ?? null) : null,
     };
   }
-  getHttpIdempotency(
+  async getHttpIdempotency(
     projectIdInput: string,
     route: string,
     keyDigest: string,
-  ): HttpIdempotencyRecord | undefined {
-    const row = this.#one<Row>(
+  ): Promise<HttpIdempotencyRecord | undefined> {
+    const row = await this.#one<Row>(
       this.#client,
       `select ${IDEMPOTENCY_COLUMNS} from public.http_idempotency where project_id=$1 and route=$2 and key_digest=$3`,
       [id(projectIdInput, "projectId"), route, keyDigest],
     );
     return row === undefined ? undefined : idempotency(row);
   }
-  saveHttpIdempotency(
+  async saveHttpIdempotency(
     input: Readonly<{
       projectId: string;
       route: string;
@@ -1107,11 +1145,15 @@ export class PostgresRuntimeStore implements RuntimeStore {
       resourceReference?: string | null;
       at: number;
     }>,
-  ): HttpIdempotencyRecord {
+  ): Promise<HttpIdempotencyRecord> {
     const projectId = id(input.projectId, "projectId");
     const now = at(input.at);
-    return this.#tx((client) => {
-      const existing = this.#one<Row>(
+    return this.#tx(async (client) => {
+      await client.query(
+        "select pg_advisory_xact_lock(hashtextextended($1,0))",
+        [`http-idempotency:${projectId}:${input.route}:${input.keyDigest}`],
+      );
+      const existing = await this.#one<Row>(
         client,
         "select request_fingerprint from public.http_idempotency where project_id=$1 and route=$2 and key_digest=$3 for update",
         [projectId, input.route, input.keyDigest],
@@ -1124,7 +1166,7 @@ export class PostgresRuntimeStore implements RuntimeStore {
           "RUNTIME_CONFLICT",
           "Idempotency key was used with a different request",
         );
-      client.query(
+      await client.query(
         "insert into public.http_idempotency(project_id,route,key_digest,request_fingerprint,response_status,response_json,resource_reference,created_at,updated_at) values($1,$2,$3,$4,$5,$6::jsonb,$7,to_timestamp($8/1000.0),to_timestamp($8/1000.0)) on conflict(project_id,route,key_digest) do update set response_status=excluded.response_status,response_json=excluded.response_json,resource_reference=excluded.resource_reference,updated_at=excluded.updated_at",
         [
           projectId,
@@ -1138,25 +1180,25 @@ export class PostgresRuntimeStore implements RuntimeStore {
         ],
       );
       return idempotency(
-        this.#one<Row>(
+        (await this.#one<Row>(
           client,
           `select ${IDEMPOTENCY_COLUMNS} from public.http_idempotency where project_id=$1 and route=$2 and key_digest=$3`,
           [projectId, input.route, input.keyDigest],
-        ) ?? fail(),
+        )) ?? fail(),
       );
     });
   }
-  deleteHttpIdempotency(
+  async deleteHttpIdempotency(
     projectIdInput: string,
     route: string,
     keyDigest: string,
-  ): void {
-    this.#client.query(
+  ): Promise<void> {
+    await this.#client.query(
       "delete from public.http_idempotency where project_id=$1 and route=$2 and key_digest=$3 and response_status is null",
       [id(projectIdInput, "projectId"), route, keyDigest],
     );
   }
-  createWebhookEndpoint(
+  async createWebhookEndpoint(
     input: Readonly<{
       endpointId: string;
       projectId: string;
@@ -1164,9 +1206,9 @@ export class PostgresRuntimeStore implements RuntimeStore {
       secretCiphertext: string;
       at: number;
     }>,
-  ): WebhookEndpointRecord {
+  ): Promise<WebhookEndpointRecord> {
     const projectId = id(input.projectId, "projectId");
-    this.#client.query(
+    await this.#client.query(
       "insert into public.webhook_endpoints(endpoint_id,project_id,url,secret_ciphertext,created_at) values($1,$2,$3,$4,to_timestamp($5/1000.0))",
       [
         input.endpointId,
@@ -1177,50 +1219,52 @@ export class PostgresRuntimeStore implements RuntimeStore {
       ],
     );
     return endpoint(
-      this.#one<Row>(
+      (await this.#one<Row>(
         this.#client,
         `select ${ENDPOINT_COLUMNS} from public.webhook_endpoints where endpoint_id=$1`,
         [input.endpointId],
-      ) ?? fail(),
+      )) ?? fail(),
     );
   }
-  getWebhookEndpoint(
+  async getWebhookEndpoint(
     projectIdInput: string,
     endpointId: string,
-  ): WebhookEndpointRecord | undefined {
-    const row = this.#one<Row>(
+  ): Promise<WebhookEndpointRecord | undefined> {
+    const row = await this.#one<Row>(
       this.#client,
       `select ${ENDPOINT_COLUMNS} from public.webhook_endpoints where project_id=$1 and endpoint_id=$2`,
       [id(projectIdInput, "projectId"), endpointId],
     );
     return row === undefined ? undefined : endpoint(row);
   }
-  listWebhookEndpoints(projectIdInput: string): WebhookEndpointRecord[] {
-    return this.#client
-      .query<Row>(
+  async listWebhookEndpoints(
+    projectIdInput: string,
+  ): Promise<WebhookEndpointRecord[]> {
+    return (
+      await this.#client.query<Row>(
         `select ${ENDPOINT_COLUMNS} from public.webhook_endpoints where project_id=$1 and revoked_at is null order by created_at,endpoint_id`,
         [id(projectIdInput, "projectId")],
       )
-      .rows.map(endpoint);
+    ).rows.map(endpoint);
   }
-  revokeWebhookEndpoint(
+  async revokeWebhookEndpoint(
     projectIdInput: string,
     endpointId: string,
     timestamp: number,
-  ): WebhookEndpointRecord | undefined {
+  ): Promise<WebhookEndpointRecord | undefined> {
     const projectId = id(projectIdInput, "projectId");
-    this.#client.query(
+    await this.#client.query(
       "update public.webhook_endpoints set revoked_at=to_timestamp($1/1000.0) where project_id=$2 and endpoint_id=$3 and revoked_at is null",
       [at(timestamp), projectId, endpointId],
     );
     return this.getWebhookEndpoint(projectId, endpointId);
   }
-  createWebhookDelivery(
+  async createWebhookDelivery(
     input: CreateWebhookDeliveryInput,
-  ): WebhookDeliveryRecord {
+  ): Promise<WebhookDeliveryRecord> {
     const projectId = id(input.projectId, "projectId");
     const now = at(input.at);
-    this.#client.query(
+    await this.#client.query(
       "insert into public.webhook_deliveries(delivery_id,endpoint_id,project_id,event_id,event_type,payload,status,attempt_count,next_attempt_at,created_at,updated_at) values($1,$2,$3,$4,$5,$6::jsonb,'PENDING',0,to_timestamp($7/1000.0),to_timestamp($7/1000.0),to_timestamp($7/1000.0)) on conflict(endpoint_id,event_id) do nothing",
       [
         input.deliveryId,
@@ -1233,25 +1277,25 @@ export class PostgresRuntimeStore implements RuntimeStore {
       ],
     );
     const row =
-      this.#one<Row>(
+      (await this.#one<Row>(
         this.#client,
         `select ${DELIVERY_COLUMNS} from public.webhook_deliveries where delivery_id=$1`,
         [input.deliveryId],
-      ) ??
-      this.#one<Row>(
+      )) ??
+      (await this.#one<Row>(
         this.#client,
         `select ${DELIVERY_COLUMNS} from public.webhook_deliveries where endpoint_id=$1 and event_id=$2`,
         [input.endpointId, input.eventId],
-      );
+      ));
     return row === undefined ? fail() : delivery(row);
   }
-  listWebhookDeliveries(
+  async listWebhookDeliveries(
     options: Readonly<{
       projectId?: string;
       dueAt?: number;
       limit?: number;
     }> = {},
-  ): WebhookDeliveryRecord[] {
+  ): Promise<WebhookDeliveryRecord[]> {
     const limit = options.limit ?? 100;
     if (!Number.isSafeInteger(limit) || limit <= 0 || limit > 1000)
       runtimeFailure(
@@ -1271,14 +1315,14 @@ export class PostgresRuntimeStore implements RuntimeStore {
       );
     }
     values.push(limit);
-    return this.#client
-      .query<Row>(
+    return (
+      await this.#client.query<Row>(
         `select ${DELIVERY_COLUMNS} from public.webhook_deliveries where ${filters.join(" and ")} order by created_at,delivery_id limit $${String(values.length)}`,
         values,
       )
-      .rows.map(delivery);
+    ).rows.map(delivery);
   }
-  updateWebhookDelivery(
+  async updateWebhookDelivery(
     input: Readonly<{
       deliveryId: string;
       status: WebhookDeliveryRecord["status"];
@@ -1289,8 +1333,8 @@ export class PostgresRuntimeStore implements RuntimeStore {
       lastError?: string | null;
       at: number;
     }>,
-  ): WebhookDeliveryRecord | undefined {
-    this.#client.query(
+  ): Promise<WebhookDeliveryRecord | undefined> {
+    await this.#client.query(
       "update public.webhook_deliveries set status=$1,attempt_count=$2,next_attempt_at=to_timestamp($3/1000.0),last_attempt_at=to_timestamp($4/1000.0),delivered_at=case when $5::bigint is null then null else to_timestamp($5::bigint/1000.0) end,last_error=$6,updated_at=to_timestamp($7/1000.0) where delivery_id=$8",
       [
         input.status,
@@ -1303,7 +1347,7 @@ export class PostgresRuntimeStore implements RuntimeStore {
         input.deliveryId,
       ],
     );
-    const row = this.#one<Row>(
+    const row = await this.#one<Row>(
       this.#client,
       `select ${DELIVERY_COLUMNS} from public.webhook_deliveries where delivery_id=$1`,
       [input.deliveryId],

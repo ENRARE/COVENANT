@@ -84,9 +84,14 @@ describe("isolated executor runtime adapter", () => {
       clock: { now: () => 200 },
     });
     const authorized = resource();
-    store.saveCovenant(projectId, authorized, 200);
-    store.saveAuthorizationEvidence(projectId, covenantId, submission, 201);
-    const started = runtime.startExecution({
+    await store.saveCovenant(projectId, authorized, 200);
+    await store.saveAuthorizationEvidence(
+      projectId,
+      covenantId,
+      submission,
+      201,
+    );
+    const started = await runtime.startExecution({
       projectId,
       covenantId,
       executionId,
@@ -147,9 +152,9 @@ describe("isolated executor runtime adapter", () => {
       },
       clock: { now: () => 200 },
     });
-    const started = (() => {
+    const started = await (async () => {
       const authorized = resource();
-      store.saveCovenant(projectId, authorized, 200);
+      await store.saveCovenant(projectId, authorized, 200);
       return runtime.startExecution({
         projectId,
         covenantId,
@@ -169,21 +174,26 @@ describe("isolated executor runtime adapter", () => {
     });
   });
 
-  it("retains verified evidence across a durable store restart", () => {
+  it("retains verified evidence across a durable store restart", async () => {
     const directory = mkdtempSync(join(tmpdir(), "covenant-runtime-"));
     const filename = join(directory, "runtime.sqlite");
     try {
       const first = new DurableRuntimeStore({ filename });
       const authorized = resource();
-      first.saveCovenant(projectId, authorized, 200);
-      first.saveAuthorizationEvidence(projectId, covenantId, submission, 201);
-      first.close();
+      await first.saveCovenant(projectId, authorized, 200);
+      await first.saveAuthorizationEvidence(
+        projectId,
+        covenantId,
+        submission,
+        201,
+      );
+      await first.close();
 
       const second = new DurableRuntimeStore({ filename });
-      expect(second.getAuthorizationEvidence(projectId, covenantId)).toEqual(
-        submission,
-      );
-      second.close();
+      expect(
+        await second.getAuthorizationEvidence(projectId, covenantId),
+      ).toEqual(submission);
+      await second.close();
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

@@ -15,7 +15,7 @@ const payer = "0x1111111111111111111111111111111111111111";
 const beneficiary = "0x2222222222222222222222222222222222222222";
 const policyHash = `0x${"ab".repeat(32)}`;
 
-function setup(
+async function setup(
   sender?: (input: {
     url: string;
     body: string;
@@ -46,7 +46,7 @@ function setup(
       ? {}
       : { authorizationContextResolver }),
   });
-  const project = api.provisionProject("test");
+  const project = await api.provisionProject("test");
   return { store, runtime, api, project, clock };
 }
 
@@ -62,9 +62,9 @@ function createBody() {
 
 describe("COV-024 developer API", () => {
   it("creates hashed project API keys and authenticates valid keys", async () => {
-    const { api, project, store } = setup();
+    const { api, project, store } = await setup();
     expect(project.apiKey).toMatch(/^cov_test_/u);
-    const record = store.listApiKeys(project.projectId)[0];
+    const record = (await store.listApiKeys(project.projectId))[0];
     expect(record?.digest).not.toContain(project.apiKey);
     const health = await api.handle({ method: "GET", path: "/health" });
     expect(health.status).toBe(200);
@@ -81,16 +81,20 @@ describe("COV-024 developer API", () => {
     expect(authenticated.status).toBe(200);
   });
 
-  it("fails closed when webhook encryption is not configured", () => {
-    const { runtime } = setup();
+  it("fails closed when webhook encryption is not configured", async () => {
+    const { runtime } = await setup();
     expect(() => new CovenantApi({ runtime })).toThrow(
       "WEBHOOK_MASTER_KEY_REQUIRED",
     );
   });
 
   it("rejects a revoked API key without disclosing key state", async () => {
-    const { api, project, store } = setup();
-    store.revokeApiKey(project.projectId, project.keyId, 1_700_000_001_000);
+    const { api, project, store } = await setup();
+    await store.revokeApiKey(
+      project.projectId,
+      project.keyId,
+      1_700_000_001_000,
+    );
     const response = await api.handle({
       method: "GET",
       path: "/v1/covenants",
@@ -103,7 +107,7 @@ describe("COV-024 developer API", () => {
   });
 
   it("creates, lists, retrieves, and replays a Covenant with HTTP idempotency", async () => {
-    const { api, project } = setup();
+    const { api, project } = await setup();
     const headers = {
       "x-api-key": project.apiKey,
       "idempotency-key": "create-one",
@@ -139,7 +143,7 @@ describe("COV-024 developer API", () => {
   });
 
   it("rejects strict unknown network/token fields and idempotency conflicts", async () => {
-    const { api, project } = setup();
+    const { api, project } = await setup();
     const headers = { "x-api-key": project.apiKey, "idempotency-key": "same" };
     const bad = await api.handle({
       method: "POST",
@@ -168,8 +172,8 @@ describe("COV-024 developer API", () => {
   });
 
   it("isolates projects and keeps authorization separate from API authentication", async () => {
-    const first = setup();
-    const second = setup();
+    const first = await setup();
+    const second = await setup();
     const created = await first.api.handle({
       method: "POST",
       path: "/v1/covenants",
@@ -196,7 +200,7 @@ describe("COV-024 developer API", () => {
   });
 
   it("uses the durable runtime for execution and returns a stable state error when unauthorised", async () => {
-    const { api, project, runtime } = setup();
+    const { api, project, runtime } = await setup();
     const created = await api.handle({
       method: "POST",
       path: "/v1/covenants",
@@ -214,13 +218,14 @@ describe("COV-024 developer API", () => {
     expect((response.body as { error: { code: string } }).error.code).toBe(
       "AUTHORIZATION_REQUIRED",
     );
-    expect(runtime.store.listOutbox()).toHaveLength(0);
+    expect(await runtime.store.listOutbox()).toHaveLength(0);
   });
 
   it("completes authorization only from verified external evidence", async () => {
     const contexts = new Map<string, { covenantSpec: unknown }>();
-    const { api, project, runtime } = setup(undefined, (_projectId, covenant) =>
-      contexts.get(covenant.id),
+    const { api, project, runtime } = await setup(
+      undefined,
+      (_projectId, covenant) => contexts.get(covenant.id),
     );
     const created = await api.handle({
       method: "POST",
@@ -251,7 +256,7 @@ describe("COV-024 developer API", () => {
     expect((fabricated.body as { error: { code: string } }).error.code).toBe(
       "INVALID_AUTHORIZATION_SIGNATURE",
     );
-    expect(runtime.store.listOutbox()).toHaveLength(0);
+    expect(await runtime.store.listOutbox()).toHaveLength(0);
 
     const wrongCovenant = await api.handle({
       method: "POST",
@@ -343,7 +348,10 @@ describe("COV-024 developer API", () => {
     expect(accepted.status).toBe(200);
     expect((accepted.body as { status: string }).status).toBe("AUTHORIZED");
     expect(
-      runtime.store.getAuthorizationEvidence(project.projectId, covenantId),
+      await runtime.store.getAuthorizationEvidence(
+        project.projectId,
+        covenantId,
+      ),
     ).toEqual(evidence.submission);
     const replay = await api.handle({
       method: "POST",
@@ -375,7 +383,7 @@ describe("COV-024 developer API", () => {
       "IDEMPOTENCY_CONFLICT",
     );
 
-    const other = api.provisionProject("other");
+    const other = await api.provisionProject("other");
     const isolated = await api.handle({
       method: "POST",
       path: `/v1/covenants/${covenantId}/authorization-evidence`,
@@ -387,8 +395,9 @@ describe("COV-024 developer API", () => {
 
   it("accepts a cryptographically verified rejection and publishes its webhook", async () => {
     const contexts = new Map<string, { covenantSpec: unknown }>();
-    const { api, project, runtime } = setup(undefined, (_projectId, covenant) =>
-      contexts.get(covenant.id),
+    const { api, project, runtime } = await setup(
+      undefined,
+      (_projectId, covenant) => contexts.get(covenant.id),
     );
     const endpoint = await api.handle({
       method: "POST",
@@ -421,9 +430,11 @@ describe("COV-024 developer API", () => {
     expect(rejected.status).toBe(200);
     expect((rejected.body as { status: string }).status).toBe("REJECTED");
     expect(
-      runtime.store
-        .listWebhookDeliveries({ projectId: project.projectId })
-        .some((delivery) => delivery.eventType === "covenant.rejected"),
+      (
+        await runtime.store.listWebhookDeliveries({
+          projectId: project.projectId,
+        })
+      ).some((delivery) => delivery.eventType === "covenant.rejected"),
     ).toBe(true);
   });
 
@@ -440,7 +451,7 @@ describe("COV-024 developer API", () => {
       expect(headers["x-covenant-signature"]).toMatch(/^v1=[0-9a-f]{64}$/u);
       return Promise.resolve({ status: calls === 1 ? 500 : 204 });
     };
-    const { api, project } = setup(sender);
+    const { api, project } = await setup(sender);
     expect(
       verifyWebhookSignature({
         secret: "secret",
@@ -469,7 +480,7 @@ describe("COV-024 developer API", () => {
     expect(JSON.stringify(listed.body)).not.toContain(
       (endpoint.body as { secret: string }).secret,
     );
-    api.webhooks.emitEvent(
+    await api.webhooks.emitEvent(
       project.projectId,
       "covenant.created",
       { covenantId: `0x${"01".repeat(32)}` },
@@ -483,7 +494,7 @@ describe("COV-024 developer API", () => {
   });
 
   it("fails closed when no deployment-owned authority verifier is configured", async () => {
-    const { api, project } = setup();
+    const { api, project } = await setup();
     const created = await api.handle({
       method: "POST",
       path: "/v1/covenants",
@@ -512,7 +523,7 @@ describe("COV-024 developer API", () => {
   it("rejects otherwise valid evidence after its authorization expiry", async () => {
     const contexts = new Map<string, { covenantSpec: unknown }>();
     const clock = { value: 1_700_000_000_000 };
-    const { api, project } = setup(
+    const { api, project } = await setup(
       undefined,
       (_projectId, covenant) => contexts.get(covenant.id),
       clock,

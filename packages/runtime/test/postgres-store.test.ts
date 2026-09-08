@@ -39,7 +39,7 @@ function client(): { client: PostgresQueryClient; sql: string[] } {
     ) {
       sql.push(text);
       if (text.startsWith("select 1"))
-        return { rows: [{ ok: 1 }] as unknown as Row[] };
+        return Promise.resolve({ rows: [{ ok: 1 }] as unknown as Row[] });
       if (text.startsWith("insert into public.covenants")) {
         stored = {
           project_id: values[0],
@@ -48,17 +48,17 @@ function client(): { client: PostgresQueryClient; sql: string[] } {
           created_at: values[3],
           updated_at: values[3],
         };
-        return { rows: [] as Row[] };
+        return Promise.resolve({ rows: [] as Row[] });
       }
       if (text.includes("from public.covenants"))
-        return {
+        return Promise.resolve({
           rows: (stored !== undefined && stored.project_id === values[0]
             ? [stored]
             : []) as Row[],
-        };
-      return { rows: [] as Row[] };
+        });
+      return Promise.resolve({ rows: [] as Row[] });
     },
-    transaction(work) {
+    async transaction(work) {
       return work(value);
     },
   };
@@ -66,17 +66,17 @@ function client(): { client: PostgresQueryClient; sql: string[] } {
 }
 
 describe("PostgresRuntimeStore", () => {
-  it("uses the canonical PostgreSQL projection and transaction boundary", () => {
+  it("uses the canonical PostgreSQL projection and transaction boundary", async () => {
     const recorded = client();
     const store = new PostgresRuntimeStore({ client: recorded.client });
-    expect(store.checkReady()).toBe(true);
-    const saved = store.saveCovenant(projectId, resource(), 200);
+    expect(await store.checkReady()).toBe(true);
+    const saved = await store.saveCovenant(projectId, resource(), 200);
     expect(saved.resource.id).toBe(covenantId);
-    expect(store.getCovenant(projectId, covenantId)?.resource.id).toBe(
+    expect((await store.getCovenant(projectId, covenantId))?.resource.id).toBe(
       covenantId,
     );
     expect(
-      store.getCovenant(`0x${"d4".repeat(32)}`, covenantId),
+      await store.getCovenant(`0x${"d4".repeat(32)}`, covenantId),
     ).toBeUndefined();
     expect(
       recorded.sql.some((query) => query.includes("to_timestamp($4/1000.0)")),
@@ -84,5 +84,24 @@ describe("PostgresRuntimeStore", () => {
     expect(recorded.sql.every((query) => !query.includes("${projectId}"))).toBe(
       true,
     );
+  });
+
+  it("fails readiness and transactions without exposing driver credentials", async () => {
+    const secret = "postgresql://user:password@database.invalid/covenant";
+    const failing: PostgresQueryClient = {
+      query: () => Promise.reject(new Error(secret)),
+      transaction: () => Promise.reject(new Error(secret)),
+    };
+    const store = new PostgresRuntimeStore({ client: failing });
+
+    await expect(store.checkReady()).resolves.toBe(false);
+    try {
+      await store.saveCovenant(projectId, resource(), 200);
+      throw new Error("expected persistence failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect(String(error)).toContain("Runtime transaction failed");
+      expect(String(error)).not.toContain(secret);
+    }
   });
 });

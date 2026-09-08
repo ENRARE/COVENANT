@@ -7,14 +7,14 @@ credentials, or anonymous project provisioning.
 ## Runtime
 
 - Node.js 22 or newer and pnpm 11.7.0 (the repository `packageManager`).
-- PostgreSQL/Supabase-compatible persistence may use the committed migrations
-  through the exported `PostgresRuntimeStore` adapter and a deployment-owned
-  PostgreSQL client module. The included Node `node:sqlite` store is a
+- PostgreSQL/Supabase-compatible persistence uses the committed migrations
+  through the packaged deployment module and its `pg` connection pool. The
+  included Node `node:sqlite` store is a
   deterministic local/developer adapter, not a financial ledger or HA
   guarantee.
-- Apply migrations in filename order: COV-023 durable runtime first, then
-  COV-024 developer API tables. Do not move spend, replay, revocation, or
-  payment authority into the database.
+- Apply migrations in filename order: COV-023 durable runtime, COV-024
+  developer API tables, then COV-027 release constraints. Do not move spend,
+  replay, revocation, or payment authority into the database.
 
 ## Provider-neutral container
 
@@ -84,6 +84,13 @@ mounted read-only (or supplied by the selected host) with absolute module
 paths. Deployment mode intentionally fails closed when either module is
 missing or invalid.
 
+The API image includes the reviewed PostgreSQL store entrypoint. For Railway,
+set this exact value (relative paths resolve from `/app`):
+
+```text
+COVENANT_DATABASE_MODULE=./dist/deployment/postgres-runtime-store.js
+```
+
 ## Required configuration
 
 Set `COVENANT_MODE=deployment` and provide:
@@ -145,10 +152,20 @@ closing the listener, and closing the store. `GET /health` only reports process
 liveness. `GET /ready` reports internal configuration/store readiness and never
 reports Circle or Arc financial success.
 
-The container does not run migrations automatically. Apply the reviewed
-PostgreSQL/Supabase-compatible migrations in lexical order against the intended
-developer database before starting a multi-instance deployment, then verify
-the migration and uniqueness/index checks. A single-container local run may
+The container does not run migrations automatically. From a one-off Railway
+shell built from the repository (with `psql` available and
+`COVENANT_DATABASE_URL` injected), run exactly:
+
+```sh
+psql "$COVENANT_DATABASE_URL" --set=ON_ERROR_STOP=on --single-transaction \
+  --file=supabase/migrations/20260902000000_cov023_durable_execution_runtime.sql \
+  --file=supabase/migrations/20260902010000_cov024_developer_api.sql \
+  --file=supabase/migrations/20260902020000_cov027_release_constraints.sql
+```
+
+Run it once against the intended developer database before starting a
+multi-instance deployment, then verify the migration and uniqueness/index
+checks. Do not run it automatically during every API start. A single-container local run may
 use the file-backed `node:sqlite` adapter with `/var/lib/covenant` persisted;
 that remains operational projection storage and is not an HA or financial
 ledger guarantee.

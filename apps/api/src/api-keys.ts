@@ -21,12 +21,14 @@ export class ApiKeyService {
     private readonly now: () => number,
   ) {}
 
-  provisionProject(name = "Developer project"): ProvisionedProject {
+  async provisionProject(
+    name = "Developer project",
+  ): Promise<ProvisionedProject> {
     const projectId = `0x${randomBytes(32).toString("hex")}`;
-    this.store.ensureDeveloperProject(projectId, name, this.now());
+    await this.store.ensureDeveloperProject(projectId, name, this.now());
     const tokenValue = `cov_test_${randomBytes(32).toString("base64url")}`;
     const keyId = id("key_");
-    this.store.saveApiKey({
+    await this.store.saveApiKey({
       keyId,
       projectId,
       prefix: tokenValue.slice(0, 18),
@@ -36,13 +38,13 @@ export class ApiKeyService {
     return { projectId, name, apiKey: tokenValue, keyId };
   }
 
-  createKey(
+  async createKey(
     projectId: string,
-  ): Readonly<{ keyId: string; apiKey: string; prefix: string }> {
+  ): Promise<Readonly<{ keyId: string; apiKey: string; prefix: string }>> {
     const tokenValue = `cov_test_${randomBytes(32).toString("base64url")}`;
     const keyId = id("key_");
     const prefix = tokenValue.slice(0, 18);
-    this.store.saveApiKey({
+    await this.store.saveApiKey({
       keyId,
       projectId,
       prefix,
@@ -52,13 +54,15 @@ export class ApiKeyService {
     return { keyId, apiKey: tokenValue, prefix };
   }
 
-  authenticate(tokenValue: string | undefined): ApiKeyRecord {
+  async authenticate(tokenValue: string | undefined): Promise<ApiKeyRecord> {
     if (
       tokenValue === undefined ||
       !/^cov_test_[A-Za-z0-9_-]{8,}$/u.test(tokenValue)
     )
       throw new Error("UNAUTHORIZED");
-    const candidates = this.store.findApiKeyCandidates(tokenValue.slice(0, 18));
+    const candidates = await this.store.findApiKeyCandidates(
+      tokenValue.slice(0, 18),
+    );
     const actual = Buffer.from(digest(tokenValue), "hex");
     for (const candidate of candidates) {
       const expected = Buffer.from(candidate.digest, "hex");
