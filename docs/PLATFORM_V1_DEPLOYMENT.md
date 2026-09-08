@@ -91,6 +91,25 @@ set this exact value (relative paths resolve from `/app`):
 COVENANT_DATABASE_MODULE=./dist/deployment/postgres-runtime-store.js
 ```
 
+**V2:** Keep the executor service private in Railway: do not generate a public
+domain for it. Railway private-network traffic uses the internal service DNS
+name and is encrypted by Railway's WireGuard mesh, so this internal hop uses
+`http://` rather than a public TLS endpoint. Configure the API service with
+these exact non-secret values:
+
+```text
+COVENANT_EXECUTION_ADAPTER_MODULE=./dist/deployment/execution-adapter-entrypoint.js
+COVENANT_EXECUTOR_WORKER_TRANSPORT=railway-private
+COVENANT_EXECUTOR_WORKER_URL=http://covenant-executor.railway.internal:8788
+```
+
+Set `COVENANT_EXECUTOR_WORKER_AUTH_TOKEN` to the same secret of at least 32
+characters in the API and executor services. The `railway-private` gate accepts
+plain HTTP only for an origin whose hostname ends exactly in
+`.railway.internal`; it rejects credentials, non-root paths, queries,
+fragments, HTTPS, public hosts, and private IP literals. Without this gate, the
+existing HTTPS requirement remains in force for non-loopback hosts.
+
 ## Required configuration
 
 Set `COVENANT_MODE=deployment` and provide:
@@ -106,7 +125,8 @@ COVENANT_WEBHOOK_MASTER_KEY       # 32 bytes, hex or base64url
 COVENANT_AUTHORIZATION_RESOLVER_MODULE
 COVENANT_AUTHORIZATION_SPEC_FILE  # mounted, public CovenantSpec trust anchors
 COVENANT_EXECUTION_ADAPTER_MODULE
-COVENANT_EXECUTOR_WORKER_URL      # HTTPS URL for the isolated executor worker
+COVENANT_EXECUTOR_WORKER_TRANSPORT # railway-private only for Railway private DNS
+COVENANT_EXECUTOR_WORKER_URL      # HTTPS, or gated Railway private HTTP origin
 COVENANT_EXECUTOR_WORKER_AUTH_TOKEN # internal channel secret, >=32 characters
 COVENANT_EXECUTOR_SERVICE_MODULE    # worker-only service factory module
 COVENANT_EXECUTOR_COVENANT_SPEC_FILE # mounted public CovenantSpec trust anchor

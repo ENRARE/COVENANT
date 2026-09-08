@@ -11,12 +11,6 @@ try {
   throw new Error("COVENANT_EXECUTOR_WORKER_URL is invalid");
 }
 if (
-  !["https:", "http:"].includes(workerUrl.protocol) ||
-  (workerUrl.protocol === "http:" &&
-    !["localhost", "127.0.0.1", "[::1]"].includes(workerUrl.hostname))
-)
-  throw new Error("COVENANT_EXECUTOR_WORKER_URL must use HTTPS");
-if (
   workerUrl.username ||
   workerUrl.password ||
   workerUrl.pathname !== "/" ||
@@ -24,6 +18,30 @@ if (
   workerUrl.hash
 )
   throw new Error("COVENANT_EXECUTOR_WORKER_URL must be an origin URL");
+
+const workerTransportValue =
+  process.env.COVENANT_EXECUTOR_WORKER_TRANSPORT?.trim();
+if (
+  workerTransportValue !== undefined &&
+  workerTransportValue !== "" &&
+  workerTransportValue !== "railway-private"
+)
+  throw new Error("COVENANT_EXECUTOR_WORKER_TRANSPORT is invalid");
+
+if (workerTransportValue === "railway-private") {
+  if (
+    workerUrl.protocol !== "http:" ||
+    !workerUrl.hostname.endsWith(".railway.internal")
+  )
+    throw new Error(
+      "Railway private executor URLs must use HTTP on .railway.internal",
+    );
+} else if (
+  !["https:", "http:"].includes(workerUrl.protocol) ||
+  (workerUrl.protocol === "http:" &&
+    !["localhost", "127.0.0.1", "[::1]"].includes(workerUrl.hostname))
+)
+  throw new Error("COVENANT_EXECUTOR_WORKER_URL must use HTTPS");
 
 const workerAuthTokenValue =
   process.env.COVENANT_EXECUTOR_WORKER_AUTH_TOKEN?.trim();
