@@ -137,13 +137,13 @@ export class WebhookService {
     this.#now = options.now ?? (() => Date.now());
   }
 
-  createEndpoint(
+  async createEndpoint(
     projectId: string,
     url: string,
-  ): Readonly<{ endpointId: string; secret: string; url: string }> {
+  ): Promise<Readonly<{ endpointId: string; secret: string; url: string }>> {
     const endpointId = `wh_${randomBytes(16).toString("base64url")}`;
     const secret = `whsec_test_${randomBytes(32).toString("base64url")}`;
-    this.#runtime.store.createWebhookEndpoint({
+    await this.#runtime.store.createWebhookEndpoint({
       endpointId,
       projectId,
       url,
@@ -153,18 +153,18 @@ export class WebhookService {
     return { endpointId, secret, url };
   }
 
-  listEndpoints(projectId: string) {
-    return this.#runtime.store
-      .listWebhookEndpoints(projectId)
-      .map((endpoint) => ({
+  async listEndpoints(projectId: string) {
+    return (await this.#runtime.store.listWebhookEndpoints(projectId)).map(
+      (endpoint) => ({
         endpointId: endpoint.endpointId,
         url: endpoint.url,
         createdAt: String(endpoint.createdAt),
         status: endpoint.revokedAt === null ? "active" : "revoked",
-      }));
+      }),
+    );
   }
 
-  revokeEndpoint(projectId: string, endpointId: string) {
+  async revokeEndpoint(projectId: string, endpointId: string) {
     return this.#runtime.store.revokeWebhookEndpoint(
       projectId,
       endpointId,
@@ -172,18 +172,18 @@ export class WebhookService {
     );
   }
 
-  emitEvent(
+  async emitEvent(
     projectId: string,
     eventType: string,
     payload: Record<string, unknown>,
     eventId = `evt_${randomBytes(16).toString("base64url")}`,
-  ): void {
+  ): Promise<void> {
     const body = canonicalJson({ eventId, eventType, payload });
-    for (const endpoint of this.#runtime.store.listWebhookEndpoints(
+    for (const endpoint of await this.#runtime.store.listWebhookEndpoints(
       projectId,
     )) {
       const deliveryId = `whd_${createHash("sha256").update(`${endpoint.endpointId}:${eventId}`, "utf8").digest("hex").slice(0, 32)}`;
-      this.#runtime.store.createWebhookDelivery({
+      await this.#runtime.store.createWebhookDelivery({
         deliveryId,
         endpointId: endpoint.endpointId,
         projectId,
@@ -195,13 +195,13 @@ export class WebhookService {
     }
   }
 
-  consumeOutbox(): number {
+  async consumeOutbox(): Promise<number> {
     let count = 0;
-    for (const event of this.#runtime.listOutbox(true)) {
+    for (const event of await this.#runtime.listOutbox(true)) {
       const eventType = EVENT_MAP[event.eventType];
       if (eventType === undefined) continue;
       const eventId = `outbox_${String(event.id)}_${String(event.version)}`;
-      this.emitEvent(
+      await this.emitEvent(
         event.projectId,
         eventType,
         {
@@ -215,7 +215,7 @@ export class WebhookService {
         },
         eventId,
       );
-      this.#runtime.store.markOutboxDelivered(event.id, this.#now());
+      await this.#runtime.store.markOutboxDelivered(event.id, this.#now());
       count += 1;
     }
     return count;
@@ -223,11 +223,11 @@ export class WebhookService {
 
   async dispatchDue(now = this.#now()): Promise<WebhookDeliveryRecord[]> {
     const delivered: WebhookDeliveryRecord[] = [];
-    for (const delivery of this.#runtime.store.listWebhookDeliveries({
+    for (const delivery of await this.#runtime.store.listWebhookDeliveries({
       dueAt: now,
       limit: 100,
     })) {
-      const endpoint = this.#runtime.store.getWebhookEndpoint(
+      const endpoint = await this.#runtime.store.getWebhookEndpoint(
         delivery.projectId,
         delivery.endpointId,
       );
@@ -252,7 +252,7 @@ export class WebhookService {
           },
         });
         if (result.status >= 200 && result.status < 300) {
-          const next = this.#runtime.store.updateWebhookDelivery({
+          const next = await this.#runtime.store.updateWebhookDelivery({
             deliveryId: delivery.deliveryId,
             status: "DELIVERED",
             attemptCount: attempt,
@@ -264,7 +264,7 @@ export class WebhookService {
           if (next !== undefined) delivered.push(next);
         } else {
           const status = attempt >= MAX_ATTEMPTS ? "FAILED" : "RETRYING";
-          const next = this.#runtime.store.updateWebhookDelivery({
+          const next = await this.#runtime.store.updateWebhookDelivery({
             deliveryId: delivery.deliveryId,
             status,
             attemptCount: attempt,
@@ -282,7 +282,7 @@ export class WebhookService {
           error instanceof Error
             ? redactSensitiveText(error.message).slice(0, 160)
             : "delivery failed";
-        const next = this.#runtime.store.updateWebhookDelivery({
+        const next = await this.#runtime.store.updateWebhookDelivery({
           deliveryId: delivery.deliveryId,
           status,
           attemptCount: attempt,

@@ -80,20 +80,22 @@ export class DurableExecutionRuntime {
     return this.#store.saveCovenant(projectId, resource, this.#clock.now());
   }
 
-  startExecution(input: ExecutionStartInput): Readonly<{
-    operation: RuntimeOperation;
-    covenant: PlatformCovenant;
-    joined: boolean;
-  }> {
+  async startExecution(input: ExecutionStartInput): Promise<
+    Readonly<{
+      operation: RuntimeOperation;
+      covenant: PlatformCovenant;
+      joined: boolean;
+    }>
+  > {
     const at = positiveAt(input.at);
-    const covenantProjection = this.#store.getCovenant(
+    const covenantProjection = await this.#store.getCovenant(
       input.projectId,
       input.covenantId,
     );
     if (covenantProjection === undefined)
       runtimeFailure("RUNTIME_NOT_FOUND", "Covenant projection was not found");
     assertProjectOwnership(covenantProjection.resource, input.projectId);
-    const existing = this.#store.getOperation(input.operationKey);
+    const existing = await this.#store.getOperation(input.operationKey);
     if (existing !== undefined) {
       if (
         existing.projectId !== input.projectId ||
@@ -124,7 +126,11 @@ export class DurableExecutionRuntime {
         "Executing Covenant is missing authorization identity",
       );
     }
-    const result = this.#store.createOrJoinOperation({
+    const authorizationEvidence = await this.#store.getAuthorizationEvidence(
+      input.projectId,
+      input.covenantId,
+    );
+    const result = await this.#store.createOrJoinOperation({
       projectId: input.projectId,
       covenantId: input.covenantId,
       executionId: input.executionId,
@@ -135,14 +141,11 @@ export class DurableExecutionRuntime {
       amount: next.amount,
       beneficiary: next.beneficiary,
       resource: next,
-      authorizationEvidence: this.#store.getAuthorizationEvidence(
-        input.projectId,
-        input.covenantId,
-      ),
+      authorizationEvidence,
       at: this.#clock.now(),
     });
     if (!result.joined) {
-      const projection = this.#store.getCovenant(
+      const projection = await this.#store.getCovenant(
         input.projectId,
         input.covenantId,
       );
@@ -154,7 +157,7 @@ export class DurableExecutionRuntime {
         joined: false,
       };
     }
-    const projection = this.#store.getCovenant(
+    const projection = await this.#store.getCovenant(
       input.projectId,
       input.covenantId,
     );
@@ -166,7 +169,10 @@ export class DurableExecutionRuntime {
     };
   }
 
-  claim(operationKey: string, workerId: string): RuntimeOperation | undefined {
+  claim(
+    operationKey: string,
+    workerId: string,
+  ): Promise<RuntimeOperation | undefined> {
     return this.#store.claimOperation(
       operationKey,
       workerId,
@@ -175,7 +181,7 @@ export class DurableExecutionRuntime {
     );
   }
 
-  recoverExpiredLeases(): RuntimeOperation[] {
+  recoverExpiredLeases(): Promise<RuntimeOperation[]> {
     return this.#store.recoverExpiredLeases(this.#clock.now());
   }
 
@@ -184,7 +190,7 @@ export class DurableExecutionRuntime {
     workerId: string,
     state: RuntimeState,
     patch = {},
-  ) {
+  ): Promise<RuntimeOperation> {
     return this.#store.transitionLeased(
       operation.operationKey,
       workerId,
@@ -195,7 +201,10 @@ export class DurableExecutionRuntime {
     );
   }
 
-  #release(operation: RuntimeOperation, workerId: string): RuntimeOperation {
+  #release(
+    operation: RuntimeOperation,
+    workerId: string,
+  ): Promise<RuntimeOperation> {
     return this.#store.releaseLease(
       operation.operationKey,
       workerId,
@@ -208,7 +217,7 @@ export class DurableExecutionRuntime {
     operationKey: string,
     workerId: string,
   ): Promise<RuntimeOperation> {
-    let operation = this.#store.getOperation(operationKey);
+    let operation = await this.#store.getOperation(operationKey);
     if (operation === undefined)
       runtimeFailure("RUNTIME_NOT_FOUND", "Execution operation was not found");
     if (
@@ -216,7 +225,7 @@ export class DurableExecutionRuntime {
       operation.state === "TERMINAL_FAILED"
     )
       return operation;
-    const claimed = this.#store.claimOperation(
+    const claimed = await this.#store.claimOperation(
       operationKey,
       workerId,
       this.#clock.now(),
@@ -233,9 +242,9 @@ export class DurableExecutionRuntime {
       return operation;
 
     if (operation.state === "QUEUED")
-      operation = this.#transition(operation, workerId, "PREPARING");
+      operation = await this.#transition(operation, workerId, "PREPARING");
     if (operation.state === "PREPARING")
-      operation = this.#transition(operation, workerId, "SIMULATING");
+      operation = await this.#transition(operation, workerId, "SIMULATING");
     if (operation.state === "SIMULATING") {
       let simulation: SimulationOutcome;
       try {
@@ -256,17 +265,26 @@ export class DurableExecutionRuntime {
           simulation.reason,
         );
       }
-      operation = this.#transition(operation, workerId, "READY_TO_SUBMIT");
+      operation = await this.#transition(
+        operation,
+        workerId,
+        "READY_TO_SUBMIT",
+      );
     }
 
     if (operation.state !== "READY_TO_SUBMIT") return operation;
     // This transaction is the durable submission boundary. It must commit
     // before the adapter is called, so a crash cannot lead to an automatic
     // second submission.
-    operation = this.#transition(operation, workerId, "SUBMISSION_STARTED", {
-      submissionBoundary: true,
-      attemptCount: operation.attemptCount + 1,
-    });
+    operation = await this.#transition(
+      operation,
+      workerId,
+      "SUBMISSION_STARTED",
+      {
+        submissionBoundary: true,
+        attemptCount: operation.attemptCount + 1,
+      },
+    );
     let submission: SubmissionOutcome;
     try {
       submission = await this.#adapter.submit(operation);
@@ -289,7 +307,7 @@ export class DurableExecutionRuntime {
       );
     }
     return this.#release(
-      this.#transition(operation, workerId, "SUBMITTED", {
+      await this.#transition(operation, workerId, "SUBMITTED", {
         providerTransactionId: submission.transactionId,
         providerState: submission.providerState ?? "ACCEPTED",
         providerEvidence: {
@@ -301,12 +319,12 @@ export class DurableExecutionRuntime {
     );
   }
 
-  #retry(
+  async #retry(
     operation: RuntimeOperation,
     workerId: string,
     reason: RetryReason,
     failureReason: string,
-  ): RuntimeOperation {
+  ): Promise<RuntimeOperation> {
     if (operation.submissionBoundary && reason !== "PROVIDER_NO_SUBMISSION") {
       return this.#ambiguous(
         operation,
@@ -316,7 +334,7 @@ export class DurableExecutionRuntime {
       );
     }
     return this.#release(
-      this.#transition(operation, workerId, "QUEUED", {
+      await this.#transition(operation, workerId, "QUEUED", {
         retryReason: reason,
         noResubmitReason: null,
         submissionBoundary:
@@ -329,7 +347,7 @@ export class DurableExecutionRuntime {
     );
   }
 
-  #ambiguous(
+  async #ambiguous(
     operation: RuntimeOperation,
     workerId: string,
     reason:
@@ -339,9 +357,9 @@ export class DurableExecutionRuntime {
       | "CRASH_AFTER_BOUNDARY"
       | "PROVIDER_OUTCOME_UNKNOWN",
     failureReason: string,
-  ): RuntimeOperation {
+  ): Promise<RuntimeOperation> {
     return this.#release(
-      this.#transition(operation, workerId, "AMBIGUOUS", {
+      await this.#transition(operation, workerId, "AMBIGUOUS", {
         noResubmitReason: reason,
         failureReason,
       }),
@@ -349,10 +367,12 @@ export class DurableExecutionRuntime {
     );
   }
 
-  reconcile(
+  async reconcile(
     input: ReconciliationInput,
-  ): Readonly<{ operation: RuntimeOperation; covenant: PlatformCovenant }> {
-    const operation = this.#store.getOperation(input.operationKey);
+  ): Promise<
+    Readonly<{ operation: RuntimeOperation; covenant: PlatformCovenant }>
+  > {
+    const operation = await this.#store.getOperation(input.operationKey);
     if (operation === undefined)
       runtimeFailure("RUNTIME_NOT_FOUND", "Execution operation was not found");
     if (operation.projectId !== input.projectId)
@@ -361,7 +381,7 @@ export class DurableExecutionRuntime {
       operation.state === "SUCCEEDED" ||
       operation.state === "TERMINAL_FAILED"
     ) {
-      const projection = this.#store.getCovenant(
+      const projection = await this.#store.getCovenant(
         operation.projectId,
         operation.covenantId,
       );
@@ -369,7 +389,7 @@ export class DurableExecutionRuntime {
         runtimeFailure("RUNTIME_PERSISTENCE_FAILURE");
       return { operation, covenant: projection.resource };
     }
-    const claimed = this.#store.claimOperation(
+    const claimed = await this.#store.claimOperation(
       operation.operationKey,
       input.workerId,
       this.#clock.now(),
@@ -382,7 +402,7 @@ export class DurableExecutionRuntime {
       );
     let current = claimed;
     if (current.state === "SUBMITTED" || current.state === "AMBIGUOUS") {
-      current = this.#store.transitionLeased(
+      current = await this.#store.transitionLeased(
         current.operationKey,
         input.workerId,
         current.version,
@@ -401,7 +421,7 @@ export class DurableExecutionRuntime {
         },
       );
     }
-    const projection = this.#store.getCovenant(
+    const projection = await this.#store.getCovenant(
       current.projectId,
       current.covenantId,
     );
@@ -425,8 +445,8 @@ export class DurableExecutionRuntime {
         error instanceof CovenantDomainError &&
         error.code === "EVIDENCE_CONFLICT"
       ) {
-        const failed = this.#release(
-          this.#store.transitionLeased(
+        const failed = await this.#release(
+          await this.#store.transitionLeased(
             current.operationKey,
             input.workerId,
             current.version,
@@ -444,7 +464,7 @@ export class DurableExecutionRuntime {
       throw error;
     }
     if (nextCovenant.status === "EXECUTED") {
-      const result = this.#store.updateCovenantAndOperation(
+      const result = await this.#store.updateCovenantAndOperation(
         current.operationKey,
         input.workerId,
         current.version,
@@ -464,12 +484,12 @@ export class DurableExecutionRuntime {
         },
       );
       return {
-        operation: this.#release(result.operation, input.workerId),
+        operation: await this.#release(result.operation, input.workerId),
         covenant: result.covenant.resource,
       };
     }
     if (nextCovenant.status === "FAILED") {
-      const result = this.#store.updateCovenantAndOperation(
+      const result = await this.#store.updateCovenantAndOperation(
         current.operationKey,
         input.workerId,
         current.version,
@@ -485,11 +505,11 @@ export class DurableExecutionRuntime {
         },
       );
       return {
-        operation: this.#release(result.operation, input.workerId),
+        operation: await this.#release(result.operation, input.workerId),
         covenant: result.covenant.resource,
       };
     }
-    const retry = this.#store.transitionLeased(
+    const retry = await this.#store.transitionLeased(
       current.operationKey,
       input.workerId,
       current.version,
@@ -503,12 +523,12 @@ export class DurableExecutionRuntime {
       },
     );
     return {
-      operation: this.#release(retry, input.workerId),
+      operation: await this.#release(retry, input.workerId),
       covenant: projection.resource,
     };
   }
 
-  listOutbox(undeliveredOnly = true): RuntimeOutboxRecord[] {
+  listOutbox(undeliveredOnly = true): Promise<RuntimeOutboxRecord[]> {
     return this.#store.listOutbox({ undeliveredOnly });
   }
 }

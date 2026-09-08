@@ -24,11 +24,13 @@
   "dependencies": {
     "@covenant/config": "workspace:*",
     "@covenant/core": "workspace:*",
-    "@covenant/spec": "workspace:*",
     "@covenant/runtime": "workspace:*",
+    "@covenant/spec": "workspace:*",
+    "pg": "^8.23.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/pg": "^8.23.1",
     "vitest": "^3.2.4"
   }
 }

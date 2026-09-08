@@ -28,9 +28,10 @@ ENV COVENANT_API_PORT=8787
 WORKDIR /app
 COPY --from=build --chown=node:node /out/ ./
 
-# Mount a persistent volume here and set COVENANT_DATABASE_FILENAME to a file
-# beneath it. Resolver/adapter modules are deployment-owned and must be
-# supplied separately; startup fails closed when they are absent.
+# Mount a persistent volume here for SQLite. The compiled PostgreSQL deployment
+# entrypoint is included under dist/deployment. Resolver/adapter modules remain
+# deployment-owned and must be supplied separately; startup fails closed when
+# they are absent.
 RUN mkdir -p /var/lib/covenant \
   && chown node:node /var/lib/covenant
 

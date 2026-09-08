@@ -193,14 +193,14 @@ export class CovenantApi {
         this.#readinessCheck === undefined
           ? true
           : await this.#readinessCheck();
-      return configured && this.#runtime.store.checkReady();
+      return configured && (await this.#runtime.store.checkReady());
     } catch {
       return false;
     }
   }
 
-  close(): void {
-    this.#runtime.store.close();
+  async close(): Promise<void> {
+    await this.#runtime.store.close();
   }
 
   async handle(input: ApiRequest): Promise<ApiResponse> {
@@ -240,7 +240,7 @@ export class CovenantApi {
       if (!authLimit.allowed) rateLimitError(authLimit.retryAfterMs);
       let identity;
       try {
-        identity = this.#keys.authenticate(presentedKey);
+        identity = await this.#keys.authenticate(presentedKey);
       } catch (error) {
         if (error instanceof Error && error.message === "REVOKED_API_KEY")
           apiError(
@@ -273,7 +273,7 @@ export class CovenantApi {
         if (!result.allowed) rateLimitError(result.retryAfterMs);
       }
       const run = (): Promise<Readonly<{ status: number; body: unknown }>> =>
-        Promise.resolve(this.route(method, url, projectId, body));
+        this.route(method, url, projectId, body);
       let result: Readonly<{ status: number; body: unknown }>;
       // Credential creation responses contain a one-time plaintext secret/key;
       // they are deliberately not persisted in the HTTP idempotency table.
@@ -292,7 +292,7 @@ export class CovenantApi {
           );
         const keyDigest = sha256(idemKey);
         const fingerprint = sha256(canonicalJson(body));
-        const previous = this.#runtime.store.getHttpIdempotency(
+        const previous = await this.#runtime.store.getHttpIdempotency(
           projectId,
           route,
           keyDigest,
@@ -315,7 +315,7 @@ export class CovenantApi {
               rid,
             );
         } else {
-          this.#runtime.store.saveHttpIdempotency({
+          await this.#runtime.store.saveHttpIdempotency({
             projectId,
             route,
             keyDigest,
@@ -331,7 +331,7 @@ export class CovenantApi {
           const operation = (async () => {
             try {
               const completed = await run();
-              this.#runtime.store.saveHttpIdempotency({
+              await this.#runtime.store.saveHttpIdempotency({
                 projectId,
                 route,
                 keyDigest,
@@ -348,7 +348,7 @@ export class CovenantApi {
               });
               return completed;
             } catch (error) {
-              this.#runtime.store.deleteHttpIdempotency(
+              await this.#runtime.store.deleteHttpIdempotency(
                 projectId,
                 route,
                 keyDigest,
@@ -440,8 +440,8 @@ export class CovenantApi {
         expiresAt: input.expiresAt,
         auditReference: input.auditReference,
       });
-      this.#runtime.saveCovenant(projectId, resource);
-      this.#webhooks.emitEvent(
+      await this.#runtime.saveCovenant(projectId, resource);
+      await this.#webhooks.emitEvent(
         projectId,
         "covenant.created",
         publicCovenant(resource),
@@ -454,7 +454,7 @@ export class CovenantApi {
         limit: url.searchParams.get("limit") ?? undefined,
         after: url.searchParams.get("after") ?? undefined,
       });
-      const result = this.#runtime.store.listCovenants(projectId, {
+      const result = await this.#runtime.store.listCovenants(projectId, {
         limit: page.limit,
         ...(page.after === undefined ? {} : { after: page.after }),
       });
@@ -481,7 +481,10 @@ export class CovenantApi {
         );
       const covenantId = covenantIdValue.toLowerCase();
       const action = covenantMatch[2];
-      const projection = this.#runtime.store.getCovenant(projectId, covenantId);
+      const projection = await this.#runtime.store.getCovenant(
+        projectId,
+        covenantId,
+      );
       if (projection === undefined)
         apiError(
           "not_found",
@@ -497,12 +500,12 @@ export class CovenantApi {
           projection.resource,
           nowSeconds(this.#now),
         );
-        this.#runtime.store.replaceCovenantProjection(
+        await this.#runtime.store.replaceCovenantProjection(
           projectId,
           next,
           this.#now(),
         );
-        this.#webhooks.emitEvent(
+        await this.#webhooks.emitEvent(
           projectId,
           "covenant.authorized",
           publicCovenant(next),
@@ -544,7 +547,7 @@ export class CovenantApi {
         );
         // Keep the exact verified bundle for the isolated executor. This is
         // operational evidence only; the API does not sign or manufacture it.
-        this.#runtime.store.saveAuthorizationEvidence(
+        await this.#runtime.store.saveAuthorizationEvidence(
           projectId,
           covenantId,
           verified,
@@ -555,12 +558,12 @@ export class CovenantApi {
           verified.evidence,
           nowSeconds(this.#now),
         );
-        this.#runtime.store.replaceCovenantProjection(
+        await this.#runtime.store.replaceCovenantProjection(
           projectId,
           next,
           this.#now(),
         );
-        this.#webhooks.emitEvent(
+        await this.#webhooks.emitEvent(
           projectId,
           next.status === "AUTHORIZED"
             ? "covenant.authorized"
@@ -573,12 +576,12 @@ export class CovenantApi {
       if (action === "cancel" && method === "POST") {
         emptyMutationSchema.parse(body);
         const next = cancelCovenant(projection.resource, nowSeconds(this.#now));
-        this.#runtime.store.replaceCovenantProjection(
+        await this.#runtime.store.replaceCovenantProjection(
           projectId,
           next,
           this.#now(),
         );
-        this.#webhooks.emitEvent(
+        await this.#webhooks.emitEvent(
           projectId,
           "covenant.cancelled",
           publicCovenant(next),
@@ -589,14 +592,14 @@ export class CovenantApi {
       if (action === "execute" && method === "POST") {
         emptyMutationSchema.parse(body);
         const executionId = id();
-        const started = this.#runtime.startExecution({
+        const started = await this.#runtime.startExecution({
           projectId,
           covenantId,
           executionId,
           operationKey: executionId,
           at: nowSeconds(this.#now),
         });
-        this.#webhooks.consumeOutbox();
+        await this.#webhooks.consumeOutbox();
         return {
           status: 202,
           body: {
@@ -639,7 +642,7 @@ export class CovenantApi {
           "Execution was not found.",
           404,
         );
-      const operation = this.#runtime.store.getOperationByExecution(
+      const operation = await this.#runtime.store.getOperationByExecution(
         projectId,
         executionIdValue,
       );
@@ -657,13 +660,13 @@ export class CovenantApi {
     }
     if (method === "POST" && path === "/v1/webhook-endpoints") {
       const input = webhookEndpointRequestSchema.parse(body);
-      const result = this.#webhooks.createEndpoint(projectId, input.url);
+      const result = await this.#webhooks.createEndpoint(projectId, input.url);
       return { status: 201, body: result };
     }
     if (method === "GET" && path === "/v1/webhook-endpoints")
       return {
         status: 200,
-        body: { data: this.#webhooks.listEndpoints(projectId) },
+        body: { data: await this.#webhooks.listEndpoints(projectId) },
       };
     const webhookMatch = /^\/v1\/webhook-endpoints\/([^/]+)$/u.exec(path);
     if (method === "DELETE" && webhookMatch !== null) {
@@ -675,7 +678,10 @@ export class CovenantApi {
           "Webhook endpoint was not found.",
           404,
         );
-      const endpoint = this.#webhooks.revokeEndpoint(projectId, endpointId);
+      const endpoint = await this.#webhooks.revokeEndpoint(
+        projectId,
+        endpointId,
+      );
       if (endpoint === undefined)
         apiError(
           "not_found",
@@ -689,17 +695,19 @@ export class CovenantApi {
       return {
         status: 200,
         body: {
-          data: this.#runtime.store.listApiKeys(projectId).map((key) => ({
-            keyId: key.keyId,
-            prefix: key.prefix,
-            status: key.revokedAt === null ? "active" : "revoked",
-            createdAt: String(key.createdAt),
-            revokedAt: key.revokedAt === null ? null : String(key.revokedAt),
-          })),
+          data: (await this.#runtime.store.listApiKeys(projectId)).map(
+            (key) => ({
+              keyId: key.keyId,
+              prefix: key.prefix,
+              status: key.revokedAt === null ? "active" : "revoked",
+              createdAt: String(key.createdAt),
+              revokedAt: key.revokedAt === null ? null : String(key.revokedAt),
+            }),
+          ),
         },
       };
     if (method === "POST" && path === "/v1/api-keys")
-      return { status: 201, body: this.#keys.createKey(projectId) };
+      return { status: 201, body: await this.#keys.createKey(projectId) };
     const keyMatch = /^\/v1\/api-keys\/([^/]+)$/u.exec(path);
     if (method === "DELETE" && keyMatch !== null) {
       const keyId = keyMatch[1];
@@ -710,7 +718,7 @@ export class CovenantApi {
           "API key was not found.",
           404,
         );
-      const key = this.#runtime.store.revokeApiKey(
+      const key = await this.#runtime.store.revokeApiKey(
         projectId,
         keyId,
         this.#now(),
@@ -898,7 +906,6 @@ export async function gracefulShutdown(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      api.close();
       resolve();
     };
     const timer = setTimeout(() => {
@@ -915,4 +922,5 @@ export async function gracefulShutdown(
       finish();
     });
   });
+  await api.close();
 }

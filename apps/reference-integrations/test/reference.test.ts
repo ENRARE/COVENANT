@@ -20,7 +20,7 @@ const payer = "0x1111111111111111111111111111111111111111";
 const beneficiary = "0x2222222222222222222222222222222222222222";
 const policyHash: `0x${string}` = `0x${"ab".repeat(32)}`;
 
-function setup() {
+async function setup() {
   const contexts = new Map<string, { covenantSpec: unknown }>();
   const store = new DurableRuntimeStore();
   const runtime = new DurableExecutionRuntime({
@@ -47,7 +47,7 @@ function setup() {
       evidence: { limit: 16, windowMs: 60_000 },
     },
   });
-  const project = api.provisionProject("reference-integrations");
+  const project = await api.provisionProject("reference-integrations");
   const fetcher: FetchLike = async (input, init = {}) => {
     const url =
       typeof input === "string"
@@ -93,7 +93,7 @@ function input(_suffix: string) {
 
 describe("COV-026 SDK dogfooding and reference integrations", () => {
   it("runs own-app, milestone, marketplace, and agent flows through SDK/API", async () => {
-    const harness = setup();
+    const harness = await setup();
     const evidence = async (
       resource: unknown,
     ): Promise<AuthorizationEvidenceSubmission> => {
@@ -136,7 +136,7 @@ describe("COV-026 SDK dogfooding and reference integrations", () => {
   });
 
   it("proves project isolation and webhook projection at the SDK boundary", async () => {
-    const harness = setup();
+    const harness = await setup();
     const endpoint = await harness.client.webhooks.createEndpoint({
       url: "https://receiver.invalid/reference",
     });
@@ -154,13 +154,15 @@ describe("COV-026 SDK dogfooding and reference integrations", () => {
     );
     expect(result.authorized.status).toBe("AUTHORIZED");
     expect(
-      harness.runtime.store
-        .listWebhookDeliveries({ projectId: harness.project.projectId })
-        .some((delivery) => delivery.eventType === "covenant.authorized"),
+      (
+        await harness.runtime.store.listWebhookDeliveries({
+          projectId: harness.project.projectId,
+        })
+      ).some((delivery) => delivery.eventType === "covenant.authorized"),
     ).toBe(true);
     expect(endpoint.secret).toMatch(/^whsec_test_/u);
 
-    const other = harness.api.provisionProject("other");
+    const other = await harness.api.provisionProject("other");
     const otherAccess = other.apiKey;
     const otherClient = new Covenant({
       ["apiKey"]: otherAccess,

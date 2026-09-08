@@ -17,7 +17,9 @@ import { InMemoryRateLimiter } from "../src/rate-limit.js";
 
 const key = "a".repeat(64);
 
-function apiWith(options: Partial<Omit<CovenantApiOptions, "runtime">> = {}) {
+async function apiWith(
+  options: Partial<Omit<CovenantApiOptions, "runtime">> = {},
+) {
   const store = new DurableRuntimeStore();
   const runtime = new DurableExecutionRuntime({
     store,
@@ -36,7 +38,7 @@ function apiWith(options: Partial<Omit<CovenantApiOptions, "runtime">> = {}) {
     webhookMasterKey: new Uint8Array(32).fill(1),
     ...options,
   });
-  const project = api.provisionProject("release-test");
+  const project = await api.provisionProject("release-test");
   return { api, project, store };
 }
 
@@ -113,7 +115,7 @@ describe("COV-027 configuration and abuse boundaries", () => {
   });
 
   it("enforces deterministic in-process limits and readiness", async () => {
-    const { api, project } = apiWith({
+    const { api, project } = await apiWith({
       rateLimits: { authentication: { limit: 1, windowMs: 60_000 } },
     });
     const first = await api.handle({
@@ -131,11 +133,11 @@ describe("COV-027 configuration and abuse boundaries", () => {
     expect((await api.handle({ method: "GET", path: "/ready" })).status).toBe(
       503,
     );
-    api.close();
+    await api.close();
   });
 
   it("does not advertise wildcard browser access and rejects non-JSON mutations", async () => {
-    const { api, project } = apiWith();
+    const { api, project } = await apiWith();
     const server = createHttpServer(api);
     await new Promise<void>((resolve) =>
       server.listen(0, "127.0.0.1", resolve),
@@ -164,8 +166,8 @@ describe("COV-027 configuration and abuse boundaries", () => {
   });
 
   it("keeps every public resource boundary project-scoped", async () => {
-    const first = apiWith();
-    const second = apiWith();
+    const first = await apiWith();
+    const second = await apiWith();
     const created = await first.api.handle({
       method: "POST",
       path: "/v1/covenants",
@@ -250,8 +252,8 @@ describe("COV-027 configuration and abuse boundaries", () => {
       status: "active",
       revokedAt: null,
     });
-    first.api.close();
-    second.api.close();
+    await first.api.close();
+    await second.api.close();
   });
 
   it("redacts credential-shaped webhook/provider failures before persistence", async () => {
@@ -260,14 +262,14 @@ describe("COV-027 configuration and abuse boundaries", () => {
         new Error("Bearer cov_test_leaked_value whsec_secret_value"),
       ),
     );
-    const { api, project, store } = apiWith({ webhookSender: sender });
+    const { api, project, store } = await apiWith({ webhookSender: sender });
     const endpoint = await api.handle({
       method: "POST",
       path: "/v1/webhook-endpoints",
       headers: { "x-api-key": project.apiKey },
       body: { url: "https://example.invalid/hook" },
     });
-    api.webhooks.emitEvent(
+    await api.webhooks.emitEvent(
       project.projectId,
       "covenant.created",
       { covenantId: `0x${"01".repeat(32)}` },
@@ -276,16 +278,16 @@ describe("COV-027 configuration and abuse boundaries", () => {
     await api.webhooks.dispatchDue(Date.now() + 1_000);
     expect(sender).toHaveBeenCalledOnce();
     const text = JSON.stringify(
-      store.listWebhookDeliveries({ projectId: project.projectId }),
+      await store.listWebhookDeliveries({ projectId: project.projectId }),
     );
     expect(text).not.toContain("cov_test_leaked_value");
     expect(text).not.toContain("whsec_secret_value");
     expect(endpoint.status).toBe(201);
-    api.close();
+    await api.close();
   });
 
   it("converges a bounded concurrent idempotent mutation batch", async () => {
-    const { api, project } = apiWith({
+    const { api, project } = await apiWith({
       rateLimits: {
         authentication: { limit: 32, windowMs: 60_000 },
         mutations: { limit: 32, windowMs: 60_000 },
@@ -316,7 +318,7 @@ describe("COV-027 configuration and abuse boundaries", () => {
     expect(
       new Set(responses.map((response) => JSON.stringify(response.body))).size,
     ).toBe(1);
-    api.close();
+    await api.close();
   });
 });
 
