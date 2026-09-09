@@ -114,6 +114,9 @@ importers:
       pg:
         specifier: ^8.23.0
         version: 8.23.0
+      viem:
+        specifier: ^2.33.3
+        version: 2.55.4(typescript@5.9.3)(zod@3.25.76)
       zod:
         specifier: ^3.25.76
         version: 3.25.76

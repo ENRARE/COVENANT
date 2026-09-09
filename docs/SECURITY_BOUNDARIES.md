@@ -625,6 +625,21 @@ onchain state. Evidence is verified against deployment-owned V1 context before
 the core transition. Rate limits and idempotency coordinate requests only;
 they are not financial controls.
 
+**V2:** COV-027 supports both EOA and ERC-1271 signer identities without
+changing the 65-byte V1 envelope schema, any EIP-712 field/domain, signer role,
+or trust anchor. The expected address always comes from immutable
+`CovenantSpec`, and both paths receive the same canonical Covenant EIP-712
+digest. EOAs use canonical ECDSA address recovery; addresses with deployed code
+must return ERC-1271 magic value `0x1626ba7e` from the expected contract.
+
+**V2:** Contract detection and ERC-1271 calls exist only in the deployment/API
+verification adapter. `@covenant/spec` remains offline and deterministic; core
+receives an injected verification port and contains no RPC implementation. The
+Arc Testnet-pinned RPC is read-only verification authority, never signing or
+execution authority. RPC uncertainty, chain mismatch, missing bytecode where a
+contract is required, call reversion, malformed return, and wrong magic value
+all fail closed before evidence persistence or lifecycle transition.
+
 **V2:** Request bodies, headers, errors, webhook delivery failures, and runtime
 failure reasons are bounded and redacted. CORS is deny-by-default, JSON
 mutations require an explicit JSON content type, and health/readiness responses

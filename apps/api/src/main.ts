@@ -24,6 +24,9 @@ type Resolver = (
   | undefined
   | Promise<AuthorizationVerificationContext | undefined>;
 
+type ReadyResolver = Resolver &
+  Readonly<{ checkReady?: () => Promise<boolean> }>;
+
 const SAFE_TEST_ADAPTER: ExecutionAdapter = Object.freeze({
   simulate: () =>
     Promise.resolve({
@@ -71,10 +74,16 @@ function assertAdapter(value: unknown): ExecutionAdapter {
   return value as ExecutionAdapter;
 }
 
-function assertResolver(value: unknown): Resolver {
+function assertResolver(value: unknown): ReadyResolver {
   if (typeof value !== "function")
     throw new Error("Configured evidence resolver is invalid.");
-  return value as Resolver;
+  const resolver = value as ReadyResolver;
+  if (
+    resolver.checkReady !== undefined &&
+    typeof resolver.checkReady !== "function"
+  )
+    throw new Error("Configured evidence resolver is invalid.");
+  return resolver;
 }
 
 function assertStore(value: unknown): RuntimeStore {
@@ -155,6 +164,8 @@ export async function startApiServer(
             "Authorization resolver",
           ),
         );
+  if (resolver?.checkReady !== undefined && !(await resolver.checkReady()))
+    throw new Error("Authorization verifier is not ready.");
   let store: RuntimeStore;
   if (config.databaseDriver === "postgres") {
     const databaseModule = config.databaseModule;
@@ -181,9 +192,13 @@ export async function startApiServer(
       ? {}
       : { authorizationContextResolver: resolver }),
     rateLimits: config.rateLimits,
-    readinessCheck: () =>
-      config.mode === "test" ||
-      (resolver !== undefined && config.executionAdapterModule !== undefined),
+    readinessCheck: async () => {
+      const configured =
+        config.mode === "test" ||
+        (resolver !== undefined && config.executionAdapterModule !== undefined);
+      if (!configured) return false;
+      return resolver?.checkReady === undefined ? true : resolver.checkReady();
+    },
   });
   const server = createHttpServer(api, {
     allowedOrigins: config.corsAllowedOrigins,

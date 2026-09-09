@@ -28,6 +28,10 @@ financial authority, or the CovenantVault execution boundary.
 - Package, API, and example release gates run offline; no real funds, production
   credentials, mainnet deployment, npm publication, GitHub Release, or tag is
   part of this COV.
+- A COV-027 compatibility patch may verify a CovenantSpec signer as an EOA or
+  ERC-1271 contract using the same frozen EIP-712 digest. RPC-dependent signer
+  classification remains injected at the deployment/API boundary, is pinned to
+  Arc Testnet, and cannot sign or execute.
 
 ## Explicit exclusions
 

@@ -68,6 +68,23 @@ COVENANT_AUTHORIZATION_SPEC_FILE=/app/deployment/arc-testnet/cov010-api-authoriz
 Do not mutate or reinterpret the executor artifact, and do not add a second
 authorization path.
 
+The packaged authorization-resolver entrypoint performs read-only signature
+verification against Arc Testnet. It derives the expected signer and the exact
+existing EIP-712 digest from the immutable CovenantSpec. An expected signer
+without deployed bytecode is verified with the historical V1 ECDSA recovery
+rules. An expected signer with deployed bytecode is called through ERC-1271
+`isValidSignature(bytes32,bytes)` and must return `0x1626ba7e`. This applies to
+the agent signer on PaymentIntent and the authorization signer on both receipt
+types; it is not hard-coded to one envelope.
+
+`COVENANT_ARC_RPC_URL` is deployment-owned, credential-free HTTPS configuration
+and is never accepted from an API request. The RPC must report Arc Testnet chain
+ID `5042002`; startup/readiness and verification fail closed on a missing or
+malformed URL, another chain, RPC failure, bytecode-read failure, contract
+revert, malformed return, or wrong magic value. These calls are read-only. The
+RPC grants no signing, Circle, transaction-writing, policy, or execution
+authority to the API.
+
 The service module must construct the existing `ExecutorService` with its
 reviewed `CovenantProvider`, `TransactionTransport`, `Clock`, and a durable
 `CircleOperationRepository` (for example the existing file journal). The
@@ -175,7 +192,8 @@ pnpm --filter @covenant/api start
 `apps/api/src/main.ts` constructs the durable store/runtime, validates config,
 starts the Node HTTP server, and handles SIGINT/SIGTERM by stopping new work,
 closing the listener, and closing the store. `GET /health` only reports process
-liveness. `GET /ready` reports internal configuration/store readiness and never
+liveness and performs no RPC or financial operation. `GET /ready` includes the
+read-only Arc chain check plus internal configuration/store readiness and never
 reports Circle or Arc financial success.
 
 The container does not run migrations automatically. From a one-off Railway

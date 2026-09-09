@@ -4,11 +4,16 @@ import {
   covenantSpecSchema,
   deriveSigningDomainForCovenant,
   formatUsdc,
+  hashAuthorizationReceipt,
+  hashDecisionReceipt,
   hashPaymentIntent,
   signedAuthorizationReceiptSchema,
   signedDecisionReceiptSchema,
   signedPaymentIntentSchema,
   UINT256_MAX_DECIMAL,
+  validateAuthorizationChainRelationships,
+  validateSignedDecisionReceiptForCovenant,
+  validateSignedPaymentIntentForCovenant,
   verifyAuthorizationChain,
   verifySignedDecisionReceiptForCovenant,
   verifySignedPaymentIntentForCovenant,
@@ -390,7 +395,30 @@ function validateSignedEvidence(
 export type AuthorizationVerificationContext = Readonly<{
   /** Deployment-owned, immutable V1 CovenantSpec used as the trust anchor. */
   covenantSpec: unknown;
+  /** Optional deployment-owned EOA/ERC-1271 verifier. Public input cannot set it. */
+  signatureVerifier?: AuthorizationSignatureVerifier;
 }>;
+
+export type AuthorizationSignatureKind =
+  "paymentIntent" | "decisionReceipt" | "authorizationReceipt";
+
+export type AuthorizationSignatureVerificationRequest = Readonly<{
+  kind: AuthorizationSignatureKind;
+  expectedSigner: `0x${string}`;
+  digest: `0x${string}`;
+  signature: `0x${string}`;
+}>;
+
+export type AuthorizationSignatureVerifier = Readonly<{
+  verify(request: AuthorizationSignatureVerificationRequest): Promise<void>;
+}>;
+
+async function verifyDeploymentSignature(
+  verifier: AuthorizationSignatureVerifier,
+  request: AuthorizationSignatureVerificationRequest,
+): Promise<void> {
+  await verifier.verify(Object.freeze({ ...request }));
+}
 
 function sameIdentifier(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
@@ -491,10 +519,23 @@ export async function verifyAuthorizationEvidence(
     covenantFailure("EVIDENCE_MISMATCH");
   }
 
-  await verifySignedPaymentIntentForCovenant(
-    submission.signedPaymentIntent,
-    rawCovenantSpec,
-  );
+  if (context.signatureVerifier === undefined) {
+    await verifySignedPaymentIntentForCovenant(
+      submission.signedPaymentIntent,
+      rawCovenantSpec,
+    );
+  } else {
+    const validated = validateSignedPaymentIntentForCovenant(
+      submission.signedPaymentIntent,
+      rawCovenantSpec,
+    );
+    await verifyDeploymentSignature(context.signatureVerifier, {
+      kind: "paymentIntent",
+      expectedSigner: validated.covenantSpec.agentSigner,
+      digest: intentHash,
+      signature: validated.envelope.signature,
+    });
+  }
 
   const parsedDecision = signedDecisionReceiptSchema.parse(decisionEnvelope);
   if (
@@ -518,22 +559,85 @@ export async function verifyAuthorizationEvidence(
     if (authorizationEnvelope === undefined) {
       covenantFailure("EVIDENCE_MISMATCH");
     }
-    await verifyAuthorizationChain(
-      rawCovenantSpec,
-      submission.signedPaymentIntent,
-      decisionEnvelope,
-      ruleResults,
-      authorizationEnvelope,
-    );
+    if (context.signatureVerifier === undefined) {
+      await verifyAuthorizationChain(
+        rawCovenantSpec,
+        submission.signedPaymentIntent,
+        decisionEnvelope,
+        ruleResults,
+        authorizationEnvelope,
+      );
+    } else {
+      const chain = validateAuthorizationChainRelationships(
+        rawCovenantSpec,
+        submission.signedPaymentIntent,
+        decisionEnvelope,
+        ruleResults,
+        authorizationEnvelope,
+      );
+      const decisionDomain = deriveSigningDomainForCovenant(
+        rawCovenantSpec,
+        EIP712_DOMAIN_NAMES.decisionReceipt,
+      );
+      const authorizationDomain = deriveSigningDomainForCovenant(
+        rawCovenantSpec,
+        EIP712_DOMAIN_NAMES.authorizationReceipt,
+      );
+      await verifyDeploymentSignature(context.signatureVerifier, {
+        kind: "paymentIntent",
+        expectedSigner: chain.covenantSpec.agentSigner,
+        digest: chain.intentHash,
+        signature: chain.signedPaymentIntent.signature,
+      });
+      await verifyDeploymentSignature(context.signatureVerifier, {
+        kind: "decisionReceipt",
+        expectedSigner: chain.covenantSpec.authorizationSigner,
+        digest: hashDecisionReceipt(
+          (decisionEnvelope as { payload: unknown }).payload,
+          decisionDomain,
+        ),
+        signature: chain.signedDecisionReceipt.signature,
+      });
+      await verifyDeploymentSignature(context.signatureVerifier, {
+        kind: "authorizationReceipt",
+        expectedSigner: chain.covenantSpec.authorizationSigner,
+        digest: hashAuthorizationReceipt(
+          (authorizationEnvelope as { payload: unknown }).payload,
+          authorizationDomain,
+        ),
+        signature: chain.signedAuthorizationReceipt.signature,
+      });
+    }
   } else {
     if (authorizationEnvelope !== undefined) {
       covenantFailure("EVIDENCE_MISMATCH");
     }
-    await verifySignedDecisionReceiptForCovenant(
-      decisionEnvelope,
-      ruleResults,
-      rawCovenantSpec,
-    );
+    if (context.signatureVerifier === undefined) {
+      await verifySignedDecisionReceiptForCovenant(
+        decisionEnvelope,
+        ruleResults,
+        rawCovenantSpec,
+      );
+    } else {
+      const validated = validateSignedDecisionReceiptForCovenant(
+        decisionEnvelope,
+        ruleResults,
+        rawCovenantSpec,
+      );
+      const decisionDomain = deriveSigningDomainForCovenant(
+        rawCovenantSpec,
+        EIP712_DOMAIN_NAMES.decisionReceipt,
+      );
+      await verifyDeploymentSignature(context.signatureVerifier, {
+        kind: "decisionReceipt",
+        expectedSigner: validated.covenantSpec.authorizationSigner,
+        digest: hashDecisionReceipt(
+          (decisionEnvelope as { payload: unknown }).payload,
+          decisionDomain,
+        ),
+        signature: validated.envelope.signature,
+      });
+    }
     if (parsedDecision.payload.decision !== "REJECTED") {
       covenantFailure("EVIDENCE_MISMATCH");
     }

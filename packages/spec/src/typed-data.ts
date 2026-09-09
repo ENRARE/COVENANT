@@ -5,6 +5,7 @@ import {
   hashStruct,
   hashTypedData,
   keccak256,
+  recoverAddress,
   recoverTypedDataAddress,
   stringToHex,
   zeroAddress,
@@ -34,7 +35,11 @@ import {
   type CovenantSpec,
   type DecisionReceipt,
 } from "./schemas.js";
-import { vaultAddressSchema } from "./primitives.js";
+import {
+  bytes32Schema,
+  signatureSchema,
+  vaultAddressSchema,
+} from "./primitives.js";
 
 const SECP256K1_HALF_CURVE_ORDER = BigInt(
   "0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0",
@@ -64,6 +69,23 @@ async function requireNonzeroRecoveredSigner(
     throw new Error("Signature recovered the zero address");
   }
   return recovered;
+}
+
+/**
+ * Recover an EOA from an already-canonical EIP-712 digest. This is kept in the
+ * offline spec package so deployment adapters can preserve the exact V1 EOA
+ * signature rules without rebuilding typed data or adding network access.
+ */
+export async function recoverDigestSigner(
+  digest: unknown,
+  signature: unknown,
+): Promise<Address> {
+  const parsedDigest = bytes32Schema.parse(digest);
+  const parsedSignature = signatureSchema.parse(signature);
+  assertCanonicalSignature(parsedSignature);
+  return requireNonzeroRecoveredSigner(
+    recoverAddress({ hash: parsedDigest, signature: parsedSignature }),
+  );
 }
 
 export const EIP712_DOMAIN_NAMES = {
@@ -620,20 +642,8 @@ export async function verifySignedPaymentIntentForCovenant(
   envelope: unknown,
   covenant: unknown,
 ) {
-  const signed = signedPaymentIntentSchema.parse(envelope);
-  const covenantSpec = covenantSpecSchema.parse(covenant);
-  if (signed.payload.covenantId !== covenantSpec.covenantId) {
-    verificationFailure(
-      "COVENANT_ID_MISMATCH",
-      "PaymentIntent.covenantId does not match CovenantSpec.covenantId",
-    );
-  }
-  if (signed.payload.agentSigner !== covenantSpec.agentSigner) {
-    verificationFailure(
-      "UNTRUSTED_AGENT_SIGNER",
-      "PaymentIntent.agentSigner is not CovenantSpec.agentSigner",
-    );
-  }
+  const { envelope: signed, covenantSpec } =
+    validateSignedPaymentIntentForCovenant(envelope, covenant);
   const domain = signingDomainForParsedCovenant(
     covenantSpec,
     EIP712_DOMAIN_NAMES.paymentIntent,
@@ -654,7 +664,58 @@ export async function verifySignedPaymentIntentForCovenant(
   return signed;
 }
 
+export function validateSignedPaymentIntentForCovenant(
+  envelope: unknown,
+  covenant: unknown,
+) {
+  const signed = signedPaymentIntentSchema.parse(envelope);
+  const covenantSpec = covenantSpecSchema.parse(covenant);
+  if (signed.payload.covenantId !== covenantSpec.covenantId) {
+    verificationFailure(
+      "COVENANT_ID_MISMATCH",
+      "PaymentIntent.covenantId does not match CovenantSpec.covenantId",
+    );
+  }
+  if (signed.payload.agentSigner !== covenantSpec.agentSigner) {
+    verificationFailure(
+      "UNTRUSTED_AGENT_SIGNER",
+      "PaymentIntent.agentSigner is not CovenantSpec.agentSigner",
+    );
+  }
+  return { envelope: signed, covenantSpec } as const;
+}
+
 export async function verifySignedDecisionReceiptForCovenant(
+  envelope: unknown,
+  ruleResults: unknown,
+  covenant: unknown,
+) {
+  const { envelope: signed, covenantSpec } =
+    validateSignedDecisionReceiptForCovenant(envelope, ruleResults, covenant);
+  const domain = signingDomainForParsedCovenant(
+    covenantSpec,
+    EIP712_DOMAIN_NAMES.decisionReceipt,
+  );
+  const recovered = await recoverOrFail(
+    () => recoverDecisionReceiptSigner(envelope, domain),
+    "DecisionReceipt",
+  );
+  if (
+    recovered !== signed.payload.signer ||
+    recovered !== covenantSpec.authorizationSigner
+  ) {
+    verificationFailure(
+      "UNTRUSTED_AUTHORIZATION_SIGNER",
+      "Recovered DecisionReceipt signer is not CovenantSpec.authorizationSigner",
+    );
+  }
+  return {
+    envelope: signed,
+    ruleResults: canonicalRuleResultsSchema.parse(ruleResults),
+  } as const;
+}
+
+export function validateSignedDecisionReceiptForCovenant(
   envelope: unknown,
   ruleResults: unknown,
   covenant: unknown,
@@ -688,13 +749,26 @@ export async function verifySignedDecisionReceiptForCovenant(
     );
   }
   assertDecisionMatchesRules(signed.payload.decision, canonicalRules);
+  return {
+    envelope: signed,
+    ruleResults: canonicalRules,
+    covenantSpec,
+  } as const;
+}
+
+export async function verifySignedAuthorizationReceiptForCovenant(
+  envelope: unknown,
+  covenant: unknown,
+) {
+  const { envelope: signed, covenantSpec } =
+    validateSignedAuthorizationReceiptForCovenant(envelope, covenant);
   const domain = signingDomainForParsedCovenant(
     covenantSpec,
-    EIP712_DOMAIN_NAMES.decisionReceipt,
+    EIP712_DOMAIN_NAMES.authorizationReceipt,
   );
   const recovered = await recoverOrFail(
-    () => recoverDecisionReceiptSigner(envelope, domain),
-    "DecisionReceipt",
+    () => recoverAuthorizationReceiptSigner(envelope, domain),
+    "AuthorizationReceipt",
   );
   if (
     recovered !== signed.payload.signer ||
@@ -702,13 +776,13 @@ export async function verifySignedDecisionReceiptForCovenant(
   ) {
     verificationFailure(
       "UNTRUSTED_AUTHORIZATION_SIGNER",
-      "Recovered DecisionReceipt signer is not CovenantSpec.authorizationSigner",
+      "Recovered AuthorizationReceipt signer is not CovenantSpec.authorizationSigner",
     );
   }
-  return { envelope: signed, ruleResults: canonicalRules } as const;
+  return signed;
 }
 
-export async function verifySignedAuthorizationReceiptForCovenant(
+export function validateSignedAuthorizationReceiptForCovenant(
   envelope: unknown,
   covenant: unknown,
 ) {
@@ -744,22 +818,5 @@ export async function verifySignedAuthorizationReceiptForCovenant(
       "AuthorizationReceipt.signer is not CovenantSpec.authorizationSigner",
     );
   }
-  const domain = signingDomainForParsedCovenant(
-    covenantSpec,
-    EIP712_DOMAIN_NAMES.authorizationReceipt,
-  );
-  const recovered = await recoverOrFail(
-    () => recoverAuthorizationReceiptSigner(envelope, domain),
-    "AuthorizationReceipt",
-  );
-  if (
-    recovered !== signed.payload.signer ||
-    recovered !== covenantSpec.authorizationSigner
-  ) {
-    verificationFailure(
-      "UNTRUSTED_AUTHORIZATION_SIGNER",
-      "Recovered AuthorizationReceipt signer is not CovenantSpec.authorizationSigner",
-    );
-  }
-  return signed;
+  return { envelope: signed, covenantSpec } as const;
 }

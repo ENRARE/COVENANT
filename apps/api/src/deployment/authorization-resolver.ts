@@ -7,6 +7,7 @@ import {
   type CovenantSpec,
 } from "@covenant/spec";
 import type {
+  AuthorizationSignatureVerifier,
   AuthorizationVerificationContext,
   PlatformCovenant,
 } from "@covenant/core";
@@ -34,10 +35,11 @@ export type AuthorizationTrustAnchor = Readonly<{
   covenantSpec: DeploymentCovenantSpec;
 }>;
 
-export type AuthorizationContextResolver = (
+export type AuthorizationContextResolver = ((
   projectId: string,
   covenant: PlatformCovenant,
-) => AuthorizationVerificationContext | undefined;
+) => AuthorizationVerificationContext | undefined) &
+  Readonly<{ checkReady?: () => Promise<boolean> }>;
 
 function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
@@ -101,6 +103,8 @@ function normalizeCovenantSpec(value: CovenantSpec): DeploymentCovenantSpec {
 /** Load immutable, deployment-owned CovenantSpec trust anchors. */
 export function createAuthorizationContextResolver(
   filename: string,
+  signatureVerifier?: AuthorizationSignatureVerifier &
+    Readonly<{ checkReady?: () => Promise<boolean> }>,
 ): AuthorizationContextResolver {
   if (typeof filename !== "string" || filename.trim() === "")
     throw new Error("Authorization trust-anchor file is required");
@@ -118,8 +122,18 @@ export function createAuthorizationContextResolver(
       entry.covenantSpec,
     ]),
   );
-  return (projectId, covenant) => {
+  const resolver: AuthorizationContextResolver = (projectId, covenant) => {
     const spec = byIdentity.get(`${projectId}:${covenant.id}`.toLowerCase());
-    return spec === undefined ? undefined : { covenantSpec: spec };
+    return spec === undefined
+      ? undefined
+      : {
+          covenantSpec: spec,
+          ...(signatureVerifier === undefined ? {} : { signatureVerifier }),
+        };
   };
+  if (signatureVerifier?.checkReady === undefined) return resolver;
+  return Object.assign(resolver, {
+    checkReady: () =>
+      signatureVerifier.checkReady?.() ?? Promise.resolve(false),
+  });
 }
