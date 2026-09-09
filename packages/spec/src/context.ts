@@ -73,7 +73,7 @@ function validatePaymentIntentRelationships(
   return { covenantSpec, signedPaymentIntent, paymentIntent } as const;
 }
 
-export async function verifyAuthorizationChain(
+export function validateAuthorizationChainRelationships(
   covenant: unknown,
   intent: unknown,
   decision: unknown,
@@ -225,10 +225,6 @@ export async function verifyAuthorizationChain(
     );
   }
 
-  await verifySignedPaymentIntentForCovenant(intent, covenant);
-  await verifySignedDecisionReceiptForCovenant(decision, ruleResults, covenant);
-  await verifySignedAuthorizationReceiptForCovenant(authorization, covenant);
-
   return {
     covenantSpec,
     signedPaymentIntent,
@@ -237,4 +233,24 @@ export async function verifyAuthorizationChain(
     signedAuthorizationReceipt,
     intentHash,
   } as const;
+}
+
+export async function verifyAuthorizationChain(
+  covenant: unknown,
+  intent: unknown,
+  decision: unknown,
+  ruleResults: unknown,
+  authorization: unknown,
+) {
+  const verified = validateAuthorizationChainRelationships(
+    covenant,
+    intent,
+    decision,
+    ruleResults,
+    authorization,
+  );
+  await verifySignedPaymentIntentForCovenant(intent, covenant);
+  await verifySignedDecisionReceiptForCovenant(decision, ruleResults, covenant);
+  await verifySignedAuthorizationReceiptForCovenant(authorization, covenant);
+  return verified;
 }

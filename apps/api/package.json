@@ -27,6 +27,7 @@
     "@covenant/runtime": "workspace:*",
     "@covenant/spec": "workspace:*",
     "pg": "^8.23.0",
+    "viem": "^2.33.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {

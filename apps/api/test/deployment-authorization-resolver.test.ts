@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createCovenant, verifyAuthorizationEvidence } from "@covenant/core";
 import { createAuthorizationContextResolver } from "../src/deployment/authorization-resolver.js";
 import {
@@ -100,6 +100,34 @@ describe("deployment authorization resolver", () => {
           context,
         ),
       ).rejects.toThrow();
+    } finally {
+      cleanup(filename);
+    }
+  });
+
+  it("injects only the deployment-owned verifier and exposes its readiness", async () => {
+    const covenant = resource();
+    const evidence = await createEvidence(covenant);
+    const filename = writeAnchors({
+      entries: [
+        {
+          projectId: covenant.projectId,
+          covenantSpec: evidence.context.covenantSpec,
+        },
+      ],
+    });
+    const verifier = {
+      verify: vi.fn(() => Promise.resolve()),
+      checkReady: vi.fn(() => Promise.resolve(true)),
+    };
+    try {
+      const resolver = createAuthorizationContextResolver(filename, verifier);
+      expect(resolver(covenant.projectId, covenant)?.signatureVerifier).toBe(
+        verifier,
+      );
+      await expect(resolver.checkReady?.()).resolves.toBe(true);
+      expect(verifier.checkReady).toHaveBeenCalledOnce();
+      expect(resolver(bytes32(10), covenant)).toBeUndefined();
     } finally {
       cleanup(filename);
     }

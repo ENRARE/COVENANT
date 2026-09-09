@@ -393,6 +393,77 @@ describe("COV-024 developer API", () => {
     expect(isolated.status).toBe(404);
   });
 
+  it("keeps failed deployment verification unpersisted and rejects public verifier overrides", async () => {
+    const contexts = new Map<
+      string,
+      {
+        covenantSpec: unknown;
+        signatureVerifier: { verify(): Promise<void> };
+      }
+    >();
+    const { api, project, runtime } = await setup(
+      undefined,
+      (_projectId, covenant) => contexts.get(covenant.id),
+    );
+    const created = await api.handle({
+      method: "POST",
+      path: "/v1/covenants",
+      headers: { "x-api-key": project.apiKey },
+      body: createBody(),
+    });
+    const covenantId = (created.body as { id: string }).id;
+    const requested = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorize`,
+      headers: { "x-api-key": project.apiKey },
+      body: {},
+    });
+    const evidence = await createEvidence(requested.body as never);
+    contexts.set(covenantId, {
+      covenantSpec: evidence.context.covenantSpec,
+      signatureVerifier: {
+        verify: () => Promise.reject(new Error("provider response is private")),
+      },
+    });
+
+    const unavailable = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: evidence.submission,
+    });
+    expect(unavailable.status).toBe(500);
+    expect(JSON.stringify(unavailable.body)).not.toContain("provider response");
+    expect(
+      await runtime.store.getAuthorizationEvidence(
+        project.projectId,
+        covenantId,
+      ),
+    ).toBeNull();
+    expect(
+      (await runtime.store.getCovenant(project.projectId, covenantId))?.resource
+        .status,
+    ).toBe("AWAITING_AUTHORIZATION");
+
+    const overridden = await api.handle({
+      method: "POST",
+      path: `/v1/covenants/${covenantId}/authorization-evidence`,
+      headers: { "x-api-key": project.apiKey },
+      body: {
+        ...evidence.submission,
+        rpcUrl: "https://attacker.invalid",
+        signerMode: "erc1271",
+      },
+    });
+    expect(overridden.status).toBe(400);
+    expect(
+      await runtime.store.getAuthorizationEvidence(
+        project.projectId,
+        covenantId,
+      ),
+    ).toBeNull();
+  });
+
   it("accepts a cryptographically verified rejection and publishes its webhook", async () => {
     const contexts = new Map<string, { covenantSpec: unknown }>();
     const { api, project, runtime } = await setup(
