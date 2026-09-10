@@ -1,0 +1,14 @@
+{
+  "entries": [
+    {
+      "projectId": "0x7bf8f28b510a05cf48b7a239b35e6e8e0cde9db7371fa33f8e9e1c06c84177ee",
+      "covenantId": "0x0982b0ffb2c5585995515dcd93162f77beb6075d450c33bc19a881b745d7f2d7",
+      "workerUrl": "http://covenant-executor.railway.internal:8788"
+    },
+    {
+      "projectId": "0x7bf8f28b510a05cf48b7a239b35e6e8e0cde9db7371fa33f8e9e1c06c84177ee",
+      "covenantId": "0x9efcc49d65443927f3c4c1bdea6e88b5d72122f8938518fb75c8cafeb955c859",
+      "workerUrl": "http://covenant-executor-fresh-demo.railway.internal:8788"
+    }
+  ]
+}

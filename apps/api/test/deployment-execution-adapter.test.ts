@@ -1,10 +1,20 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const AUTH_TOKEN = "a".repeat(32);
 
-function operation() {
+const PROJECT_ID = `0x${"11".repeat(32)}`;
+const OLD_COVENANT_ID = `0x${"22".repeat(32)}`;
+const NEW_COVENANT_ID = `0x${"33".repeat(32)}`;
+const temporaryDirectories: string[] = [];
+
+function operation(covenantId = OLD_COVENANT_ID) {
   return {
     executionId: "22222222-2222-4222-8222-222222222222",
+    projectId: PROJECT_ID,
+    covenantId,
     authorizationEvidence: {
       signedPaymentIntent: { payload: "intent", signature: "sig" },
       ruleResults: [],
@@ -20,11 +30,15 @@ function operation() {
 }
 
 async function loadAdapter(options: {
-  url: string;
+  url?: string;
   transport?: string;
   authToken?: string;
+  routesFile?: string;
 }) {
-  vi.stubEnv("COVENANT_EXECUTOR_WORKER_URL", options.url);
+  if (options.url !== undefined)
+    vi.stubEnv("COVENANT_EXECUTOR_WORKER_URL", options.url);
+  if (options.routesFile !== undefined)
+    vi.stubEnv("COVENANT_EXECUTOR_WORKER_ROUTES_FILE", options.routesFile);
   vi.stubEnv(
     "COVENANT_EXECUTOR_WORKER_AUTH_TOKEN",
     options.authToken ?? AUTH_TOKEN,
@@ -33,6 +47,14 @@ async function loadAdapter(options: {
     vi.stubEnv("COVENANT_EXECUTOR_WORKER_TRANSPORT", options.transport);
   vi.resetModules();
   return import("../src/deployment/execution-adapter-entrypoint.js");
+}
+
+function writeRoutes(entries: readonly unknown[]): string {
+  const directory = mkdtempSync(join(tmpdir(), "covenant-worker-routes-"));
+  temporaryDirectories.push(directory);
+  const filename = join(directory, "routes.json");
+  writeFileSync(filename, JSON.stringify({ entries }), "utf8");
+  return filename;
 }
 
 function successfulWorker(
@@ -65,6 +87,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.resetModules();
+  for (const directory of temporaryDirectories.splice(0))
+    rmSync(directory, { recursive: true, force: true });
 });
 
 describe("deployment isolated executor adapter entrypoint", () => {
@@ -149,5 +173,63 @@ describe("deployment isolated executor adapter entrypoint", () => {
         authToken: "",
       }),
     ).rejects.toThrow("COVENANT_EXECUTOR_WORKER_AUTH_TOKEN is required");
+  });
+
+  it("routes exact project and Covenant identities to isolated workers", async () => {
+    const routesFile = writeRoutes([
+      {
+        projectId: PROJECT_ID,
+        covenantId: OLD_COVENANT_ID,
+        workerUrl: "http://covenant-executor.railway.internal:8788",
+      },
+      {
+        projectId: PROJECT_ID,
+        covenantId: NEW_COVENANT_ID,
+        workerUrl: "http://covenant-executor-fresh-demo.railway.internal:8788",
+      },
+    ]);
+    const fetchMock = successfulWorker(
+      "http://covenant-executor-fresh-demo.railway.internal:8788/simulate-authorized-payment",
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const loaded = await loadAdapter({
+      routesFile,
+      transport: "railway-private",
+    });
+
+    await expect(
+      loaded.default.simulate(operation(NEW_COVENANT_ID)),
+    ).resolves.toEqual({ status: "READY" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed for an unmapped Covenant and duplicate routes", async () => {
+    const routesFile = writeRoutes([
+      {
+        projectId: PROJECT_ID,
+        covenantId: OLD_COVENANT_ID,
+        workerUrl: "https://executor.example",
+      },
+    ]);
+    const loaded = await loadAdapter({ routesFile });
+    await expect(
+      loaded.default.simulate(operation(NEW_COVENANT_ID)),
+    ).rejects.toThrow("Isolated executor route is unavailable");
+
+    const duplicate = writeRoutes([
+      {
+        projectId: PROJECT_ID,
+        covenantId: OLD_COVENANT_ID,
+        workerUrl: "https://executor.example",
+      },
+      {
+        projectId: PROJECT_ID.toUpperCase().replace("0X", "0x"),
+        covenantId: OLD_COVENANT_ID,
+        workerUrl: "https://other.example",
+      },
+    ]);
+    await expect(loadAdapter({ routesFile: duplicate })).rejects.toThrow(
+      "Duplicate isolated executor route",
+    );
   });
 });

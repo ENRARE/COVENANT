@@ -28,6 +28,7 @@ ENV COVENANT_API_PORT=8787
 WORKDIR /app
 COPY --from=build --chown=node:node /out/ ./
 COPY --from=build --chown=node:node /workspace/deployment/arc-testnet/cov010-api-authorization-spec.json /app/deployment/arc-testnet/cov010-api-authorization-spec.json
+COPY --from=build --chown=node:node /workspace/deployment/arc-testnet/executor-worker-routes.json /app/deployment/arc-testnet/executor-worker-routes.json
 
 # Mount a persistent volume here for SQLite. The compiled PostgreSQL deployment
 # entrypoint and authorization resolver are included under dist/deployment. The

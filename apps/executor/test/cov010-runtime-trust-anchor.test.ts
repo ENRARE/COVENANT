@@ -56,6 +56,15 @@ const DEPENDENCIES = Object.freeze({
   validateSignerSource: vi.fn(() => undefined),
 });
 
+function eoaSignatureVerifier() {
+  const rpc: ArcSignatureVerificationClient = {
+    getChainId: vi.fn(() => Promise.resolve(5_042_002)),
+    getCode: vi.fn((): Promise<Hex | undefined> => Promise.resolve(undefined)),
+    readContract: vi.fn(() => Promise.reject(new Error("unexpected"))),
+  };
+  return createArcTestnetSignatureVerifier(rpc);
+}
+
 async function readAnchor(): Promise<RuntimeTrustAnchorDocument> {
   return JSON.parse(
     await readFile(TRUST_ANCHOR_FILE, "utf8"),
@@ -114,13 +123,6 @@ describe("COV-010 reconstructed runtime trust anchor", () => {
     const filename = await writeTemporaryAnchor({
       covenantSpec: harness.covenant,
     });
-    const rpc: ArcSignatureVerificationClient = {
-      getChainId: vi.fn(() => Promise.resolve(5_042_002)),
-      getCode: vi.fn((): Promise<Hex | undefined> =>
-        Promise.resolve(undefined),
-      ),
-      readContract: vi.fn(() => Promise.reject(new Error("unexpected"))),
-    };
     const service = await createExecutorDeploymentService({
       env: {
         ...ENV,
@@ -132,7 +134,7 @@ describe("COV-010 reconstructed runtime trust anchor", () => {
         clock: harness.dependencies.clock,
         verifyArcChain: vi.fn(() => undefined),
         validateSignerSource: vi.fn(() => undefined),
-        signatureVerifier: createArcTestnetSignatureVerifier(rpc),
+        signatureVerifier: eoaSignatureVerifier(),
       },
     });
 
@@ -151,6 +153,96 @@ describe("COV-010 reconstructed runtime trust anchor", () => {
           ...ENV,
           COVENANT_VAULT_ADDRESS: "0x9000000000000000000000000000000000000009",
         },
+        dependencies: DEPENDENCIES,
+      }),
+    ).rejects.toThrow(ExecutorDeploymentConfigurationError);
+  });
+
+  it("selects only one exact configured vault from a multi-spec file", async () => {
+    const harness = await createTestHarness({ token: ARC_USDC });
+    const old = await readAnchor();
+    const filename = await writeTemporaryAnchor({
+      entries: [
+        { covenantSpec: old.covenantSpec },
+        { covenantSpec: harness.covenant },
+      ],
+    });
+    const service = await createExecutorDeploymentService({
+      env: {
+        ...ENV,
+        COVENANT_VAULT_ADDRESS: harness.covenant.vaultAddress,
+        COVENANT_EXECUTOR_COVENANT_SPEC_FILE: filename,
+      },
+      dependencies: {
+        transport: harness.dependencies.transport,
+        clock: harness.dependencies.clock,
+        verifyArcChain: vi.fn(() => undefined),
+        validateSignerSource: vi.fn(() => undefined),
+        signatureVerifier: eoaSignatureVerifier(),
+      },
+    });
+    await expect(
+      service.prepareExecution(harness.request),
+    ).resolves.toMatchObject({
+      target: harness.covenant.vaultAddress,
+    });
+  });
+
+  it("rejects multiple specs for the same configured vault", async () => {
+    const anchor = await readAnchor();
+    const filename = await writeTemporaryAnchor({
+      entries: [
+        { covenantSpec: anchor.covenantSpec },
+        {
+          covenantSpec: {
+            ...anchor.covenantSpec,
+            covenantId: `0x${"99".repeat(32)}`,
+          },
+        },
+      ],
+    });
+    await expect(
+      createExecutorDeploymentService({
+        env: { ...ENV, COVENANT_EXECUTOR_COVENANT_SPEC_FILE: filename },
+        dependencies: DEPENDENCIES,
+      }),
+    ).rejects.toThrow(ExecutorDeploymentConfigurationError);
+  });
+
+  it("rejects an authorization chain for a different Covenant ID", async () => {
+    const harness = await createTestHarness({ token: ARC_USDC });
+    const filename = await writeTemporaryAnchor({
+      covenantSpec: {
+        ...harness.covenant,
+        covenantId: `0x${"99".repeat(32)}`,
+      },
+    });
+    const service = await createExecutorDeploymentService({
+      env: {
+        ...ENV,
+        COVENANT_VAULT_ADDRESS: harness.covenant.vaultAddress,
+        COVENANT_EXECUTOR_COVENANT_SPEC_FILE: filename,
+      },
+      dependencies: {
+        transport: harness.dependencies.transport,
+        clock: harness.dependencies.clock,
+        verifyArcChain: vi.fn(() => undefined),
+        validateSignerSource: vi.fn(() => undefined),
+      },
+    });
+    await expect(service.prepareExecution(harness.request)).rejects.toThrow();
+    expect(harness.transportState.simulations).toHaveLength(0);
+    expect(harness.transportState.submissions).toHaveLength(0);
+  });
+
+  it("rejects a trust anchor on the wrong chain", async () => {
+    const anchor = await readAnchor();
+    const filename = await writeTemporaryAnchor({
+      covenantSpec: { ...anchor.covenantSpec, chainId: "1" },
+    });
+    await expect(
+      createExecutorDeploymentService({
+        env: { ...ENV, COVENANT_EXECUTOR_COVENANT_SPEC_FILE: filename },
         dependencies: DEPENDENCIES,
       }),
     ).rejects.toThrow(ExecutorDeploymentConfigurationError);
