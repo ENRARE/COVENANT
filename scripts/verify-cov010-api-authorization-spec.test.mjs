@@ -76,14 +76,18 @@ test("API authorization artifact contains no secret-bearing fields", () => {
   visit(authorizationSpec);
 });
 
-test("API image copies only the reviewed public authorization artifact", () => {
+test("API image copies only reviewed public deployment artifacts", () => {
   assert.match(
     apiDockerfile,
     /^COPY --from=build --chown=node:node \/workspace\/deployment\/arc-testnet\/cov010-api-authorization-spec\.json \/app\/deployment\/arc-testnet\/cov010-api-authorization-spec\.json$/mu,
   );
+  assert.match(
+    apiDockerfile,
+    /^COPY --from=build --chown=node:node \/workspace\/deployment\/arc-testnet\/executor-worker-routes\.json \/app\/deployment\/arc-testnet\/executor-worker-routes\.json$/mu,
+  );
   assert.equal(
     apiDockerfile.match(/\/workspace\/deployment\/arc-testnet\//gu)?.length,
-    1,
+    2,
   );
   assert.doesNotMatch(apiDockerfile, /COPY .*\/workspace\/evidence\//u);
 });

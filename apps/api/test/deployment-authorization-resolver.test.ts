@@ -50,6 +50,39 @@ function cleanup(filename: string): void {
 }
 
 describe("deployment authorization resolver", () => {
+  it("keeps multiple project-bound CovenantSpecs isolated", async () => {
+    const oldCovenant = resource();
+    const oldEvidence = await createEvidence(oldCovenant);
+    const newCovenant = { ...oldCovenant, id: bytes32(2) };
+    const oldSpec = oldEvidence.context.covenantSpec as Record<string, unknown>;
+    const newSpec = {
+      ...oldSpec,
+      covenantId: newCovenant.id,
+      vaultAddress: "0x5000000000000000000000000000000000000005",
+    };
+    const filename = writeAnchors({
+      entries: [
+        {
+          projectId: oldCovenant.projectId,
+          covenantSpec: oldSpec,
+        },
+        { projectId: newCovenant.projectId, covenantSpec: newSpec },
+      ],
+    });
+    try {
+      const resolver = createAuthorizationContextResolver(filename);
+      expect(
+        resolver(oldCovenant.projectId, oldCovenant)?.covenantSpec,
+      ).toEqual(oldSpec);
+      expect(
+        resolver(newCovenant.projectId, newCovenant)?.covenantSpec,
+      ).toEqual(newSpec);
+      expect(resolver(bytes32(10), newCovenant)).toBeUndefined();
+    } finally {
+      cleanup(filename);
+    }
+  });
+
   it("selects only the exact project and Covenant trust anchor", async () => {
     const covenant = resource();
     const evidence = await createEvidence(covenant);

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1",
+  "expectedChainId": "5042002",
+  "usdcInterfaceAddress": "0x3600000000000000000000000000000000000000",
+  "plannedDeployer": "0x58F2C55A4E409ee4C5544F2756073449ee41F403",
+  "plannedTransactionPayer": "0x58F2C55A4E409ee4C5544F2756073449ee41F403",
+  "constructor": {
+    "covenantId": "0x9efcc49d65443927f3c4c1bdea6e88b5d72122f8938518fb75c8cafeb955c859",
+    "issuer": "0x4B7b728885c6ad716B6e769BDCc13a3D63e19Ece",
+    "agentSigner": "0xa5a0c0B3279085E47E18a3e65583732E5e4000ae",
+    "authorizationSigner": "0x803fA7BDb80C6AF83e40B8Aa530A3cB867E6C967",
+    "token": "0x3600000000000000000000000000000000000000",
+    "recipient": "0xDbf314C646792dbbD48070e799E7B1EE5d913aB1",
+    "maxAmountPerPayment": "1000000",
+    "totalBudget": "3000000",
+    "maxPaymentCount": "3",
+    "validAfter": "1788998400",
+    "validUntil": "1820534400",
+    "purpose": "COVENANT Arc Testnet approved payment demonstration",
+    "policyHash": "0x426bae23597d4adadceacd3dbef1dc20b3cdfc041693885576f632df9b70915f",
+    "policyVersion": "cov-018-testnet-1"
+  }
+}

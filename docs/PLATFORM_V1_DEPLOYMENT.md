@@ -133,6 +133,14 @@ plain HTTP only for an origin whose hostname ends exactly in
 fragments, HTTPS, public hosts, and private IP literals. Without this gate, the
 existing HTTPS requirement remains in force for non-loopback hosts.
 
+**V2:** A deployment with more than one immutable CovenantVault must retain one
+executor service per exact vault/spec. Configure the API with
+`COVENANT_EXECUTOR_WORKER_ROUTES_FILE` instead of the single
+`COVENANT_EXECUTOR_WORKER_URL`; the strict file maps exact project/Covenant
+identities to private executor origins and rejects duplicates or unmapped
+operations. The reviewed preparation procedure for the next Arc Testnet demo
+Covenant is in `docs/ARC_TESTNET_FRESH_DEMO_PROVISIONING.md`.
+
 ## Required configuration
 
 Set `COVENANT_MODE=deployment` and provide:
@@ -150,6 +158,7 @@ COVENANT_AUTHORIZATION_SPEC_FILE  # mounted, public CovenantSpec trust anchors
 COVENANT_EXECUTION_ADAPTER_MODULE
 COVENANT_EXECUTOR_WORKER_TRANSPORT # railway-private only for Railway private DNS
 COVENANT_EXECUTOR_WORKER_URL      # HTTPS, or gated Railway private HTTP origin
+COVENANT_EXECUTOR_WORKER_ROUTES_FILE # exact multi-Covenant routes; replaces URL
 COVENANT_EXECUTOR_WORKER_AUTH_TOKEN # internal channel secret, >=32 characters
 COVENANT_EXECUTOR_SERVICE_MODULE    # worker-only service factory module
 COVENANT_EXECUTOR_COVENANT_SPEC_FILE # mounted public CovenantSpec trust anchor
