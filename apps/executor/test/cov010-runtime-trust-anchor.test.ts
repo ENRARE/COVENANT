@@ -2,11 +2,17 @@ import { readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { covenantSpecSchema } from "@covenant/spec";
+import {
+  createArcTestnetSignatureVerifier,
+  type ArcSignatureVerificationClient,
+} from "@covenant/core";
+import type { Hex } from "viem";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createExecutorDeploymentService,
   ExecutorDeploymentConfigurationError,
 } from "../src/deployment-service-factory.js";
+import { createTestHarness } from "./fixtures.js";
 
 const ROOT = resolve(import.meta.dirname, "../../..");
 const TRUST_ANCHOR_FILE = resolve(
@@ -101,6 +107,41 @@ describe("COV-010 reconstructed runtime trust anchor", () => {
       "simulateAuthorizedPayment",
       "executeAuthorizedPayment",
     ]);
+  });
+
+  it("preserves canonical JSON values for verification after loading a file-backed trust anchor", async () => {
+    const harness = await createTestHarness({ token: ARC_USDC });
+    const filename = await writeTemporaryAnchor({
+      covenantSpec: harness.covenant,
+    });
+    const rpc: ArcSignatureVerificationClient = {
+      getChainId: vi.fn(() => Promise.resolve(5_042_002)),
+      getCode: vi.fn((): Promise<Hex | undefined> =>
+        Promise.resolve(undefined),
+      ),
+      readContract: vi.fn(() => Promise.reject(new Error("unexpected"))),
+    };
+    const service = await createExecutorDeploymentService({
+      env: {
+        ...ENV,
+        COVENANT_VAULT_ADDRESS: harness.covenant.vaultAddress,
+        COVENANT_EXECUTOR_COVENANT_SPEC_FILE: filename,
+      },
+      dependencies: {
+        transport: harness.dependencies.transport,
+        clock: harness.dependencies.clock,
+        verifyArcChain: vi.fn(() => undefined),
+        validateSignerSource: vi.fn(() => undefined),
+        signatureVerifier: createArcTestnetSignatureVerifier(rpc),
+      },
+    });
+
+    await expect(
+      service.prepareExecution(harness.request),
+    ).resolves.toMatchObject({
+      target: harness.covenant.vaultAddress,
+      chainId: 5_042_002n,
+    });
   });
 
   it("fails closed when the configured vault does not match", async () => {

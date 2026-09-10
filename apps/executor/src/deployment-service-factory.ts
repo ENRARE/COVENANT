@@ -4,8 +4,13 @@ import { isAbsolute, resolve } from "node:path";
 import { ARC_TESTNET_USDC_INTERFACE } from "@covenant/config";
 import { withIsolatedKeystoreAccount as openIsolatedKeystoreAccount } from "@covenant/config/isolated-keystore";
 import {
+  createArcTestnetSignatureVerifierFromRpcUrl,
+  type AuthorizationSignatureVerifier,
+} from "@covenant/core";
+import {
   ARC_TESTNET_CHAIN_ID,
   covenantSpecSchema,
+  formatUsdc,
   vaultAddressSchema,
   type CovenantSpec,
 } from "@covenant/spec";
@@ -74,6 +79,7 @@ export type ExecutorDeploymentOverrides = Readonly<{
   clock?: Clock;
   verifyArcChain?: ArcChainVerifier;
   validateSignerSource?: SignerSourceValidator;
+  signatureVerifier?: AuthorizationSignatureVerifier;
 }>;
 
 export type ExecutorDeploymentOptions = Readonly<{
@@ -193,7 +199,7 @@ function deepFreeze<T>(value: T): T {
 function parseCovenantSpecDocument(
   value: unknown,
   vaultAddress: Address,
-): CovenantSpec {
+): Readonly<Record<string, unknown>> {
   const candidates: unknown[] = [];
   const direct = covenantSpecSchema.safeParse(value);
   if (direct.success) candidates.push(direct.data);
@@ -230,7 +236,30 @@ function parseCovenantSpecDocument(
     spec.tokenAddress.toLowerCase() !== ARC_TESTNET_USDC_INTERFACE.toLowerCase()
   )
     configurationFailure("CovenantSpec is not Arc Testnet USDC configuration");
-  return deepFreeze(spec);
+  return deepFreeze(normalizeCovenantSpec(spec));
+}
+
+function normalizeCovenantSpec(value: CovenantSpec): Record<string, unknown> {
+  return {
+    version: value.version,
+    covenantId: value.covenantId,
+    issuer: value.issuer,
+    agentSigner: value.agentSigner,
+    authorizationSigner: value.authorizationSigner,
+    vaultAddress: value.vaultAddress,
+    chainId: value.chainId.toString(),
+    tokenAddress: value.tokenAddress,
+    recipientAddress: value.recipientAddress,
+    maxAmountPerPayment: formatUsdc(value.maxAmountPerPayment),
+    totalBudget: formatUsdc(value.totalBudget),
+    maxPaymentCount: value.maxPaymentCount.toString(),
+    validAfter: value.validAfter.toString(),
+    validUntil: value.validUntil.toString(),
+    purpose: value.purpose,
+    policyHash: value.policyHash,
+    policyVersion: value.policyVersion,
+    createdAt: value.createdAt.toString(),
+  };
 }
 
 async function createFileCovenantProvider(
@@ -410,6 +439,9 @@ function overridesOf(
     ...(options.validateSignerSource === undefined
       ? {}
       : { validateSignerSource: options.validateSignerSource }),
+    ...(options.signatureVerifier === undefined
+      ? {}
+      : { signatureVerifier: options.signatureVerifier }),
   });
 }
 
@@ -453,6 +485,9 @@ export async function createExecutorDeploymentService(
     clock: overrides.clock ?? systemClock(),
     covenantProvider,
     transport,
+    signatureVerifier:
+      overrides.signatureVerifier ??
+      createArcTestnetSignatureVerifierFromRpcUrl(config.arcRpcUrl),
     ...(overrides.executionRepository === undefined
       ? {}
       : { executionRepository: overrides.executionRepository }),

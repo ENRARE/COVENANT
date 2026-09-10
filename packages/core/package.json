@@ -20,6 +20,7 @@
   "dependencies": {
     "@covenant/spec": "workspace:*",
     "@covenant/config": "workspace:*",
+    "viem": "^2.33.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
