@@ -273,6 +273,30 @@ describe("@covenant/runtime COV-023 durable execution", () => {
     expect(submissions).toBe(1);
   });
 
+  it("keeps authorization-verification simulation failures before the submission boundary", async () => {
+    let submissions = 0;
+    const setup = runtime({
+      simulate: async () => {
+        throw new Error("INVALID_AUTHORIZATION_CHAIN");
+      },
+      submit: async () => {
+        submissions += 1;
+        return { status: "ACCEPTED", transactionId: "must-not-submit" };
+      },
+    });
+    const started = await start(setup.runtime);
+
+    const result = await setup.runtime.process(
+      started.operation.operationKey,
+      "worker-a",
+    );
+
+    expect(result.state).toBe("QUEUED");
+    expect(result.retryReason).toBe("SIMULATION_FAILURE");
+    expect(result.submissionBoundary).toBe(false);
+    expect(submissions).toBe(0);
+  });
+
   it("retries explicit no-submission rejection, keeps provider acceptance separate, and reconciles Arc success", async () => {
     const setup = runtime({
       simulate: async () => ({ status: "READY" }),

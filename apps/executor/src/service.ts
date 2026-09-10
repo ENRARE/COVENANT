@@ -8,6 +8,10 @@ import {
   hashDecisionReceipt,
   verifyAuthorizationChain,
 } from "@covenant/spec";
+import {
+  verifyAuthorizationChainWithSignatureVerifier,
+  type AuthorizationSignatureVerifier,
+} from "@covenant/core";
 import { encodeAbiParameters, keccak256, stringToHex } from "viem";
 import { constructExecutePaymentRequest } from "./calldata/prepare-execute-payment.js";
 import {
@@ -79,6 +83,7 @@ export type ExecutorDependencies = {
   covenantProvider: CovenantProvider;
   transport: TransactionTransport;
   executionRepository?: ExecutionRepository;
+  signatureVerifier?: AuthorizationSignatureVerifier;
   submissionTimeoutMilliseconds?: unknown;
 };
 
@@ -158,13 +163,23 @@ export function createExecutorService(
 
     let verified: Awaited<ReturnType<typeof verifyAuthorizationChain>>;
     try {
-      verified = await verifyAuthorizationChain(
-        rawCovenant,
-        request.raw.signedPaymentIntent,
-        request.raw.decisionReceipt,
-        request.raw.ruleResults,
-        request.raw.authorizationReceipt,
-      );
+      verified =
+        dependencies.signatureVerifier === undefined
+          ? await verifyAuthorizationChain(
+              rawCovenant,
+              request.raw.signedPaymentIntent,
+              request.raw.decisionReceipt,
+              request.raw.ruleResults,
+              request.raw.authorizationReceipt,
+            )
+          : await verifyAuthorizationChainWithSignatureVerifier(
+              rawCovenant,
+              request.raw.signedPaymentIntent,
+              request.raw.decisionReceipt,
+              request.raw.ruleResults,
+              request.raw.authorizationReceipt,
+              dependencies.signatureVerifier,
+            );
     } catch (error) {
       throw authorizationChainError(error);
     }

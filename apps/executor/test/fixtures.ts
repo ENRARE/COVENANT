@@ -9,6 +9,7 @@ import {
   hashPaymentIntent,
   hashRuleResults,
 } from "@covenant/spec";
+import type { Address } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
   createExecutorService,
@@ -18,11 +19,14 @@ import {
 
 export const TEST_NOW = 2_000_000_000n;
 
-export async function createTestHarness() {
+export async function createTestHarness(
+  options: Readonly<{ token?: Address }> = {},
+) {
   const issuer = privateKeyToAccount(generatePrivateKey());
   const agent = privateKeyToAccount(generatePrivateKey());
   const authorization = privateKeyToAccount(generatePrivateKey());
-  const token = privateKeyToAccount(generatePrivateKey()).address;
+  const token =
+    options.token ?? privateKeyToAccount(generatePrivateKey()).address;
   const recipient = privateKeyToAccount(generatePrivateKey()).address;
   const vault = privateKeyToAccount(generatePrivateKey()).address;
   const clock = { value: TEST_NOW, calls: 0 };
