@@ -28,17 +28,17 @@ export const REVIEWED_COVENANT_ARTIFACT = Object.freeze({
   viaIr: true,
   metadataBytecodeHash: "ipfs",
   creationBytecodeHash:
-    "0xf8397467ac97f7b7bafbd2475bcb3dcfa954177caa670b6bb471e50eb5d9abf6",
+    "0x352331ee4affc510ee820e834c5e21435c56d03551c9d34cbe87de8e0464bb73",
   unpatchedRuntimeBytecodeHash:
-    "0xc15a104d5ad3440ab65678c50fc37b8e0c4d8fc449da9ce30fb9eb68ce6aebf2",
+    "0x1e198dfd1f78c72f250636b17c687634ed8f079f5234974d889abc0d0e9f3156",
   canonicalAbiHash:
     "0x6606d1c53a3d8f0fad559849d4108913813cbe6683e1f5f390205066a16dcdc0",
   semanticImmutableMapDigest:
-    "0x86bc8b62dbcfa9711069de846d779b2fc2095803f2909ec9944411f8abc68a82",
+    "0x62a4ffc052f3ad8d39c6274ace74513e2dc6b054c9cc9cdb351f578eb0626549",
   canonicalMetadataDigest:
-    "0x338e52d378c8823cc0ca3825e7ed3b7d4efb1059edb6d8bc4264a7c818197863",
-  creationByteLength: 11_990,
-  runtimeByteLength: 8_930,
+    "0x367e3ea1d4a8de3d049d3522ccc165bff87fc6fb5585d7c3cb6a52eea2532dce",
+  creationByteLength: 12_134,
+  runtimeByteLength: 9_074,
 });
 
 const root = resolve(import.meta.dirname, "../..");

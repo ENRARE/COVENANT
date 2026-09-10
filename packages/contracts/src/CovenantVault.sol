@@ -6,6 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 
 import {CovenantHashing} from "./CovenantHashing.sol";
 import {CovenantTypes} from "./CovenantTypes.sol";
@@ -142,8 +143,13 @@ contract CovenantVault is EIP712, ReentrancyGuard {
         _validateIntent(intent);
 
         bytes32 intentHash = hashPaymentIntent(intent);
-        address recoveredAgent = ECDSA.recoverCalldata(intentHash, intentSignature);
-        if (recoveredAgent == address(0) || recoveredAgent != agentSigner) {
+        if (!SignatureChecker.isValidSignatureNowCalldata(agentSigner, intentHash, intentSignature))
+        {
+            address recoveredAgent;
+            // Preserve the existing EOA revert behavior, including malformed-signature errors.
+            if (agentSigner.code.length == 0) {
+                recoveredAgent = ECDSA.recoverCalldata(intentHash, intentSignature);
+            }
             revert InvalidAgentSignature(recoveredAgent);
         }
 
