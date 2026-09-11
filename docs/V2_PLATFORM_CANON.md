@@ -244,7 +244,7 @@ already submitted chain operation.
 
 ## TypeScript SDK contract
 
-**V2:** `@covenant/sdk` is the typed, server-side TypeScript client for the
+**V2:** `@enrare/covenant-sdk` is the typed, server-side TypeScript client for the
 COV-024 REST API. It exposes `covenants.create`, `covenants.retrieve`,
 `covenants.list`, `covenants.authorize`, `covenants.execute`,
 `covenants.cancel`, `covenants.audit`, `executions.retrieve`, API-key and

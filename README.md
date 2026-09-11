@@ -6,7 +6,7 @@
 
 **MVP:** The completed proof remains frozen historical evidence under `docs/MVP_CANON.md`.
 
-**V2:** COV-021 approves an API-first Covenant Platform v1 for multiple developer projects and Covenant instances on Arc using six-decimal USDC. COV-022 provides the pure, offline generalized Covenant domain core, COV-023 the durable runtime, COV-024 the authenticated developer REST API, COV-025 `@covenant/sdk`, COV-026 authorization completion and dogfood references, and COV-027 the internal developer-release hardening gate. The SDK is not a second execution architecture.
+**V2:** COV-021 approves an API-first Covenant Platform v1 for multiple developer projects and Covenant instances on Arc using six-decimal USDC. COV-022 provides the pure, offline generalized Covenant domain core, COV-023 the durable runtime, COV-024 the authenticated developer REST API, COV-025 `@enrare/covenant-sdk`, COV-026 authorization completion and dogfood references, and COV-027 the internal developer-release hardening gate. The SDK is not a second execution architecture.
 
 ## Workspace
 
