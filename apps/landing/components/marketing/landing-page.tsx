@@ -72,11 +72,14 @@ export function LandingPage({
                 defines the agreement and conditions under which it may move.
               </p>
               <div className="site-actions">
-                <a
-                  className="site-button site-button-primary"
-                  href="https://github.com/ENRARE/COVENANT/blob/main/docs/PLATFORM_V1_DEVELOPER_QUICKSTART.md"
-                >
+                <a className="site-button site-button-primary" href="/docs">
                   Read the developer guide
+                </a>
+                <a
+                  className="site-button site-button-secondary"
+                  href="/docs#installation"
+                >
+                  Install SDK
                 </a>
                 <a
                   className="site-button site-button-secondary"
@@ -127,10 +130,7 @@ export function LandingPage({
                   <strong>receive unrestricted access to funds</strong>
                 </div>
               </div>
-              <a
-                className="product-docs-cta"
-                href="https://github.com/ENRARE/COVENANT/tree/main/docs"
-              >
+              <a className="product-docs-cta" href="/docs">
                 Explore the documentation
               </a>
             </Reveal>
@@ -255,11 +255,14 @@ export function LandingPage({
                 evidence.
               </p>
               <div className="site-actions">
-                <a
-                  className="site-button site-button-primary"
-                  href="https://github.com/ENRARE/COVENANT/blob/main/docs/PLATFORM_V1_DEVELOPER_QUICKSTART.md"
-                >
+                <a className="site-button site-button-primary" href="/docs">
                   Read the developer guide
+                </a>
+                <a
+                  className="site-button site-button-secondary"
+                  href="/docs#installation"
+                >
+                  Install SDK
                 </a>
                 <a
                   className="site-button site-button-secondary"

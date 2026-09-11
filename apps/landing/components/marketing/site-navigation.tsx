@@ -9,7 +9,8 @@ const links = [
   ["How It Works", "#how-it-works"],
   ["Use Case", "#use-case"],
   ["Security", "#security"],
-  ["Developers", "https://github.com/ENRARE/COVENANT/tree/main/docs"],
+  ["Developers", "/docs"],
+  ["GitHub", "https://github.com/ENRARE/COVENANT"],
 ] as const;
 
 export function SiteNavigation() {
@@ -67,11 +68,11 @@ export function SiteNavigation() {
             ))}
           </div>
 
-          <a
-            className="site-nav-cta"
-            href="https://github.com/ENRARE/COVENANT/blob/main/docs/PLATFORM_V1_DEVELOPER_QUICKSTART.md"
-          >
+          <a className="site-nav-cta" href="/docs#quickstart">
             Get Started
+          </a>
+          <a className="site-nav-cta" href="/docs#installation">
+            Install SDK
           </a>
 
           <button
@@ -106,12 +107,21 @@ export function SiteNavigation() {
             ))}
             <a
               className="site-mobile-cta"
-              href="https://github.com/ENRARE/COVENANT/blob/main/docs/PLATFORM_V1_DEVELOPER_QUICKSTART.md"
+              href="/docs#quickstart"
               onClick={() => {
                 setMenuOpen(false);
               }}
             >
               Get Started
+            </a>
+            <a
+              className="site-mobile-cta"
+              href="/docs#installation"
+              onClick={() => {
+                setMenuOpen(false);
+              }}
+            >
+              Install SDK
             </a>
           </div>
         </nav>
