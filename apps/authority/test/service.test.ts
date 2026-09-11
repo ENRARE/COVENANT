@@ -43,7 +43,9 @@ describe("authority service integration", () => {
         verify: () => Promise.reject(new Error("invalid")),
       },
     });
-    const result = await harness.service.evaluatePaymentRequest(harness.request);
+    const result = await harness.service.evaluatePaymentRequest(
+      harness.request,
+    );
     expect(result.status).toBe("REJECTED");
     expect(result.ruleResults[1]).toMatchObject({
       ruleId: "intent_signature_valid",

@@ -85,7 +85,8 @@ export async function evaluatePolicy(input: {
     covenantReason = "evidence_stale";
   const covenantActive = covenantReason === "covenant_active";
 
-  const signatureValid = input.intentSignatureValid ?? recoveredIntentSigner !== undefined;
+  const signatureValid =
+    input.intentSignatureValid ?? recoveredIntentSigner !== undefined;
   const agentAuthorized =
     recoveredIntentSigner === covenant.agentSigner &&
     intent.agentSigner === covenant.agentSigner &&
