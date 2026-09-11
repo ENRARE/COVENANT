@@ -18,7 +18,7 @@ accepted COV.
 - **V2 — COV-022:** Generalized Covenant core (complete).
 - **V2 — COV-023:** Durable execution runtime and persistence (complete).
 - **V2 — COV-024:** Developer REST API (complete).
-- **V2 — COV-025:** `@covenant/sdk` typed server-side API client (complete;
+- **V2 — COV-025:** `@enrare/covenant-sdk` typed server-side API client (complete;
   package publication remains deferred).
 - **V2 — COV-026:** Authorization completion and bounded dogfood references
   (complete).

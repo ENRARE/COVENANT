@@ -1,6 +1,6 @@
 {
   "name": "@enrare/covenant-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Server-side TypeScript client for the Covenant Platform v1 developer API.",
   "repository": {
     "type": "git",

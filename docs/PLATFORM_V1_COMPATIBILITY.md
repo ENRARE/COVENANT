@@ -15,7 +15,7 @@ reinterpreted.
 
 ## SDK
 
-`@enrare/covenant-sdk` remains `0.1.0`; normal pre-1.0 semver rules apply until a
+`@enrare/covenant-sdk` remains `0.1.1`; normal pre-1.0 semver rules apply until a
 separate release decision promotes it. REST/API versioning and npm package
 semver are separate.
 

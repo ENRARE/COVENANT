@@ -230,7 +230,7 @@ defaults. These controls remain developer-release scope, not a production SLA.
 developer release. The API has an explicit configuration boundary and Node
 entrypoint, bounded request and rate-limit controls, readiness and graceful
 shutdown behavior, and redacted operational errors. Runtime ambiguity and
-webhook retry semantics remain fail-closed and durable. `@covenant/sdk` 0.1.0
+webhook retry semantics remain fail-closed and durable. `@enrare/covenant-sdk` 0.1.1
 is packable and independently consumable, with an OpenAPI/SDK drift gate.
 
 **V2:** The release claim is strictly **Covenant Platform v1 Developer Release
@@ -264,7 +264,7 @@ mobile clients.
 2. **V2 — COV-022:** Generalized Covenant core.
 3. **V2 — COV-023:** Production-style execution runtime and persistence.
 4. **V2 — COV-024:** Developer REST API.
-5. **V2 — COV-025:** `@covenant/sdk` typed server-side API client.
+5. **V2 — COV-025:** `@enrare/covenant-sdk` typed server-side API client.
 6. **V2 — COV-026:** Dogfood the existing Covenant app and add bounded
    reference integrations.
 7. **V2 — COV-027:** Security, reliability, and Platform v1 release.
