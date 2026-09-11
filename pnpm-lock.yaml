@@ -83,6 +83,9 @@ importers:
       '@covenant/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@covenant/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@covenant/spec':
         specifier: workspace:*
         version: link:../../packages/spec
@@ -133,6 +136,9 @@ importers:
       '@covenant/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@covenant/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@covenant/spec':
         specifier: workspace:*
         version: link:../../packages/spec

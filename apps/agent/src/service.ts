@@ -5,6 +5,7 @@ import {
   deriveSigningDomainForCovenant,
   formatUsdc,
   hashInvoice,
+  hashPaymentIntent,
   paymentIntentSchema,
   recoverInvoiceSigner,
   recoverPaymentIntentSigner,
@@ -13,6 +14,7 @@ import {
   type CovenantSpec,
   type SignedInvoice,
 } from "@covenant/spec";
+import type { AuthorizationSignatureVerifier } from "@covenant/core";
 import {
   encodeAbiParameters,
   keccak256,
@@ -66,6 +68,7 @@ export type AgentDependencies = {
   approvedVendor: unknown;
   approvedProductId: unknown;
   intentTtlSeconds: unknown;
+  signatureVerifier?: AuthorizationSignatureVerifier;
 };
 
 export type AgentService = {
@@ -421,27 +424,47 @@ export function createAgentService(
         covenant: input.covenant,
         expectedInvoiceHash: input.invoiceHash,
       });
-      const verified = await verifySignedPaymentIntentForCovenant(
-        input.result.signedPaymentIntent,
-        input.covenant.raw,
-      );
+      if (dependencies.signatureVerifier === undefined) {
+        await verifySignedPaymentIntentForCovenant(
+          input.result.signedPaymentIntent,
+          input.covenant.raw,
+        );
+      } else {
+        const paymentDomain = deriveSigningDomainForCovenant(
+          input.covenant.raw,
+          EIP712_DOMAIN_NAMES.paymentIntent,
+        );
+        await dependencies.signatureVerifier.verify({
+          kind: "paymentIntent",
+          expectedSigner: input.covenant.parsed.agentSigner,
+          digest: hashPaymentIntent(
+            input.result.signedPaymentIntent.payload,
+            paymentDomain,
+          ),
+          signature: input.result.signedPaymentIntent.signature as Hex,
+        });
+      }
       const expected = paymentIntentSchema.parse(
         input.reservation.rawPaymentIntentPayload,
       );
-      assertEveryIntentField(verified.payload, expected);
+      const verified = paymentIntentSchema.parse(
+        input.result.signedPaymentIntent.payload,
+      );
+      assertEveryIntentField(verified, expected);
       const paymentDomain = deriveSigningDomainForCovenant(
         input.covenant.raw,
         EIP712_DOMAIN_NAMES.paymentIntent,
       );
-      const recovered = await recoverPaymentIntentSigner(
-        input.result.signedPaymentIntent,
-        paymentDomain,
-      );
-      if (recovered !== input.signerAddress) {
-        throw new AgentError("SELF_VERIFICATION_FAILED");
+      if (dependencies.signatureVerifier === undefined) {
+        const recovered = await recoverPaymentIntentSigner(
+          input.result.signedPaymentIntent,
+          paymentDomain,
+        );
+        if (recovered !== input.signerAddress)
+          throw new AgentError("SELF_VERIFICATION_FAILED");
       }
       if (
-        verified.payload.invoiceHash !== storedInvoiceHash ||
+        verified.invoiceHash !== storedInvoiceHash ||
         storedInvoiceHash !== input.invoiceHash
       ) {
         throw new AgentError("SELF_VERIFICATION_FAILED");

@@ -87,6 +87,7 @@ export async function createAgentHarness(overrides?: {
   intentTtlSeconds?: unknown;
   signer?: PaymentIntentSigner;
   identifierGenerator?: AgentDependencies["identifierGenerator"];
+  signatureVerifier?: AgentDependencies["signatureVerifier"];
 }) {
   const issuer = privateKeyToAccount(generatePrivateKey());
   const agentAccount = privateKeyToAccount(generatePrivateKey());
@@ -169,6 +170,9 @@ export async function createAgentHarness(overrides?: {
     ...(overrides?.proposalRepository === undefined
       ? {}
       : { proposalRepository: overrides.proposalRepository }),
+    ...(overrides?.signatureVerifier === undefined
+      ? {}
+      : { signatureVerifier: overrides.signatureVerifier }),
   };
 
   function invoiceDomain(targetCovenant = covenant) {

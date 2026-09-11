@@ -3,9 +3,35 @@ import {
   type ReceiptSigner,
 } from "../../authority/src/index.js";
 import { describe, expect, it } from "vitest";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createAgentHarness, TEST_NOW } from "./fixtures.js";
 
 describe("COV-005 agent service", () => {
+  it("accepts an ERC-1271 agent through the injected verifier", async () => {
+    const signingAccount = privateKeyToAccount(generatePrivateKey());
+    const contractSigner = "0x7000000000000000000000000000000000000007";
+    const verifierCalls: unknown[] = [];
+    const harness = await createAgentHarness({
+      covenant: { agentSigner: contractSigner },
+      signer: {
+        address: contractSigner,
+        signPaymentIntent: (typedData) =>
+          signingAccount.signTypedData(
+            typedData as Parameters<typeof signingAccount.signTypedData>[0],
+          ),
+      },
+      signatureVerifier: {
+        verify: (request) => {
+          verifierCalls.push(request);
+          return Promise.resolve();
+        },
+      },
+    });
+    const result = await harness.service.proposePayment(harness.request);
+    expect(result.signedPaymentIntent.payload.agentSigner).toBe(contractSigner);
+    expect(verifierCalls).toHaveLength(1);
+  });
+
   it("returns the exact frozen authority-ready result", async () => {
     const harness = await createAgentHarness();
     const result = await harness.service.proposePayment(harness.request);
