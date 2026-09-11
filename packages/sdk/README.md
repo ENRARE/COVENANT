@@ -1,4 +1,4 @@
-# `@covenant/sdk`
+# `@enrare/covenant-sdk`
 
 **V2:** The Covenant TypeScript SDK is a typed, server-side client for the
 COV-024 developer REST API. It ends at the HTTP boundary: it does not evaluate
@@ -11,7 +11,7 @@ Publication is deferred until the Platform v1 release gate (COV-027). When the
 package is available from the package registry:
 
 ```bash
-pnpm add @covenant/sdk
+pnpm add @enrare/covenant-sdk
 ```
 
 ## Initialize
@@ -22,7 +22,7 @@ or public frontend code. The application, not the SDK, owns environment
 configuration; the SDK does not read `.env` files automatically.
 
 ```ts
-import { Covenant } from "@covenant/sdk";
+import { Covenant } from "@enrare/covenant-sdk";
 
 const covenant = new Covenant({
   ["apiKey"]: process.env.COVENANT_API_KEY!,
@@ -133,7 +133,7 @@ SDK boundary decision.
 
 ## Developer-release packaging
 
-The package remains pre-1.0 at version `0.1.0`. From the repository root,
+The package remains pre-1.0 at version `0.1.1`. From the repository root,
 `pnpm test:sdk-release` builds the package, inspects its local tarball, installs
 it into an isolated temporary consumer, and verifies a mocked import. This is
 an offline proof; `npm publish` is intentionally not run until a separate

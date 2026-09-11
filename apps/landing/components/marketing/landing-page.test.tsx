@@ -30,6 +30,6 @@ describe("isolated COVENANT landing deployment", () => {
     expect(markup).not.toMatch(/href=["']\/(?:docs|demo|evidence)(?:[/#?"'])/u);
     expect(markup).not.toContain("Open Evidence Console");
     expect(markup).toContain('href="#use-case"');
-    expect(markup).toContain("Documentation coming soon");
+    expect(markup).toContain("Read the developer guide");
   });
 });

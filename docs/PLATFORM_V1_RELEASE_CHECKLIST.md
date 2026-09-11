@@ -14,7 +14,7 @@ deferred Production item is not represented as a PASS.
 | API            | Body/header/time limits, JSON content type, safe errors, readiness         | PASS — API release-hardening tests                               |
 | API            | Rate limiting is bounded and deterministic                                 | PASS — `InMemoryRateLimiter` tests; distributed limiter deferred |
 | Webhooks       | Stable identity, signing, retries, disable/restart behavior                | PASS — webhook/API suites and incident runbook                   |
-| SDK            | 0.1.0 metadata, restricted files, dry-run package inspection               | PASS — `npm pack --dry-run` via `test:sdk-release`               |
+| SDK            | 0.1.1 metadata, restricted files, dry-run package inspection               | PASS — `npm pack --dry-run` via `test:sdk-release`               |
 | SDK            | Independent packed consumer import/initialization                          | PASS — `scripts/sdk-package-consumer.mjs`                        |
 | Contracts      | OpenAPI and SDK route set aligned                                          | PASS — `scripts/verify-openapi-sdk.mjs`                          |
 | Examples       | Quickstart, dogfood, milestone, marketplace, agent references              | PASS — COV-026 example tests/build                               |

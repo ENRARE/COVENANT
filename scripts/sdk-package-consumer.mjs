@@ -46,7 +46,7 @@ try {
   );
   writeFileSync(
     resolve(temp, "consumer.mjs"),
-    `import { Covenant, verifyWebhook } from "@covenant/sdk";\nconst testKey = ["cov", "_test_consumer_key_12345678"].join("");\nconst client = new Covenant({ apiKey: testKey, baseUrl: "http://localhost:8787", fetch: async () => new Response("{}", { status: 200 }) });\nif (!(client && typeof verifyWebhook === "function")) throw new Error("SDK consumer import failed");\nconsole.log("SDK consumer import and mocked initialization passed.");\n`,
+    `import { Covenant, verifyWebhook } from "@enrare/covenant-sdk";\nconst testKey = ["cov", "_test_consumer_key_12345678"].join("");\nconst client = new Covenant({ apiKey: testKey, baseUrl: "http://localhost:8787", fetch: async () => new Response("{}", { status: 200 }) });\nif (!(client && typeof verifyWebhook === "function")) throw new Error("SDK consumer import failed");\nconsole.log("SDK consumer import and mocked initialization passed.");\n`,
   );
   execSync(`"${process.execPath}" "${resolve(temp, "consumer.mjs")}"`, {
     cwd: temp,

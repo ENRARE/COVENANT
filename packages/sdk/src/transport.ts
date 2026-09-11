@@ -214,7 +214,7 @@ export class HttpTransport {
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#userAgent =
       options.userAgent === undefined
-        ? "@covenant/sdk/0.1.0"
+        ? "@enrare/covenant-sdk/0.1.1"
         : safeField(options.userAgent, "", 256);
     if (options.userAgent !== undefined && this.#userAgent === "")
       throw new CovenantConfigurationError("userAgent is invalid.");

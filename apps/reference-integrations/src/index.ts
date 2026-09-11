@@ -1,4 +1,4 @@
-import { Covenant } from "@covenant/sdk";
+import { Covenant } from "@enrare/covenant-sdk";
 import type {
   AuthorizationEvidenceSubmission,
   AuditResource,
@@ -6,7 +6,7 @@ import type {
   CreateCovenantInput,
   ExecutionAccepted,
   ExecutionResource,
-} from "@covenant/sdk";
+} from "@enrare/covenant-sdk";
 
 export type ReferencePaymentResult = Readonly<{
   created: CovenantResource;
@@ -65,7 +65,7 @@ async function runPayment(
   };
 }
 
-/** Own application dogfood: every Platform operation crosses only @covenant/sdk. */
+/** Own application dogfood: every Platform operation crosses only @enrare/covenant-sdk. */
 export function runOwnAppPayment(
   client: Covenant,
   input: CreateCovenantInput,

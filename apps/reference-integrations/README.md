@@ -1,7 +1,7 @@
 # SDK reference integrations
 
 **V2:** This package is the COV-026 dogfooding surface. The own-app,
-milestone, marketplace, and agent examples use only `@covenant/sdk` for
+milestone, marketplace, and agent examples use only `@enrare/covenant-sdk` for
 Platform operations. They create a Covenant, request authority, transport
 externally produced evidence, execute, retrieve the operation, and read the
 non-authoritative audit view. A separate valid cancellation helper exercises

@@ -227,7 +227,7 @@ importers:
 
   apps/reference-integrations:
     dependencies:
-      '@covenant/sdk':
+      '@enrare/covenant-sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
     devDependencies:

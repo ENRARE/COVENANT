@@ -5,8 +5,11 @@ import {
   DurableExecutionRuntime,
   DurableRuntimeStore,
 } from "@covenant/runtime";
-import { Covenant } from "@covenant/sdk";
-import type { AuthorizationEvidenceSubmission, FetchLike } from "@covenant/sdk";
+import { Covenant } from "@enrare/covenant-sdk";
+import type {
+  AuthorizationEvidenceSubmission,
+  FetchLike,
+} from "@enrare/covenant-sdk";
 import {
   cancelBeforeAuthorization,
   runAgentCovenant,

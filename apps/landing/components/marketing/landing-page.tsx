@@ -65,19 +65,19 @@ export function LandingPage({
                 Financial governance infrastructure for autonomous software
               </p>
               <h1 id="hero-title">
-                Bounded financial authority for autonomous software
+                The agreement and policy layer for programmable money
               </h1>
               <p className="hero-lede">
-                AI proposes. Covenant authorizes. Circle submits. Arc execution
-                is independently verified.
+                Circle is how money moves. Arc is where it settles. COVENANT
+                defines the agreement and conditions under which it may move.
               </p>
               <div className="site-actions">
-                <span
-                  aria-disabled="true"
-                  className="site-button site-button-primary site-button-disabled"
+                <a
+                  className="site-button site-button-primary"
+                  href="https://github.com/ENRARE/COVENANT/blob/main/docs/PLATFORM_V1_DEVELOPER_QUICKSTART.md"
                 >
-                  Documentation coming soon
-                </span>
+                  Read the developer guide
+                </a>
                 <a
                   className="site-button site-button-secondary"
                   href="#use-case"
@@ -127,12 +127,12 @@ export function LandingPage({
                   <strong>receive unrestricted access to funds</strong>
                 </div>
               </div>
-              <span
-                aria-disabled="true"
-                className="product-docs-cta product-docs-cta-disabled"
+              <a
+                className="product-docs-cta"
+                href="https://github.com/ENRARE/COVENANT/tree/main/docs"
               >
-                Documentation coming soon
-              </span>
+                Explore the documentation
+              </a>
             </Reveal>
           </div>
         </section>
@@ -255,12 +255,12 @@ export function LandingPage({
                 evidence.
               </p>
               <div className="site-actions">
-                <span
-                  aria-disabled="true"
-                  className="site-button site-button-primary site-button-disabled"
+                <a
+                  className="site-button site-button-primary"
+                  href="https://github.com/ENRARE/COVENANT/blob/main/docs/PLATFORM_V1_DEVELOPER_QUICKSTART.md"
                 >
-                  Documentation coming soon
-                </span>
+                  Read the developer guide
+                </a>
                 <a
                   className="site-button site-button-secondary"
                   href="#use-case"

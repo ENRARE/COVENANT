@@ -8,7 +8,7 @@
 
 **V2:** ADR 0022 approves Covenant Platform v1 as API-first developer
 infrastructure for multiple projects and Covenant instances on Arc using USDC.
-The future `@covenant/sdk` is a typed API client. Existing proposal, authority,
+The future `@enrare/covenant-sdk` is a typed API client. Existing proposal, authority,
 isolated-signer, executor, Circle, CovenantVault, Arc-evidence, and audit
 boundaries remain separated.
 

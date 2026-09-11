@@ -1,4 +1,4 @@
-import { Covenant } from "@covenant/sdk";
+import { Covenant } from "@enrare/covenant-sdk";
 
 const projectKey = process.env.COVENANT_API_KEY;
 const baseUrl = process.env.COVENANT_API_URL;

@@ -28,6 +28,186 @@ body {
   background: #070707;
 }
 
+.docs-page {
+  min-height: 100vh;
+  background: #0b0b0b;
+  color: #f5f5f5;
+}
+.docs-page-header {
+  max-width: 1180px;
+  margin: auto;
+  padding: 28px 28px 22px;
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #292929;
+}
+.docs-page-header nav {
+  display: flex;
+  gap: 24px;
+  font-size: 14px;
+}
+.docs-brand {
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-decoration: none;
+}
+.docs-page-layout {
+  max-width: 1180px;
+  margin: auto;
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 64px;
+  padding: 56px 28px 100px;
+}
+.docs-page-sidebar {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+}
+.docs-page-sidebar p {
+  color: #888;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  margin: 0 0 8px;
+}
+.docs-page-sidebar a {
+  color: #aaa;
+  text-decoration: none;
+}
+.docs-page-sidebar a:hover {
+  color: #fff;
+}
+.docs-page-article {
+  max-width: 780px;
+}
+.docs-page-article h1 {
+  max-width: 760px;
+  font-size: clamp(2.5rem, 6vw, 5.2rem);
+  line-height: 0.98;
+  margin: 12px 0 28px;
+  letter-spacing: -0.05em;
+}
+.docs-lede {
+  color: #b5b5b5;
+  font-size: 20px;
+  line-height: 1.5;
+  max-width: 700px;
+}
+.docs-flow {
+  margin: 34px 0 70px;
+  font-weight: 700;
+}
+.docs-flow span {
+  color: #777;
+  padding: 0 10px;
+}
+.docs-page-article section {
+  border-top: 1px solid #292929;
+  padding: 34px 0;
+  scroll-margin-top: 24px;
+}
+.docs-page-article h2 {
+  font-size: 28px;
+  margin: 0 0 14px;
+}
+.docs-page-article p {
+  color: #bbb;
+  line-height: 1.65;
+}
+.docs-page-article pre,
+.sdk-command {
+  overflow-x: auto;
+  background: #151515;
+  border: 1px solid #292929;
+  padding: 18px;
+  border-radius: 8px;
+}
+.docs-page-article pre code {
+  white-space: pre;
+}
+.sdk-install {
+  margin: 22px 0;
+}
+.sdk-install [role="tablist"] {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.sdk-install button {
+  border: 1px solid #444;
+  background: #171717;
+  color: #ccc;
+  border-radius: 6px;
+  padding: 8px 13px;
+  cursor: pointer;
+}
+.sdk-install button[aria-selected="true"] {
+  background: #fff;
+  color: #111;
+}
+.sdk-command {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+.sdk-command code {
+  white-space: nowrap;
+}
+.sdk-command button {
+  flex: none;
+  background: #fff;
+  color: #111;
+  border: 0;
+  border-radius: 5px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.sdk-install small {
+  display: block;
+  color: #777;
+  margin-top: 8px;
+}
+.docs-page-article footer {
+  display: flex;
+  gap: 24px;
+  padding-top: 28px;
+  font-size: 14px;
+}
+.docs-page-article footer a {
+  color: #ccc;
+}
+@media (max-width: 760px) {
+  .docs-page-layout {
+    display: block;
+    padding: 36px 20px 70px;
+  }
+  .docs-page-sidebar {
+    position: static;
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 26px;
+  }
+  .docs-page-sidebar p {
+    display: none;
+  }
+  .docs-page-sidebar a {
+    white-space: nowrap;
+  }
+  .docs-page-header {
+    padding: 22px 20px;
+  }
+  .docs-page-header nav {
+    gap: 14px;
+  }
+  .docs-flow {
+    line-height: 2;
+  }
+}
+
 a {
   color: inherit;
 }

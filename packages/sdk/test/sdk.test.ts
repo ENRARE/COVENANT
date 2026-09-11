@@ -141,7 +141,7 @@ describe("COV-025 TypeScript SDK", () => {
       accept: "application/json",
       "content-type": "application/json",
       "x-api-key": TEST_PROJECT_KEY,
-      "user-agent": "@covenant/sdk/0.1.0",
+      "user-agent": "@enrare/covenant-sdk/0.1.1",
       "idempotency-key": "create-1",
     });
     expect(JSON.parse(calls[0]?.init.body as string)).toEqual(createInput());
