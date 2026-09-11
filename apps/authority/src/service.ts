@@ -546,6 +546,9 @@ export function createAuthorityService(
               validUntil,
               reservation,
               signer: dependencies.signer,
+              ...(dependencies.signatureVerifier === undefined
+                ? {}
+                : { signatureVerifier: dependencies.signatureVerifier }),
             });
           },
         ),
@@ -560,6 +563,9 @@ export function createAuthorityService(
         rawDecisionReceipt: request.rawDecisionReceipt,
         ruleResults: request.ruleResults,
         authorizationReceipt: receipt,
+        ...(dependencies.signatureVerifier === undefined
+          ? {}
+          : { signatureVerifier: dependencies.signatureVerifier }),
       });
       if (
         verified.signedAuthorizationReceipt.payload.validUntil <= currentTime ||

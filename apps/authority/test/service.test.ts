@@ -14,11 +14,11 @@ import { authorizationInput, createTestHarness, TEST_NOW } from "./fixtures.js";
 
 describe("authority service integration", () => {
   it("accepts an ERC-1271 PaymentIntent through the injected verifier", async () => {
+    const verifiedKinds: string[] = [];
     const harness = await createTestHarness({
       signatureVerifier: {
         verify: (request) => {
-          expect(request.kind).toBe("paymentIntent");
-          expect(request.expectedSigner).toBe(harness.covenant.agentSigner);
+          verifiedKinds.push(request.kind);
           return Promise.resolve();
         },
       },
@@ -28,13 +28,26 @@ describe("authority service integration", () => {
     const request = await harness.rebuildRequest({
       intent: { agentSigner: contractSigner },
     });
-    const result = await harness.service.evaluatePaymentRequest(request);
+    const result = await harness.service.processPaymentRequest(request);
     expect(result.status).toBe("APPROVED");
     expect(result.ruleResults).toHaveLength(11);
     expect(result.ruleResults[1]).toMatchObject({
       ruleId: "intent_signature_valid",
       status: "PASS",
     });
+    expect(verifiedKinds).toEqual([
+      "paymentIntent",
+      "paymentIntent",
+      "paymentIntent",
+      "paymentIntent",
+      "decisionReceipt",
+      "authorizationReceipt",
+      "paymentIntent",
+      "decisionReceipt",
+      "authorizationReceipt",
+    ]);
+    if (result.status !== "APPROVED") throw new Error("Expected approval");
+    expect(result.authorizationReceipt.payload).not.toHaveProperty("intentId");
   });
 
   it("fails closed when the injected ERC-1271 verifier rejects", async () => {
@@ -52,6 +65,37 @@ describe("authority service integration", () => {
       status: "FAIL",
     });
   });
+
+  it.each(["false", "throws"] as const)(
+    "fails closed during ERC-1271 authorization issuance when verifier %s",
+    async (mode) => {
+      let paymentIntentCalls = 0;
+      const harness = await createTestHarness({
+        signatureVerifier: {
+          verify: (request) => {
+            if (request.kind !== "paymentIntent") return Promise.resolve();
+            paymentIntentCalls += 1;
+            if (paymentIntentCalls === 1) return Promise.resolve();
+            return mode === "throws"
+              ? Promise.reject(new Error("RPC failure"))
+              : Promise.reject(new Error("ERC-1271 returned false"));
+          },
+        },
+      });
+      const contractSigner = "0x7000000000000000000000000000000000000007";
+      harness.covenant.agentSigner = contractSigner;
+      const request = await harness.rebuildRequest({
+        intent: { agentSigner: contractSigner },
+      });
+      const approved = await harness.service.evaluatePaymentRequest(request);
+      expect(approved.status).toBe("APPROVED");
+      await expect(
+        harness.service.issueAuthorization(
+          authorizationInput(request, approved),
+        ),
+      ).rejects.toMatchObject({ code: "INVALID_DECISION" });
+    },
+  );
 
   it("returns both verified receipts for an approved gpu-h100-hour purchase", async () => {
     const harness = await createTestHarness();
