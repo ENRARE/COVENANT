@@ -75,12 +75,17 @@ export function SiteNavigation() {
             ))}
           </div>
 
-          <a className="site-nav-cta" href="/docs#quickstart">
-            Get Started
-          </a>
-          <a className="site-nav-cta" href="/docs#installation">
-            Install SDK
-          </a>
+          <div className="site-nav-actions">
+            <a
+              className="site-nav-cta site-nav-install"
+              href="/docs#installation"
+            >
+              Install SDK
+            </a>
+            <a className="site-nav-cta" href="/docs#quickstart">
+              Get Started
+            </a>
+          </div>
 
           <button
             aria-controls="mobile-navigation"

@@ -199,7 +199,9 @@ export function LandingPage() {
             <p>The agreement and policy layer for programmable money.</p>
           </div>
           <nav aria-label="Footer navigation">
+            <a href="#product">Product</a>
             <a href="/docs">Docs</a>
+            <a href="/docs#installation">Install SDK</a>
             <a href="https://github.com/ENRARE/COVENANT">GitHub</a>
           </nav>
           <p>Arc Testnet · USDC</p>
