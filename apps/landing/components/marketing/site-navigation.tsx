@@ -6,10 +6,10 @@ import { BrandLogo } from "./brand-logo";
 
 const links = [
   ["Product", "#product"],
-  ["How It Works", "#how-it-works"],
-  ["Use Case", "#use-case"],
+  ["Lifecycle", "#lifecycle"],
+  ["Developers", "#developers"],
   ["Security", "#security"],
-  ["Developers", "/docs"],
+  ["Docs", "/docs"],
   ["GitHub", "https://github.com/ENRARE/COVENANT"],
 ] as const;
 
@@ -27,6 +27,13 @@ export function SiteNavigation() {
       window.removeEventListener("scroll", update);
     };
   }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -68,12 +75,17 @@ export function SiteNavigation() {
             ))}
           </div>
 
-          <a className="site-nav-cta" href="/docs#quickstart">
-            Get Started
-          </a>
-          <a className="site-nav-cta" href="/docs#installation">
-            Install SDK
-          </a>
+          <div className="site-nav-actions">
+            <a
+              className="site-nav-cta site-nav-install"
+              href="/docs#installation"
+            >
+              Install SDK
+            </a>
+            <a className="site-nav-cta" href="/docs#quickstart">
+              Get Started
+            </a>
+          </div>
 
           <button
             aria-controls="mobile-navigation"
@@ -106,22 +118,22 @@ export function SiteNavigation() {
               </a>
             ))}
             <a
-              className="site-mobile-cta"
-              href="/docs#quickstart"
-              onClick={() => {
-                setMenuOpen(false);
-              }}
-            >
-              Get Started
-            </a>
-            <a
-              className="site-mobile-cta"
+              className="site-mobile-cta site-mobile-install"
               href="/docs#installation"
               onClick={() => {
                 setMenuOpen(false);
               }}
             >
               Install SDK
+            </a>
+            <a
+              className="site-mobile-cta site-mobile-start"
+              href="/docs#quickstart"
+              onClick={() => {
+                setMenuOpen(false);
+              }}
+            >
+              Get Started
             </a>
           </div>
         </nav>

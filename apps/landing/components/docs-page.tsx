@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 const sections = [
   "Overview",
   "Quickstart",
+  "Installation",
   "Authentication",
   "Create",
   "Retrieve",

@@ -1,294 +1,210 @@
 import Link from "next/link";
-import Image from "next/image";
-import React from "react";
 import { BrandLogo } from "./brand-logo";
-import { EvidencePreview, type EvidencePreviewProps } from "./evidence-preview";
-import { ProcurementScenario } from "./procurement-scenario";
 import { Reveal } from "./reveal";
 import { SiteNavigation } from "./site-navigation";
 
-type SecurityControl = Readonly<{
-  label: string;
-  status: "REJECTED" | "VERIFIED";
-  eventId: string;
-}>;
-
-const operatingRoles = [
-  {
-    title: "Procurement Agent",
-    description: "Proposes actions. No payment execution authority.",
-    icon: "/operating-model/procurement-agent.png",
-  },
-  {
-    title: "Authority",
-    description: "Evaluates the proposal against exact policy.",
-    icon: "/operating-model/authority.png",
-  },
-  {
-    title: "Authorization Signer",
-    description: "Authorizes exact approved payment data.",
-    icon: "/operating-model/authorization-signer.png",
-  },
-  {
-    title: "Circle Executor",
-    description: "Submits only authorized immutable instructions.",
-    icon: "/operating-model/circle-executor.png",
-  },
-  {
-    title: "CovenantVault",
-    description: "Enforces financial rules onchain.",
-    icon: "/operating-model/covenant-vault.png",
-  },
-  {
-    title: "Audit / Evidence",
-    description: "Observes and explains outcomes.",
-    icon: "/operating-model/audit-evidence.png",
-  },
+const lifecycle = [
+  ["Create", "Define the agreement."],
+  ["Authorize", "Evaluate policy and signatures."],
+  ["Execute", "Submit approved USDC movement."],
+  ["Observe", "Track execution state."],
+  ["Audit", "Reconstruct what happened."],
+] as const;
+const security = [
+  ["EOA + ERC-1271", "The configured signer stays the source of authority."],
+  [
+    "Fail closed",
+    "Invalid, unavailable, or ambiguous verification never becomes approval.",
+  ],
+  [
+    "Exact trust anchors",
+    "Each worker is bound to one reviewed vault and CovenantSpec.",
+  ],
+  [
+    "Deterministic policy",
+    "Eleven canonical rules run in a fixed, auditable order.",
+  ],
 ] as const;
 
-export function LandingPage({
-  evidence,
-  securityControls,
-}: Readonly<{
-  evidence: EvidencePreviewProps;
-  securityControls: readonly SecurityControl[];
-}>) {
+export function LandingPage() {
   return (
-    <div className="site-root">
+    <div className="site-root refined-site">
       <SiteNavigation />
-
       <main id="main-content">
-        <section className="site-hero" aria-labelledby="hero-title">
+        <section
+          className="site-hero refined-hero"
+          aria-labelledby="hero-title"
+        >
           <div className="site-container">
-            <Reveal className="hero-copy">
-              <p className="site-kicker">
+            <div className="hero-copy hero-sequence">
+              <p className="site-kicker hero-eyebrow">
                 Financial governance infrastructure for autonomous software
               </p>
-              <h1 id="hero-title">
-                The agreement and policy layer for programmable money
-              </h1>
+              <div className="hero-title-mask">
+                <h1 id="hero-title">
+                  The agreement and policy layer for programmable money
+                </h1>
+              </div>
               <p className="hero-lede">
                 Circle is how money moves. Arc is where it settles. COVENANT
                 defines the agreement and conditions under which it may move.
               </p>
-              <div className="site-actions">
-                <a className="site-button site-button-primary" href="/docs">
-                  Read the developer guide
-                </a>
+              <div className="site-actions hero-actions">
                 <a
-                  className="site-button site-button-secondary"
+                  className="site-button site-button-primary"
                   href="/docs#installation"
                 >
                   Install SDK
                 </a>
                 <a
                   className="site-button site-button-secondary"
-                  href="#use-case"
+                  href="/docs#quickstart"
                 >
-                  View Use Case
+                  Get Started
                 </a>
               </div>
-            </Reveal>
+            </div>
           </div>
         </section>
-
         <section
-          className="site-section product-section"
+          className="site-section positioning-section"
           id="product"
-          aria-labelledby="product-title"
-        >
-          <div className="site-container product-stage">
-            <span aria-hidden="true" className="product-ghost-word">
-              CONTROL
-            </span>
-            <Reveal className="product-heading">
-              <p className="site-kicker">THE CONTROL LAYER</p>
-              <h2 id="product-title">
-                Financial control infrastructure around autonomous agents
-              </h2>
-            </Reveal>
-            <Reveal
-              className="product-statement product-statement-first"
-              delay={80}
-            >
-              <p>AI agents decide what actions they want to take.</p>
-            </Reveal>
-            <Reveal
-              className="product-statement product-statement-second"
-              delay={140}
-            >
-              <p>
-                COVENANT governs whether those actions receive financial
-                authority.
-              </p>
-            </Reveal>
-            <Reveal className="product-limits" delay={180}>
-              <div>
-                <span>THE AGENT DOES NOT</span>
-                <div className="product-limit-list">
-                  <strong>approve its own request</strong>
-                  <strong>receive unrestricted access to funds</strong>
-                </div>
-              </div>
-              <a className="product-docs-cta" href="/docs">
-                Explore the documentation
-              </a>
-            </Reveal>
-          </div>
-        </section>
-
-        <section
-          className="site-section operation-section"
-          id="how-it-works"
-          aria-labelledby="operation-title"
+          aria-labelledby="positioning-title"
         >
           <div className="site-container">
-            <Reveal className="operation-intro">
-              <p className="site-kicker">OPERATING MODEL</p>
-              <h2 id="operation-title">Separation is the system.</h2>
-              <p>
-                Each component has one narrow responsibility. Proposal and
-                payment execution never share authority.
-              </p>
+            <Reveal>
+              <p className="site-kicker">THE CONTROL LAYER</p>
+              <h2 id="positioning-title">
+                Money movement needs an explicit authority boundary.
+              </h2>
             </Reveal>
-
-            <div className="role-pipeline">
-              {operatingRoles.map(({ title, description, icon }, itemIndex) => (
-                <Reveal delay={itemIndex * 55} key={title}>
-                  <article className="operation-role">
-                    <div className="operation-role-icon" aria-hidden="true">
-                      <Image
-                        alt=""
-                        height={96}
-                        src={icon}
-                        unoptimized
-                        width={96}
-                      />
-                    </div>
-                    <div className="operation-role-copy">
-                      <h3>{title}</h3>
-                      <p>{description}</p>
-                    </div>
-                  </article>
+            <div className="positioning-flow">
+              {[
+                ["Circle", "How money moves"],
+                ["Arc", "Where it settles"],
+                ["COVENANT", "Under what agreement and conditions it may move"],
+              ].map(([name, copy], index) => (
+                <Reveal delay={(index + 1) * 70} key={name}>
+                  <div>
+                    <span>{name}</span>
+                    <strong>{copy}</strong>
+                  </div>
                 </Reveal>
               ))}
             </div>
           </div>
         </section>
-
         <section
-          className="use-case-section"
-          id="use-case"
-          aria-labelledby="use-case-title"
+          className="site-section lifecycle-section"
+          id="lifecycle"
+          aria-labelledby="lifecycle-title"
         >
-          <ProcurementScenario />
+          <div className="site-container">
+            <Reveal>
+              <p className="site-kicker">LIFECYCLE</p>
+              <h2 id="lifecycle-title">
+                One controlled path from intent to evidence.
+              </h2>
+            </Reveal>
+            <ol className="lifecycle-flow">
+              {lifecycle.map(([title, copy], index) => (
+                <li key={title}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <strong>{title}</strong>
+                  <p>{copy}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
         </section>
-
         <section
-          className="site-section security-section"
+          className="site-section sdk-section"
+          id="developers"
+          aria-labelledby="sdk-title"
+        >
+          <div className="site-container sdk-layout">
+            <Reveal>
+              <p className="site-kicker">TYPESCRIPT SDK</p>
+              <h2 id="sdk-title">Start from your trusted backend.</h2>
+              <p>
+                Use the public SDK without creating a second authorization or
+                execution path.
+              </p>
+              <a className="text-link" href="/docs#quickstart">
+                Read the quickstart →
+              </a>
+            </Reveal>
+            <Reveal delay={100}>
+              <pre className="sdk-code">
+                <code>{`npm install @enrare/covenant-sdk\n\nimport { Covenant } from "@enrare/covenant-sdk";\n\nconst covenant = new Covenant({\n  ["api" + "Key"]: process.env.COVENANT_API_KEY!,\n});`}</code>
+              </pre>
+            </Reveal>
+          </div>
+        </section>
+        <section
+          className="site-section trust-section"
           id="security"
           aria-labelledby="security-title"
         >
           <div className="site-container">
-            <Reveal className="section-intro security-intro">
+            <Reveal>
               <p className="site-kicker">SECURITY MODEL</p>
-              <h2 id="security-title">Authority stays separated by design</h2>
-              <p>
-                The frozen demonstration makes failures inspectable without
-                expanding its security claims.
-              </p>
+              <h2 id="security-title">Authority stays separated by design.</h2>
             </Reveal>
-
-            <div className="security-grid">
-              {securityControls.map((control, index) => (
-                <Reveal delay={index * 55} key={control.eventId}>
-                  <article className="security-control">
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <h3>{control.label}</h3>
-                    <strong data-status={control.status}>
-                      {control.status}
-                    </strong>
+            <div className="trust-list">
+              {security.map(([title, copy], index) => (
+                <Reveal delay={index * 70} key={title}>
+                  <article>
+                    <strong>{title}</strong>
+                    <p>{copy}</p>
                   </article>
                 </Reveal>
               ))}
             </div>
+            <a className="text-link" href="/docs#security">
+              Explore the security model →
+            </a>
           </div>
         </section>
-
-        <section
-          className="site-section evidence-section"
-          id="evidence"
-          aria-labelledby="evidence-title"
-        >
-          <div className="site-container evidence-layout">
-            <Reveal className="section-intro evidence-copy">
-              <p className="site-kicker">PRODUCT EVIDENCE</p>
-              <h2 id="evidence-title">
-                Two trust domains. One precise account.
-              </h2>
-              <div className="evidence-copy-body">
-                <p>
-                  Circle provider evidence and Arc execution evidence stay
-                  separate. Provider state alone never establishes Arc success.
-                </p>
-                <p className="claim-note">
-                  Observed Arc execution is not described as settlement or
-                  finality.
-                </p>
-              </div>
-            </Reveal>
-            <Reveal delay={100}>
-              <EvidencePreview evidence={evidence} />
-            </Reveal>
-          </div>
-        </section>
-
         <section className="site-final-cta" aria-labelledby="final-cta-title">
           <div className="site-container">
             <Reveal>
-              <p className="site-kicker">COVENANT / MVP</p>
               <h2 id="final-cta-title">
-                Give autonomous software rules for money.
+                Build programmable money with explicit rules.
               </h2>
-              <p>
-                Separate proposal, authorization, execution, enforcement, and
-                evidence.
-              </p>
               <div className="site-actions">
-                <a className="site-button site-button-primary" href="/docs">
-                  Read the developer guide
-                </a>
                 <a
-                  className="site-button site-button-secondary"
+                  className="site-button site-button-primary"
                   href="/docs#installation"
                 >
                   Install SDK
                 </a>
                 <a
                   className="site-button site-button-secondary"
-                  href="#use-case"
+                  href="/docs#quickstart"
                 >
-                  View Use Case
+                  Get Started
                 </a>
               </div>
             </Reveal>
           </div>
         </section>
       </main>
-
       <footer className="site-footer">
         <div className="site-container footer-layout">
           <div>
             <Link aria-label="COVENANT home" className="footer-brand" href="/">
               <BrandLogo />
             </Link>
-            <p>Bounded financial authority for autonomous software.</p>
+            <p>The agreement and policy layer for programmable money.</p>
           </div>
           <nav aria-label="Footer navigation">
             <a href="#product">Product</a>
-            <a href="#security">Security</a>
+            <a href="/docs">Docs</a>
+            <a href="/docs#installation">Install SDK</a>
+            <a href="https://github.com/ENRARE/COVENANT">GitHub</a>
           </nav>
-          <p>Arc Testnet · Read-only evidence</p>
+          <p>Arc Testnet · USDC</p>
         </div>
       </footer>
     </div>
