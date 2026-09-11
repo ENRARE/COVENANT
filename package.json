@@ -48,8 +48,8 @@
     "audit:project": "pnpm --silent --filter @covenant/audit... build && node packages/audit/dist/cli.js",
     "verify:cov010-evidence": "pnpm --filter @covenant/spec build && node scripts/verify-cov010-deployment-evidence.mjs",
     "verify:cov010-runtime-trust-anchor": "node scripts/verify-cov010-runtime-trust-anchor.mjs",
-    "verify:openapi-sdk": "pnpm --filter @covenant/sdk build && node scripts/verify-openapi-sdk.mjs",
-    "test:sdk-release": "pnpm --filter @covenant/sdk build && node scripts/sdk-package-consumer.mjs"
+    "verify:openapi-sdk": "pnpm --filter @enrare/covenant-sdk build && node scripts/verify-openapi-sdk.mjs",
+    "test:sdk-release": "pnpm --filter @enrare/covenant-sdk build && node scripts/sdk-package-consumer.mjs"
   },
   "devDependencies": {
     "@covenant/agent": "workspace:*",
