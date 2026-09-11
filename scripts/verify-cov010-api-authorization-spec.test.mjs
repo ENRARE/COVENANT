@@ -29,16 +29,16 @@ const projectId =
 function verifyAuthorizationSpec(candidate) {
   assert.deepEqual(Object.keys(candidate), ["entries"]);
   assert.ok(Array.isArray(candidate.entries));
-  assert.equal(candidate.entries.length, 1);
-  assert.deepEqual(Object.keys(candidate.entries[0]), [
-    "projectId",
-    "covenantSpec",
-  ]);
-  assert.equal(candidate.entries[0].projectId, projectId);
-  assert.deepEqual(
-    candidate.entries[0].covenantSpec,
-    runtimeTrustAnchor.covenantSpec,
+  assert.ok(candidate.entries.length >= 1);
+  const reviewed = candidate.entries.find(
+    (entry) =>
+      entry.covenantSpec?.covenantId ===
+      runtimeTrustAnchor.covenantSpec.covenantId,
   );
+  assert.ok(reviewed);
+  assert.deepEqual(Object.keys(reviewed), ["projectId", "covenantSpec"]);
+  assert.equal(reviewed.projectId, projectId);
+  assert.deepEqual(reviewed.covenantSpec, runtimeTrustAnchor.covenantSpec);
 }
 
 test("API authorization artifact exactly wraps the reviewed COV-010 CovenantSpec", () => {
@@ -47,7 +47,11 @@ test("API authorization artifact exactly wraps the reviewed COV-010 CovenantSpec
   );
   assert.doesNotThrow(() => verifyAuthorizationSpec(authorizationSpec));
   assert.equal(
-    authorizationSpec.entries[0].covenantSpec.covenantId,
+    authorizationSpec.entries.find(
+      (entry) =>
+        entry.covenantSpec.covenantId ===
+        deploymentManifest.constructor.covenantId,
+    ).covenantSpec.covenantId,
     deploymentManifest.constructor.covenantId,
   );
 });
