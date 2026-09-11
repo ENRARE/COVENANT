@@ -5,7 +5,7 @@
 
 1. Obtain a project and initial `cov_test_...` API key through the private
    administrative bootstrap. There is no anonymous signup.
-2. Install `@covenant/sdk` 0.1.0 and configure `COVENANT_API_URL` plus the API
+2. Install `@enrare/covenant-sdk` 0.1.0 and configure `COVENANT_API_URL` plus the API
    key in the server environment.
 3. Create a Covenant with payer, beneficiary, canonical amount, supported
    policy reference, and expiry.
