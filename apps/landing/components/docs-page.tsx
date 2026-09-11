@@ -84,12 +84,15 @@ export function DocsPage() {
               Credentials belong in trusted backend code, never in browser
               bundles.
             </p>
-            <InstallTabs
-              tab={tab}
-              setTab={setTab}
-              copied={copied}
-              onCopy={copyInstall}
-            />
+            <div id="installation" className="docs-installation">
+              <h3>Install SDK</h3>
+              <InstallTabs
+                tab={tab}
+                setTab={setTab}
+                copied={copied}
+                onCopy={copyInstall}
+              />
+            </div>
             <pre>
               <code>{`import { Covenant } from "@enrare/covenant-sdk";\n\nconst covenant = new Covenant({\n  ["api" + "Key"]: process.env.COVENANT_API_KEY!,\n  baseUrl: process.env.COVENANT_API_URL,\n});\nconst result = await covenant.covenants.get("covenant-id");`}</code>
             </pre>

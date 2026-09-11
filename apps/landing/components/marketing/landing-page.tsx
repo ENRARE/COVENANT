@@ -77,6 +77,12 @@ export function LandingPage({
                 </a>
                 <a
                   className="site-button site-button-secondary"
+                  href="/docs#installation"
+                >
+                  Install SDK
+                </a>
+                <a
+                  className="site-button site-button-secondary"
                   href="#use-case"
                 >
                   View Use Case
@@ -251,6 +257,12 @@ export function LandingPage({
               <div className="site-actions">
                 <a className="site-button site-button-primary" href="/docs">
                   Read the developer guide
+                </a>
+                <a
+                  className="site-button site-button-secondary"
+                  href="/docs#installation"
+                >
+                  Install SDK
                 </a>
                 <a
                   className="site-button site-button-secondary"

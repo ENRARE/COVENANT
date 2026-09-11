@@ -71,6 +71,9 @@ export function SiteNavigation() {
           <a className="site-nav-cta" href="/docs#quickstart">
             Get Started
           </a>
+          <a className="site-nav-cta" href="/docs#installation">
+            Install SDK
+          </a>
 
           <button
             aria-controls="mobile-navigation"
@@ -110,6 +113,15 @@ export function SiteNavigation() {
               }}
             >
               Get Started
+            </a>
+            <a
+              className="site-mobile-cta"
+              href="/docs#installation"
+              onClick={() => {
+                setMenuOpen(false);
+              }}
+            >
+              Install SDK
             </a>
           </div>
         </nav>

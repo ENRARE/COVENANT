@@ -28,6 +28,7 @@ describe("isolated COVENANT landing deployment", () => {
     const markup = renderToStaticMarkup(<HomePage />);
 
     expect(markup).toContain('href="/docs"');
+    expect(markup).toContain('href="/docs#installation"');
     expect(markup).not.toContain("Open Evidence Console");
     expect(markup).toContain('href="#use-case"');
     expect(markup).toContain("Read the developer guide");
