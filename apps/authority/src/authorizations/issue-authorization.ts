@@ -12,6 +12,10 @@ import {
   type CovenantSpec,
 } from "@covenant/spec";
 import {
+  verifyAuthorizationChainWithSignatureVerifier,
+  type AuthorizationSignatureVerifier,
+} from "@covenant/core";
+import {
   AUTHORITY_ERROR_MESSAGES,
   AuthorityError,
   callDependency,
@@ -66,14 +70,25 @@ export async function verifyAuthorizationReceiptLinkage(input: {
   rawDecisionReceipt: unknown;
   ruleResults: CanonicalRuleResults;
   authorizationReceipt: unknown;
+  signatureVerifier?: AuthorizationSignatureVerifier;
 }) {
   try {
-    return await verifyAuthorizationChain(
+    if (input.signatureVerifier === undefined) {
+      return await verifyAuthorizationChain(
+        input.rawCovenant,
+        input.rawSignedPaymentIntent,
+        input.rawDecisionReceipt,
+        input.ruleResults,
+        input.authorizationReceipt,
+      );
+    }
+    return await verifyAuthorizationChainWithSignatureVerifier(
       input.rawCovenant,
       input.rawSignedPaymentIntent,
       input.rawDecisionReceipt,
       input.ruleResults,
       input.authorizationReceipt,
+      input.signatureVerifier,
     );
   } catch (error) {
     throw authorizationVerificationError(error);
@@ -91,6 +106,7 @@ export async function issueAuthorizationReceipt(input: {
   validUntil: bigint;
   reservation: AuthorizationReservation;
   signer: ReceiptSigner;
+  signatureVerifier?: AuthorizationSignatureVerifier;
 }): Promise<RawSignedAuthorizationReceipt> {
   const rawPayload = {
     version: SCHEMA_VERSION,
@@ -134,6 +150,9 @@ export async function issueAuthorizationReceipt(input: {
       rawDecisionReceipt: input.rawDecisionReceipt,
       ruleResults: input.ruleResults,
       authorizationReceipt: envelope,
+      ...(input.signatureVerifier === undefined
+        ? {}
+        : { signatureVerifier: input.signatureVerifier }),
     });
   } catch (error) {
     if (error instanceof AuthorityError) throw error;
