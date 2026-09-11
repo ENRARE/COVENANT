@@ -118,22 +118,22 @@ export function SiteNavigation() {
               </a>
             ))}
             <a
-              className="site-mobile-cta"
-              href="/docs#quickstart"
-              onClick={() => {
-                setMenuOpen(false);
-              }}
-            >
-              Get Started
-            </a>
-            <a
-              className="site-mobile-cta"
+              className="site-mobile-cta site-mobile-install"
               href="/docs#installation"
               onClick={() => {
                 setMenuOpen(false);
               }}
             >
               Install SDK
+            </a>
+            <a
+              className="site-mobile-cta site-mobile-start"
+              href="/docs#quickstart"
+              onClick={() => {
+                setMenuOpen(false);
+              }}
+            >
+              Get Started
             </a>
           </div>
         </nav>

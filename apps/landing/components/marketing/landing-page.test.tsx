@@ -19,8 +19,12 @@ describe("COVENANT public landing", () => {
     const hero =
       /<section class="site-hero[\s\S]*?<\/section>/u.exec(markup)?.[0] ?? "";
     expect((hero.match(/<a /gu) ?? []).length).toBe(2);
-    expect(hero).toContain('href="/docs#installation"');
-    expect(hero).toContain('href="/docs#quickstart"');
+    expect(hero).toContain(
+      'class="site-button site-button-primary" href="/docs#installation"',
+    );
+    expect(hero).toContain(
+      'class="site-button site-button-secondary" href="/docs#quickstart"',
+    );
   });
 
   it("keeps docs first-party and GitHub explicit", () => {
@@ -28,5 +32,11 @@ describe("COVENANT public landing", () => {
     expect(markup).toContain('href="/docs"');
     expect(markup).toContain('href="https://github.com/ENRARE/COVENANT"');
     expect(markup).not.toContain("COVENANT/tree/main/docs");
+    expect(markup).toContain(
+      'class="site-nav-cta site-nav-install" href="/docs#installation"',
+    );
+    expect(markup).toContain(
+      'class="site-mobile-cta site-mobile-start" href="/docs#quickstart"',
+    );
   });
 });

@@ -140,7 +140,7 @@ body {
   border: 1px solid #444;
   background: #171717;
   color: #ccc;
-  border-radius: 6px;
+  border-radius: 0;
   padding: 8px 13px;
   cursor: pointer;
 }
@@ -162,7 +162,7 @@ body {
   background: #fff;
   color: #111;
   border: 0;
-  border-radius: 5px;
+  border-radius: 0;
   padding: 7px 12px;
   cursor: pointer;
 }
@@ -214,6 +214,7 @@ a {
 
 button {
   font: inherit;
+  border-radius: 0;
 }
 
 .site-root {
@@ -376,26 +377,34 @@ button {
   min-height: 44px;
   align-items: center;
   padding: 10px 15px;
-  border-radius: 8px;
-  background: #f7f7f7;
-  color: #090909;
+  border: 1px solid #000000;
+  border-radius: 0;
+  background: #000000;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 650;
   text-decoration: none;
+  white-space: nowrap;
   transition:
     transform 180ms ease,
     background-color 180ms ease;
 }
 
 .site-nav-install {
-  border: 1px solid #3a3a3a;
-  background: transparent;
-  color: #f5f5f5;
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #090909;
 }
 
 .site-nav-cta:hover {
   transform: translateY(-2px);
-  background: #ffffff;
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+.site-nav-install:hover {
+  background: #e8e8e8;
+  color: #090909;
 }
 
 .site-menu-trigger,
@@ -506,10 +515,11 @@ button {
   justify-content: center;
   padding: 12px 19px;
   border: 1px solid var(--site-line-strong);
-  border-radius: 9px;
+  border-radius: 0;
   font-size: 13px;
   font-weight: 650;
   text-decoration: none;
+  white-space: nowrap;
   transition:
     transform 180ms ease,
     border-color 180ms ease,
@@ -527,13 +537,15 @@ a.site-button:hover {
 }
 
 .site-button-secondary {
+  border-color: #000000;
   background: #111111;
-  color: #f5f5f5;
+  color: #ffffff;
 }
 
 .site-button-secondary:hover {
   border-color: #666666;
   background: #181818;
+  color: #ffffff;
 }
 
 .site-button-disabled,
@@ -688,7 +700,7 @@ a.site-button:hover {
   align-items: center;
   padding: 11px 15px;
   border: 1px solid #ffffff;
-  border-radius: 7px;
+  border-radius: 0;
   background: #ffffff;
   color: #090909;
   font-size: 12px;
@@ -1175,7 +1187,7 @@ a.site-button:hover {
     height: 40px;
     padding: 12px 10px;
     border: 1px solid #3b3b3b;
-    border-radius: 7px;
+    border-radius: 0;
     background: #111111;
     place-content: center;
   }
@@ -1233,12 +1245,22 @@ a.site-button:hover {
 
   .site-mobile-menu .site-mobile-cta {
     margin-top: 8px;
-    border: 0;
-    border-radius: 7px;
-    background: #ffffff;
-    color: #090909;
+    border: 1px solid #ffffff;
+    border-radius: 0;
     font-weight: 650;
     text-align: center;
+    white-space: nowrap;
+  }
+
+  .site-mobile-menu .site-mobile-install {
+    background: #ffffff;
+    color: #090909;
+  }
+
+  .site-mobile-menu .site-mobile-start {
+    border-color: #000000;
+    background: #000000;
+    color: #ffffff;
   }
 
   .site-hero {
@@ -1773,6 +1795,11 @@ a.site-button:hover {
 .refined-site :focus-visible {
   outline: 2px solid #fff;
   outline-offset: 4px;
+}
+.docs-page button:focus-visible,
+.docs-page a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 .docs-installation {
   scroll-margin-top: 32px;
