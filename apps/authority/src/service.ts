@@ -9,6 +9,7 @@ import {
   verifySignedDecisionReceiptForCovenant,
   verifySignedPaymentIntentForCovenant,
 } from "@covenant/spec";
+import type { AuthorizationSignatureVerifier } from "@covenant/core";
 import {
   issueAuthorizationReceipt,
   verifyAuthorizationReceiptLinkage,
@@ -70,6 +71,7 @@ export type AuthorityDependencies = {
   decisionRepository?: ApprovedDecisionRepository;
   authorizationRepository?: AuthorizationRepository;
   nonceRepository?: AuthorizationNonceRepository;
+  signatureVerifier?: AuthorizationSignatureVerifier;
 };
 
 type LoadedCovenant = ReturnType<typeof parseTrustedCovenant>;
@@ -237,6 +239,20 @@ export function createAuthorityService(
   ): Promise<PolicyEvaluation> {
     const { intentHash } = paymentDigests(request, covenant);
     const evidence = await readEvidence(request, covenant, intentHash);
+    let intentSignatureValid: boolean | undefined;
+    if (dependencies.signatureVerifier !== undefined) {
+      try {
+        await dependencies.signatureVerifier.verify({
+          kind: "paymentIntent",
+          expectedSigner: covenant.parsed.agentSigner,
+          digest: intentHash,
+          signature: request.signedPaymentIntent.signature,
+        });
+        intentSignatureValid = true;
+      } catch {
+        intentSignatureValid = false;
+      }
+    }
     return evaluatePolicy({
       rawCovenant: covenant.raw,
       covenant: covenant.parsed,
@@ -248,6 +264,7 @@ export function createAuthorityService(
       now: currentTime,
       approvedVendor,
       approvedProductId,
+      ...(intentSignatureValid === undefined ? {} : { intentSignatureValid }),
     });
   }
 
@@ -359,10 +376,20 @@ export function createAuthorityService(
     );
 
     try {
-      await verifySignedPaymentIntentForCovenant(
-        request.rawSignedPaymentIntent,
-        covenant.raw,
-      );
+      if (dependencies.signatureVerifier === undefined) {
+        await verifySignedPaymentIntentForCovenant(
+          request.rawSignedPaymentIntent,
+          covenant.raw,
+        );
+      } else {
+        const { intentHash } = paymentDigests(request, covenant);
+        await dependencies.signatureVerifier.verify({
+          kind: "paymentIntent",
+          expectedSigner: covenant.parsed.agentSigner,
+          digest: intentHash,
+          signature: request.signedPaymentIntent.signature,
+        });
+      }
       const invoice = await verifyInvoice({
         rawCovenant: covenant.raw,
         covenant: covenant.parsed,

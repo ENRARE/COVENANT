@@ -29,6 +29,7 @@ export async function evaluatePolicy(input: {
   now: bigint;
   approvedVendor: string;
   approvedProductId: string;
+  intentSignatureValid?: boolean;
 }): Promise<PolicyEvaluation> {
   const paymentDomain = deriveSigningDomainForCovenant(
     input.rawCovenant,
@@ -40,13 +41,17 @@ export async function evaluatePolicy(input: {
   const intentHash = hashPaymentIntent(rawIntentPayload, paymentDomain);
 
   let recoveredIntentSigner: string | undefined;
-  try {
-    recoveredIntentSigner = await recoverPaymentIntentSigner(
-      input.rawSignedPaymentIntent,
-      paymentDomain,
-    );
-  } catch {
-    recoveredIntentSigner = undefined;
+  if (input.intentSignatureValid === undefined) {
+    try {
+      recoveredIntentSigner = await recoverPaymentIntentSigner(
+        input.rawSignedPaymentIntent,
+        paymentDomain,
+      );
+    } catch {
+      recoveredIntentSigner = undefined;
+    }
+  } else if (input.intentSignatureValid) {
+    recoveredIntentSigner = input.covenant.agentSigner;
   }
 
   const invoiceVerification = await verifyInvoice({
@@ -80,7 +85,7 @@ export async function evaluatePolicy(input: {
     covenantReason = "evidence_stale";
   const covenantActive = covenantReason === "covenant_active";
 
-  const signatureValid = recoveredIntentSigner !== undefined;
+  const signatureValid = input.intentSignatureValid ?? recoveredIntentSigner !== undefined;
   const agentAuthorized =
     recoveredIntentSigner === covenant.agentSigner &&
     intent.agentSigner === covenant.agentSigner &&

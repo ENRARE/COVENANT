@@ -57,7 +57,9 @@ class TestReceiptSigner implements ReceiptSigner {
 
 export type TestHarness = Awaited<ReturnType<typeof createTestHarness>>;
 
-export async function createTestHarness(): Promise<{
+export async function createTestHarness(options?: {
+  signatureVerifier?: AuthorityDependencies["signatureVerifier"];
+}): Promise<{
   service: AuthorityService;
   covenant: Record<string, unknown>;
   invoice: Record<string, unknown>;
@@ -237,6 +239,9 @@ export async function createTestHarness(): Promise<{
     signer,
     approvedVendor: vendorAccount.address,
     approvedProductId: "gpu-h100-hour",
+    ...(options?.signatureVerifier === undefined
+      ? {}
+      : { signatureVerifier: options.signatureVerifier }),
   };
   const service = createAuthorityService(dependencies);
 

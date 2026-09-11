@@ -13,6 +13,44 @@ import {
 import { authorizationInput, createTestHarness, TEST_NOW } from "./fixtures.js";
 
 describe("authority service integration", () => {
+  it("accepts an ERC-1271 PaymentIntent through the injected verifier", async () => {
+    const harness = await createTestHarness({
+      signatureVerifier: {
+        verify: (request) => {
+          expect(request.kind).toBe("paymentIntent");
+          expect(request.expectedSigner).toBe(harness.covenant.agentSigner);
+          return Promise.resolve();
+        },
+      },
+    });
+    const contractSigner = "0x7000000000000000000000000000000000000007";
+    harness.covenant.agentSigner = contractSigner;
+    const request = await harness.rebuildRequest({
+      intent: { agentSigner: contractSigner },
+    });
+    const result = await harness.service.evaluatePaymentRequest(request);
+    expect(result.status).toBe("APPROVED");
+    expect(result.ruleResults).toHaveLength(11);
+    expect(result.ruleResults[1]).toMatchObject({
+      ruleId: "intent_signature_valid",
+      status: "PASS",
+    });
+  });
+
+  it("fails closed when the injected ERC-1271 verifier rejects", async () => {
+    const harness = await createTestHarness({
+      signatureVerifier: {
+        verify: () => Promise.reject(new Error("invalid")),
+      },
+    });
+    const result = await harness.service.evaluatePaymentRequest(harness.request);
+    expect(result.status).toBe("REJECTED");
+    expect(result.ruleResults[1]).toMatchObject({
+      ruleId: "intent_signature_valid",
+      status: "FAIL",
+    });
+  });
+
   it("returns both verified receipts for an approved gpu-h100-hour purchase", async () => {
     const harness = await createTestHarness();
     const result = await harness.service.processPaymentRequest(harness.request);
