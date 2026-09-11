@@ -39,6 +39,7 @@ COPY --from=build --chown=node:node /workspace/packages/contracts/abi/CovenantVa
 # Public, reviewed runtime projection of the immutable COV-010 deployment.
 # This is not a signed or historically recovered CovenantSpec.
 COPY --from=build --chown=node:node /workspace/deployment/arc-testnet/cov010-runtime-trust-anchor.json /app/deployment/arc-testnet/cov010-runtime-trust-anchor.json
+COPY --from=build --chown=node:node /workspace/deployment/arc-testnet/fresh-demo-runtime-trust-anchor.json /app/deployment/arc-testnet/fresh-demo-runtime-trust-anchor.json
 
 # Mount the durable operation journal here. Provider credentials and signer
 # material are supplied by the deployment-owned service module, never baked
