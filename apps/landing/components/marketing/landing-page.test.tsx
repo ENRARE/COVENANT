@@ -25,6 +25,16 @@ describe("COVENANT public landing", () => {
     expect(hero).toContain(
       'class="site-button site-button-secondary" href="/docs#quickstart"',
     );
+    const lifecycleSection =
+      /<section class="site-section lifecycle-section"[\s\S]*?<\/section>/u.exec(
+        markup,
+      )?.[0] ?? "";
+    expect((lifecycleSection.match(/<li>/gu) ?? []).length).toBe(5);
+    const securitySection =
+      /<section class="site-section trust-section"[\s\S]*?<\/section>/u.exec(
+        markup,
+      )?.[0] ?? "";
+    expect((securitySection.match(/<article>/gu) ?? []).length).toBe(4);
   });
 
   it("keeps docs first-party and GitHub explicit", () => {
@@ -37,6 +47,12 @@ describe("COVENANT public landing", () => {
     );
     expect(markup).toContain(
       'class="site-mobile-cta site-mobile-start" href="/docs#quickstart"',
+    );
+    expect(markup).toContain(
+      'class="text-link" href="/docs#quickstart">Read the quickstart',
+    );
+    expect(markup).toContain(
+      'class="text-link" href="/docs#security">Explore the security model',
     );
   });
 });
