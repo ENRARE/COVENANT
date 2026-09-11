@@ -9,6 +9,7 @@ const links = [
   ["How It Works", "#how-it-works"],
   ["Use Case", "#use-case"],
   ["Security", "#security"],
+  ["Developers", "https://github.com/ENRARE/COVENANT/tree/main/docs"],
 ] as const;
 
 export function SiteNavigation() {
@@ -66,8 +67,11 @@ export function SiteNavigation() {
             ))}
           </div>
 
-          <a className="site-nav-cta" href="#use-case">
-            Explore Use Case
+          <a
+            className="site-nav-cta"
+            href="https://github.com/ENRARE/COVENANT/blob/main/docs/PLATFORM_V1_DEVELOPER_QUICKSTART.md"
+          >
+            Get Started
           </a>
 
           <button
@@ -102,12 +106,12 @@ export function SiteNavigation() {
             ))}
             <a
               className="site-mobile-cta"
-              href="#use-case"
+              href="https://github.com/ENRARE/COVENANT/blob/main/docs/PLATFORM_V1_DEVELOPER_QUICKSTART.md"
               onClick={() => {
                 setMenuOpen(false);
               }}
             >
-              Explore Use Case
+              Get Started
             </a>
           </div>
         </nav>
