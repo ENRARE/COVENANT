@@ -6,10 +6,10 @@ import { BrandLogo } from "./brand-logo";
 
 const links = [
   ["Product", "#product"],
-  ["How It Works", "#how-it-works"],
-  ["Use Case", "#use-case"],
+  ["Lifecycle", "#lifecycle"],
+  ["Developers", "#developers"],
   ["Security", "#security"],
-  ["Developers", "/docs"],
+  ["Docs", "/docs"],
   ["GitHub", "https://github.com/ENRARE/COVENANT"],
 ] as const;
 
@@ -27,6 +27,13 @@ export function SiteNavigation() {
       window.removeEventListener("scroll", update);
     };
   }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {

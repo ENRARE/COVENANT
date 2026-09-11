@@ -3,34 +3,30 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import HomePage from "../../app/page";
 
-describe("isolated COVENANT landing deployment", () => {
-  it("renders the approved public evidence copy", () => {
+describe("COVENANT public landing", () => {
+  it("renders the concise lifecycle and exactly two hero actions", () => {
     const markup = renderToStaticMarkup(<HomePage />);
-
-    for (const expected of [
-      "0.01 USDC",
-      "Arc Testnet",
-      "UNKNOWN",
-      "Execution observed",
-      "ARC_EXECUTION_SUCCEEDED",
-      "Evidence console available in the local demonstration",
-      "Fixed compromised proposer",
-      "Direct vault bypass",
-      "Unauthorized revocation",
-      "Valid revocation",
-      "Post-revocation execution",
-    ]) {
-      expect(markup).toContain(expected);
-    }
+    for (const text of [
+      "Create",
+      "Authorize",
+      "Execute",
+      "Observe",
+      "Audit",
+      "EOA + ERC-1271",
+    ])
+      expect(markup).toContain(text);
+    expect(markup).not.toContain("PRODUCT EVIDENCE");
+    const hero =
+      /<section class="site-hero[\s\S]*?<\/section>/u.exec(markup)?.[0] ?? "";
+    expect((hero.match(/<a /gu) ?? []).length).toBe(2);
+    expect(hero).toContain('href="/docs#installation"');
+    expect(hero).toContain('href="/docs#quickstart"');
   });
 
-  it("routes primary developer navigation to first-party docs", () => {
+  it("keeps docs first-party and GitHub explicit", () => {
     const markup = renderToStaticMarkup(<HomePage />);
-
     expect(markup).toContain('href="/docs"');
-    expect(markup).toContain('href="/docs#installation"');
-    expect(markup).not.toContain("Open Evidence Console");
-    expect(markup).toContain('href="#use-case"');
-    expect(markup).toContain("Read the developer guide");
+    expect(markup).toContain('href="https://github.com/ENRARE/COVENANT"');
+    expect(markup).not.toContain("COVENANT/tree/main/docs");
   });
 });
