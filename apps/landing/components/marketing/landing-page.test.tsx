@@ -24,10 +24,10 @@ describe("isolated COVENANT landing deployment", () => {
     }
   });
 
-  it("contains no navigation to application-only routes", () => {
+  it("routes primary developer navigation to first-party docs", () => {
     const markup = renderToStaticMarkup(<HomePage />);
 
-    expect(markup).not.toMatch(/href=["']\/(?:docs|demo|evidence)(?:[/#?"'])/u);
+    expect(markup).toContain('href="/docs"');
     expect(markup).not.toContain("Open Evidence Console");
     expect(markup).toContain('href="#use-case"');
     expect(markup).toContain("Read the developer guide");
